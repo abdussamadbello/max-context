@@ -571,11 +571,20 @@ curl -fsSL https://maxcontext.dev/install.sh | sh
 
 ---
 
-### Phase 8 — MCP Apps Visual Explorer (Phase 4+ / Future)
+### Phase 8 — Strategic Differentiation (Capability + Benchmark + Repositioning + Adoption)
 
-**Goal:** Optional visual call-graph and architecture explorer for VS Code Copilot via MCP Apps.
+**Goal:** Ship four sequenced moves that convert max-context from competent infrastructure into the clear choice for editor-integrated AI assistants.
 
-> **Status:** Deferred. MCP Apps spec (Jan 2026) is brand new and VS Code–exclusive. Will be evaluated after Phase 6 ships.
+| Move | Deliverable | Done When |
+|------|-------------|-----------|
+| 1 | get_impact MCP tool + constrained query expansion + Store interface | New tool callable; p95 < 300ms; suggestions surface on weak query; Store interface defined |
+| 2 | Reproducible benchmark harness + BENCHMARK.md (self-repo for Phase 8; cli/cli + vite deferred to Phase 8.1) | `max-context bench` runs; both naive and skilled baselines measured; numbers published honestly (29.5× skilled headline) |
+| 3 | README repositioning + launch blog post | "Why max-context" + "How it works" sections live; `docs/launch-post.md` committed |
+| 4 | Tagged v0.8.0 release + adoption push (Show HN, r/programming, Lobste.rs) | Release tagged; submissions posted within 48h |
+
+See `docs/superpowers/specs/2026-05-25-max-context-phase-8-strategic-differentiation-design.md` and `docs/superpowers/plans/2026-05-25-phase-8-strategic-differentiation.md`.
+
+The original Phase 8 MCP Apps Visual Explorer is deferred to a future phase.
 
 ---
 
