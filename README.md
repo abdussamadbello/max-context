@@ -4,7 +4,7 @@ Maximum Context is a **Go-based MCP (Model Context Protocol) server** that gives
 
 ## Features
 
-- **Two MCP tools**: `query_codebase` (full-text symbol search with BM25 ranking) and `get_architecture` (pre-computed project summary)
+- **Four MCP tools**: `query_codebase` (BM25 symbol search), `get_call_chain` (recursive caller/callee traversal), `get_impact` (change blast radius), `get_architecture` (pre-computed project summary)
 - **Real-time index**: File watcher keeps the index current within 2 seconds of changes
 - **Multi-language**: TypeScript, JavaScript, Python, Go, Rust, Java (and more via Tree-sitter)
 - **Universal CLI support**: One `max-context setup <cli>` configures Claude Code, VS Code Copilot, Codex CLI, Antigravity, Cursor, and Windsurf
