@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/maxcontext/max-context/internal/artifacts"
+	"github.com/maxcontext/max-context/internal/bench"
 	"github.com/maxcontext/max-context/internal/config"
 	"github.com/maxcontext/max-context/internal/db"
 	"github.com/maxcontext/max-context/internal/indexer"
@@ -54,6 +56,9 @@ func run(cfg *config.Config) error {
 			target = args[1]
 		}
 		return runSetup(cfg, target)
+	}
+	if len(args) >= 1 && args[0] == "bench" {
+		return runBench(cfg, args[1:])
 	}
 	switch {
 	case cfg.Index:
@@ -165,4 +170,43 @@ func runMCPServer(cfg *config.Config) error {
 
 func runSetup(cfg *config.Config, target string) error {
 	return setup.Run(cfg.ProjectRoot, target)
+}
+
+// runBench executes the benchmark harness against a question set and writes
+// results.json + benchmark.md to the output directory.
+func runBench(cfg *config.Config, args []string) error {
+	fs := flag.NewFlagSet("bench", flag.ContinueOnError)
+	repoFlag := fs.String("repo", cfg.ProjectRoot, "repo root to benchmark (defaults to project root)")
+	questionsFlag := fs.String("questions", "", "path to questions JSON (defaults to benchmark/questions/<repo-name>.json)")
+	outFlag := fs.String("out", "benchmark", "output directory")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	repoName := filepath.Base(*repoFlag)
+	qPath := *questionsFlag
+	if qPath == "" {
+		qPath = filepath.Join("benchmark", "questions", repoName+".json")
+	}
+	body, err := os.ReadFile(qPath)
+	if err != nil {
+		return fmt.Errorf("read questions: %w", err)
+	}
+	var questions []bench.Question
+	if err := json.Unmarshal(body, &questions); err != nil {
+		return fmt.Errorf("parse questions: %w", err)
+	}
+	res, err := bench.Run(*repoFlag, questions, bench.RunOptions{
+		OutDir: *outFlag,
+		Repo:   repoName,
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stdout, "Benchmarked %d questions on %q. Naive savings: %.1fx, Skilled: %.1fx.\nResults: %s\n",
+		res.Summary.QuestionCount, res.Repo,
+		res.Summary.NaiveSavingsX, res.Summary.SkilledSavingsX,
+		filepath.Join(*outFlag, "results.json"),
+	)
+	return nil
 }
