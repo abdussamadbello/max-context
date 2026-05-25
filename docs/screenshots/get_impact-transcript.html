@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>max-context · get_impact — transcript visualization</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-2: #1c232b;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --muted: #8b949e;
+    --accent: #4ade80;
+    --accent-dim: #16a34a;
+    --warn: #fbbf24;
+    --link: #58a6ff;
+    --code: #d2a8ff;
+    --code-2: #79c0ff;
+    --code-3: #ff7b72;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Inter", "Segoe UI", Roboto, sans-serif;
+    padding: 48px 56px;
+    width: 1600px;
+    min-height: 980px;
+  }
+  .wordmark {
+    display: flex; align-items: center; gap: 14px;
+    margin-bottom: 8px;
+  }
+  .wordmark .logo {
+    width: 36px; height: 36px;
+    border: 2px solid var(--accent);
+    border-radius: 8px;
+    display: grid; place-items: center;
+    font-family: "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-weight: 700;
+    color: var(--accent);
+    font-size: 18px;
+  }
+  .wordmark .title {
+    font-size: 26px; font-weight: 700; letter-spacing: -0.01em;
+  }
+  .wordmark .tool {
+    color: var(--muted);
+    font-family: "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-size: 17px;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-left: 4px;
+  }
+  .tagline {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    margin: 18px 0 8px 0;
+    color: #f0f6fc;
+  }
+  .tagline em {
+    font-style: normal;
+    color: var(--accent);
+  }
+  .sub {
+    color: var(--muted);
+    font-size: 16px;
+    margin-bottom: 36px;
+    max-width: 920px;
+  }
+  .flow {
+    display: grid;
+    grid-template-columns: 340px 80px 1fr;
+    gap: 24px;
+    align-items: stretch;
+    margin-bottom: 32px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .card-head {
+    padding: 14px 20px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel-2);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .card-head .label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+  .card-head .label.accent { color: var(--accent); }
+  .card-head .count {
+    font-family: "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .file-path {
+    font-family: "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-size: 14px;
+    color: var(--code-2);
+    padding: 16px 20px 8px;
+  }
+  .file-meta {
+    font-size: 12px;
+    color: var(--muted);
+    padding: 0 20px 16px;
+  }
+  .symbol-list {
+    list-style: none;
+    padding: 4px 20px 20px;
+  }
+  .symbol-list li {
+    font-family: "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-size: 14px;
+    color: var(--code);
+    padding: 6px 0;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .symbol-list li::before {
+    content: "›";
+    color: var(--muted);
+    font-weight: 700;
+  }
+  .arrow {
+    display: grid; place-items: center;
+  }
+  .arrow svg { display: block; }
+  .arrow .verb {
+    font-family: "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    color: var(--accent);
+    margin-top: 8px;
+    text-align: center;
+    letter-spacing: 0.04em;
+  }
+  table.impact {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-size: 13px;
+  }
+  table.impact th {
+    text-align: left;
+    padding: 12px 18px;
+    color: var(--muted);
+    font-weight: 500;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel-2);
+  }
+  table.impact td {
+    padding: 11px 18px;
+    border-bottom: 1px solid #21262d;
+    vertical-align: top;
+  }
+  table.impact tr:last-child td { border-bottom: none; }
+  td.file { color: var(--code-2); }
+  td.symbol { color: var(--code); }
+  td.kind .pill { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 4px; background: rgba(74,222,128,0.12); color: var(--accent); border: 1px solid rgba(74,222,128,0.3); }
+  td.depth { color: var(--code-3); text-align: center; }
+  td.via { color: var(--muted); }
+  td.testbadge { color: var(--warn); font-size: 11px; }
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .stat {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .stat .k {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); margin-bottom: 6px;
+  }
+  .stat .v {
+    font-family: "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-size: 22px; font-weight: 600; color: #f0f6fc;
+  }
+  .stat .v.accent { color: var(--accent); }
+  .footer {
+    margin-top: 24px;
+    display: flex; justify-content: space-between; align-items: flex-end;
+    color: var(--muted);
+    font-size: 12px;
+    border-top: 1px solid var(--border);
+    padding-top: 18px;
+  }
+  .footer .left { max-width: 720px; line-height: 1.55; }
+  .footer .right { text-align: right; }
+  .footer code {
+    font-family: "JetBrains Mono", "SF Mono", Menlo, monospace;
+    background: var(--panel);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--code-2);
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<div class="wordmark">
+  <div class="logo">mc</div>
+  <div class="title">max-context</div>
+  <div class="tool">get_impact</div>
+</div>
+
+<div class="tagline">What does my <em>change</em> touch?</div>
+<div class="sub">
+  An edit to <code style="color:var(--code-2);font-family:'JetBrains Mono',monospace;">internal/db/queries.go</code> ripples through the call graph.
+  max-context returns the transitive blast radius — what to test, what to review — without the agent re-reading the codebase.
+</div>
+
+<div class="flow">
+
+  <div class="card">
+    <div class="card-head">
+      <span class="label">You edited</span>
+      <span class="count">1 file · 3 symbols</span>
+    </div>
+    <div class="file-path">internal/db/queries.go</div>
+    <div class="file-meta">Working-tree change vs HEAD</div>
+    <ul class="symbol-list">
+      <li>PrepareQueries</li>
+      <li>Close</li>
+      <li>SymbolsInFile</li>
+    </ul>
+  </div>
+
+  <div class="arrow">
+    <svg width="64" height="40" viewBox="0 0 64 40" fill="none">
+      <path d="M2 20 H56 M48 10 L58 20 L48 30" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </svg>
+    <div class="verb">get_impact</div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="label accent">Blast radius</span>
+      <span class="count">5 impacted symbols · depth 1</span>
+    </div>
+    <table class="impact">
+      <thead>
+        <tr>
+          <th style="width:30%">file</th>
+          <th style="width:28%">symbol</th>
+          <th style="width:14%">kind</th>
+          <th style="width:8%">depth</th>
+          <th style="width:20%">via</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="file">internal/tools/get_impact.go</td>
+          <td class="symbol">GetImpactHandler</td>
+          <td class="kind"><span class="pill">function</span></td>
+          <td class="depth">1</td>
+          <td class="via">SymbolsInFile</td>
+        </tr>
+        <tr>
+          <td class="file">internal/db/store.go</td>
+          <td class="symbol">SymbolsInFile</td>
+          <td class="kind"><span class="pill">function</span></td>
+          <td class="depth">1</td>
+          <td class="via">SymbolsInFile</td>
+        </tr>
+        <tr>
+          <td class="file">internal/tools/query_codebase_test.go</td>
+          <td class="symbol">TestQueryCodebase_SuggestionsOnZeroResults <span class="testbadge">· test</span></td>
+          <td class="kind"><span class="pill">function</span></td>
+          <td class="depth">1</td>
+          <td class="via">Close</td>
+        </tr>
+        <tr>
+          <td class="file">internal/db/store_test.go</td>
+          <td class="symbol">TestSQLiteStoreImplementsStore <span class="testbadge">· test</span></td>
+          <td class="kind"><span class="pill">function</span></td>
+          <td class="depth">1</td>
+          <td class="via">Close</td>
+        </tr>
+        <tr>
+          <td class="file">internal/db/queries_test.go</td>
+          <td class="symbol">TestSymbolsInFile <span class="testbadge">· test</span></td>
+          <td class="kind"><span class="pill">function</span></td>
+          <td class="depth">1</td>
+          <td class="via">SymbolsInFile</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<div class="stats-row">
+  <div class="stat"><div class="k">changed files</div><div class="v">1</div></div>
+  <div class="stat"><div class="k">changed symbols</div><div class="v">3</div></div>
+  <div class="stat"><div class="k">impacted symbols</div><div class="v accent">5</div></div>
+  <div class="stat"><div class="k">max depth reached</div><div class="v">1</div></div>
+  <div class="stat"><div class="k">truncated</div><div class="v">false</div></div>
+</div>
+
+<div class="footer">
+  <div class="left">
+    <strong style="color:var(--text);">Transcript visualization</strong> · Real <code>get_impact</code> MCP response captured 2026-05-26 against the max-context self repo at <code>worktree-phase-8-strategic-differentiation</code>. Rendered for clarity — not a screenshot of any IDE chrome. See <code>BENCHMARK.md</code> for token measurements.
+  </div>
+  <div class="right">
+    max-context v0.8.0<br>
+    4 MCP tools · 0 LLM calls at index time
+  </div>
+</div>
+
+</body>
+</html>
