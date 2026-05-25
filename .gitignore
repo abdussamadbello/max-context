@@ -1,5 +1,4 @@
 # Build artifacts
-max-context
 bin/max-context
 bin/max-context-*
 *.exe
