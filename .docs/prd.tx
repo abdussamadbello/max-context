@@ -230,7 +230,7 @@ Maximum Context generates and maintains the following files in the project root:
 
 **REQ-MCP-01:** The MCP server must support both **stdio transport** (for CLI tools) and **HTTP/SSE transport** (for IDE integrations) as defined by the MCP specification.
 
-**REQ-MCP-02:** The combined schema token cost of both tools must not exceed 750 tokens when measured with cl100k_base tokenization.
+**REQ-MCP-02:** The combined schema token cost of all MCP tools must not exceed 1000 tokens when measured with cl100k_base tokenization. (Raised from 750 in Phase 8 to accommodate the get_impact tool; remains a tiny fraction of a modern context window.)
 
 **REQ-MCP-03:** `query_codebase` must return results within 200ms at p95 for indexes up to 500K LOC.
 
