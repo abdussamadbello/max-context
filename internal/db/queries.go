@@ -169,3 +169,33 @@ func (q *Queries) Close() error {
 	}
 	return nil
 }
+
+// Symbol is a minimal projection of a function row used by impact analysis.
+type Symbol struct {
+	ID        int64
+	Name      string
+	FilePath  string
+	StartLine int
+	Language  string
+}
+
+// SymbolsInFile returns every function-row that lives in the given project-root-relative file path.
+// Returns an empty slice (not nil) when the file has no indexed symbols.
+func SymbolsInFile(db interface {
+	Query(query string, args ...interface{}) (*sql.Rows, error)
+}, filePath string) ([]Symbol, error) {
+	rows, err := db.Query(`SELECT id, name, file_path, start_line, language FROM functions WHERE file_path = ? ORDER BY start_line`, filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Symbol{}
+	for rows.Next() {
+		var s Symbol
+		if err := rows.Scan(&s.ID, &s.Name, &s.FilePath, &s.StartLine, &s.Language); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
