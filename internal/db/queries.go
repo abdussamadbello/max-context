@@ -179,11 +179,20 @@ type Symbol struct {
 	Language  string
 }
 
-// SymbolsInFile returns every function-row that lives in the given project-root-relative file path.
-// Returns an empty slice (not nil) when the file has no indexed symbols.
-func SymbolsInFile(db interface {
+// Querier is the minimal database surface SymbolsInFile (and future ad-hoc queries)
+// rely on. It is satisfied by *sql.DB and any wrapper that exposes the same Query
+// signature — for example the Store interface introduced in a later task.
+type Querier interface {
 	Query(query string, args ...interface{}) (*sql.Rows, error)
-}, filePath string) ([]Symbol, error) {
+}
+
+// SymbolsInFile returns every function-row that lives in the given
+// project-root-relative file path. Returns an empty slice (not nil) when the
+// file has no indexed symbols.
+//
+// Standalone (not a *Queries method) because it runs at most once per
+// get_impact request — a prepared-statement slot would be unused overhead.
+func SymbolsInFile(db Querier, filePath string) ([]Symbol, error) {
 	rows, err := db.Query(`SELECT id, name, file_path, start_line, language FROM functions WHERE file_path = ? ORDER BY start_line`, filePath)
 	if err != nil {
 		return nil, err

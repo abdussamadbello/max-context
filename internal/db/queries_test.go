@@ -43,6 +43,9 @@ func TestSymbolsInFile(t *testing.T) {
 	if !names["Foo"] || !names["Bar"] {
 		t.Fatalf("missing expected symbols: %+v", syms)
 	}
+	if syms[0].StartLine > syms[1].StartLine {
+		t.Fatalf("expected results ordered by start_line, got %d before %d", syms[0].StartLine, syms[1].StartLine)
+	}
 
 	empty, err := SymbolsInFile(database, "internal/missing.go")
 	if err != nil {
