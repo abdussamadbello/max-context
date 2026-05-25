@@ -1,24 +1,211 @@
 [
-  { "id": "L01", "text": "Where is the function that opens the SQLite database?", "category": "lookup", "mc_tool": "query_codebase", "baseline_terms": ["Open"], "mc_response_tokens": 300 },
-  { "id": "L02", "text": "Where is the file watcher started?", "category": "lookup", "mc_tool": "query_codebase", "baseline_terms": ["fsnotify"], "mc_response_tokens": 280 },
-  { "id": "L03", "text": "Which file defines the MCP tool handler signature?", "category": "lookup", "mc_tool": "query_codebase", "baseline_terms": ["ToolHandler"], "mc_response_tokens": 260 },
-  { "id": "L04", "text": "Where is the query_codebase tool registered?", "category": "lookup", "mc_tool": "query_codebase", "baseline_terms": ["query_codebase"], "mc_response_tokens": 310 },
-  { "id": "L05", "text": "What is the schema migration for the functions table?", "category": "lookup", "mc_tool": "query_codebase", "baseline_terms": ["migrationV1", "CREATE TABLE functions"], "mc_response_tokens": 420 },
-  { "id": "L06", "text": "Where is the architecture summary generated?", "category": "lookup", "mc_tool": "query_codebase", "baseline_terms": ["WriteArchitecture", "WriteSummary"], "mc_response_tokens": 290 },
-  { "id": "L07", "text": "What's the structure of a search result?", "category": "lookup", "mc_tool": "query_codebase", "baseline_terms": ["searchResult"], "mc_response_tokens": 220 },
-
-  { "id": "T01", "text": "What calls IndexFile?", "category": "trace", "mc_tool": "get_call_chain", "baseline_terms": ["IndexFile"], "mc_response_tokens": 250 },
-  { "id": "T02", "text": "What does Migrate call?", "category": "trace", "mc_tool": "get_call_chain", "baseline_terms": ["Migrate"], "mc_response_tokens": 240 },
-  { "id": "T03", "text": "What calls PrepareQueries?", "category": "trace", "mc_tool": "get_call_chain", "baseline_terms": ["PrepareQueries"], "mc_response_tokens": 230 },
-  { "id": "T04", "text": "What calls Open in the db package?", "category": "trace", "mc_tool": "get_call_chain", "baseline_terms": ["db.Open", "Open("], "mc_response_tokens": 270 },
-  { "id": "T05", "text": "What does Index() in indexer call?", "category": "trace", "mc_tool": "get_call_chain", "baseline_terms": ["indexer.Index"], "mc_response_tokens": 260 },
-  { "id": "T06", "text": "Trace what the MCP Serve method ends up doing", "category": "trace", "mc_tool": "get_call_chain", "baseline_terms": ["Serve", "srv.Serve"], "mc_response_tokens": 320 },
-
-  { "id": "I01", "text": "If I change internal/db/queries.go, what's affected?", "category": "impact", "mc_tool": "get_impact", "baseline_terms": ["queries.go", "Queries"], "mc_response_tokens": 600 },
-  { "id": "I02", "text": "If I refactor RegisterAll, what's affected?", "category": "impact", "mc_tool": "get_impact", "baseline_terms": ["RegisterAll"], "mc_response_tokens": 280 },
-  { "id": "I03", "text": "If I change SymbolsInFile, what calls it?", "category": "impact", "mc_tool": "get_impact", "baseline_terms": ["SymbolsInFile"], "mc_response_tokens": 220 },
-  { "id": "I04", "text": "If I change the calls table schema, what code needs updating?", "category": "impact", "mc_tool": "get_impact", "baseline_terms": ["calls", "InsertCall", "GetCallersOf"], "mc_response_tokens": 500 },
-  { "id": "I05", "text": "If I rename queryCallChain, what's affected?", "category": "impact", "mc_tool": "get_impact", "baseline_terms": ["queryCallChain"], "mc_response_tokens": 200 },
-  { "id": "I06", "text": "If I change the MCP handler signature, what needs to be updated?", "category": "impact", "mc_tool": "get_impact", "baseline_terms": ["ToolHandler", "mcp.ToolHandler"], "mc_response_tokens": 380 },
-  { "id": "I07", "text": "If I touch internal/tools/register.go, what's affected?", "category": "impact", "mc_tool": "get_impact", "baseline_terms": ["register.go", "tools.RegisterAll"], "mc_response_tokens": 290 }
+  {
+    "id": "L01",
+    "text": "Where is the function that opens the SQLite database?",
+    "category": "lookup",
+    "mc_tool": "query_codebase",
+    "baseline_terms": [
+      "Open"
+    ],
+    "mc_response_tokens": 776
+  },
+  {
+    "id": "L02",
+    "text": "Where is the file watcher started?",
+    "category": "lookup",
+    "mc_tool": "query_codebase",
+    "baseline_terms": [
+      "fsnotify"
+    ],
+    "mc_response_tokens": 432
+  },
+  {
+    "id": "L03",
+    "text": "Which file defines the MCP tool handler signature?",
+    "category": "lookup",
+    "mc_tool": "query_codebase",
+    "baseline_terms": [
+      "ToolHandler"
+    ],
+    "mc_response_tokens": 179
+  },
+  {
+    "id": "L04",
+    "text": "Where is the query_codebase tool registered?",
+    "category": "lookup",
+    "mc_tool": "query_codebase",
+    "baseline_terms": [
+      "query_codebase"
+    ],
+    "mc_response_tokens": 1174
+  },
+  {
+    "id": "L05",
+    "text": "What is the schema migration for the functions table?",
+    "category": "lookup",
+    "mc_tool": "query_codebase",
+    "baseline_terms": [
+      "migrationV1",
+      "CREATE TABLE functions"
+    ],
+    "mc_response_tokens": 165
+  },
+  {
+    "id": "L06",
+    "text": "Where is the architecture summary generated?",
+    "category": "lookup",
+    "mc_tool": "query_codebase",
+    "baseline_terms": [
+      "WriteArchitecture",
+      "WriteSummary"
+    ],
+    "mc_response_tokens": 533
+  },
+  {
+    "id": "L07",
+    "text": "What's the structure of a search result?",
+    "category": "lookup",
+    "mc_tool": "query_codebase",
+    "baseline_terms": [
+      "searchResult"
+    ],
+    "mc_response_tokens": 174
+  },
+  {
+    "id": "T01",
+    "text": "What calls IndexFile?",
+    "category": "trace",
+    "mc_tool": "get_call_chain",
+    "baseline_terms": [
+      "IndexFile"
+    ],
+    "mc_response_tokens": 72
+  },
+  {
+    "id": "T02",
+    "text": "What does Migrate call?",
+    "category": "trace",
+    "mc_tool": "get_call_chain",
+    "baseline_terms": [
+      "Migrate"
+    ],
+    "mc_response_tokens": 134
+  },
+  {
+    "id": "T03",
+    "text": "What calls PrepareQueries?",
+    "category": "trace",
+    "mc_tool": "get_call_chain",
+    "baseline_terms": [
+      "PrepareQueries"
+    ],
+    "mc_response_tokens": 100
+  },
+  {
+    "id": "T04",
+    "text": "What calls Open in the db package?",
+    "category": "trace",
+    "mc_tool": "get_call_chain",
+    "baseline_terms": [
+      "db.Open",
+      "Open("
+    ],
+    "mc_response_tokens": 49
+  },
+  {
+    "id": "T05",
+    "text": "What does Index() in indexer call?",
+    "category": "trace",
+    "mc_tool": "get_call_chain",
+    "baseline_terms": [
+      "indexer.Index"
+    ],
+    "mc_response_tokens": 50
+  },
+  {
+    "id": "T06",
+    "text": "Trace what the MCP Serve method ends up doing",
+    "category": "trace",
+    "mc_tool": "get_call_chain",
+    "baseline_terms": [
+      "Serve",
+      "srv.Serve"
+    ],
+    "mc_response_tokens": 97
+  },
+  {
+    "id": "I01",
+    "text": "If I change internal/db/queries.go, what's affected?",
+    "category": "impact",
+    "mc_tool": "get_impact",
+    "baseline_terms": [
+      "queries.go",
+      "Queries"
+    ],
+    "mc_response_tokens": 78
+  },
+  {
+    "id": "I02",
+    "text": "If I refactor RegisterAll, what's affected?",
+    "category": "impact",
+    "mc_tool": "get_impact",
+    "baseline_terms": [
+      "RegisterAll"
+    ],
+    "mc_response_tokens": 99
+  },
+  {
+    "id": "I03",
+    "text": "If I change SymbolsInFile, what calls it?",
+    "category": "impact",
+    "mc_tool": "get_impact",
+    "baseline_terms": [
+      "SymbolsInFile"
+    ],
+    "mc_response_tokens": 99
+  },
+  {
+    "id": "I04",
+    "text": "If I change the calls table schema, what code needs updating?",
+    "category": "impact",
+    "mc_tool": "get_impact",
+    "baseline_terms": [
+      "calls",
+      "InsertCall",
+      "GetCallersOf"
+    ],
+    "mc_response_tokens": 99
+  },
+  {
+    "id": "I05",
+    "text": "If I rename queryCallChain, what's affected?",
+    "category": "impact",
+    "mc_tool": "get_impact",
+    "baseline_terms": [
+      "queryCallChain"
+    ],
+    "mc_response_tokens": 99
+  },
+  {
+    "id": "I06",
+    "text": "If I change the MCP handler signature, what needs to be updated?",
+    "category": "impact",
+    "mc_tool": "get_impact",
+    "baseline_terms": [
+      "ToolHandler",
+      "mcp.ToolHandler"
+    ],
+    "mc_response_tokens": 99
+  },
+  {
+    "id": "I07",
+    "text": "If I touch internal/tools/register.go, what's affected?",
+    "category": "impact",
+    "mc_tool": "get_impact",
+    "baseline_terms": [
+      "register.go",
+      "tools.RegisterAll"
+    ],
+    "mc_response_tokens": 78
+  }
 ]
