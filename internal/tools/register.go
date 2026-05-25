@@ -8,13 +8,17 @@ import (
 )
 
 func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot string) []mcp.ToolSchema {
+	store := db.NewSQLiteStore(database)
+
 	h.Register("query_codebase", QueryCodebaseHandler(database, q, projectRoot))
 	h.Register("get_call_chain", GetCallChainHandler(database))
+	h.Register("get_impact", GetImpactHandler(store, projectRoot))
 	h.Register("get_architecture", GetArchitectureHandler(projectRoot))
+
 	return []mcp.ToolSchema{
 		{
 			Name:        "query_codebase",
-			Description: "Search the indexed codebase for functions, types, or files by keyword. Returns BM25-ranked results with file paths, line numbers, and code snippets.",
+			Description: "Search the indexed codebase for functions, types, or files by keyword. Returns BM25-ranked results with file paths, line numbers, and code snippets. Returns 'suggestions' when results are weak.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -37,6 +41,20 @@ func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot st
 					"depth":         map[string]interface{}{"type": "integer", "description": "Max recursion depth (1-5)", "default": 2},
 				},
 				"required": []string{"function_name"},
+			},
+		},
+		{
+			Name:        "get_impact",
+			Description: "Given changed files (or a git rev range), return symbols whose blast radius is affected. Default behaviour: diff against HEAD, walk callers to depth 2. Use this post-edit to learn what tests and dependents your change may break.",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"files":         map[string]interface{}{"type": "array", "items": map[string]string{"type": "string"}, "description": "Explicit file list (project-root relative). If omitted, uses from_git or defaults to HEAD."},
+					"from_git":      map[string]string{"type": "string", "description": "Git revision (e.g. 'HEAD' or 'main..HEAD'). Ignored if 'files' is set."},
+					"depth":         map[string]interface{}{"type": "integer", "description": "Max recursion depth (1-5)", "default": 2},
+					"direction":     map[string]interface{}{"type": "string", "description": "callers (blast radius), callees (dependencies), or both", "enum": []string{"callers", "callees", "both"}, "default": "callers"},
+					"include_tests": map[string]interface{}{"type": "boolean", "description": "Include test files in results", "default": true},
+				},
 			},
 		},
 		{
