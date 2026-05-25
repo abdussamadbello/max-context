@@ -1,0 +1,21 @@
+{
+  "name": "@maxcontext/cli",
+  "version": "0.1.0",
+  "description": "Maximum Context — MCP server for codebase indexing and query",
+  "bin": {
+    "max-context": "./bin/max-context.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/maxcontext/max-context.git"
+  },
+  "keywords": ["mcp", "codebase", "index", "ai"],
+  "license": "MIT",
+  "engines": { "node": ">=18" },
+  "optionalDependencies": {
+    "adm-zip": "^0.5.16"
+  }
+}

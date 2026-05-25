@@ -1,0 +1,11 @@
+{
+  "name": "max-context-local",
+  "owner": { "name": "Max Context" },
+  "plugins": [
+    {
+      "name": "max-context",
+      "source": "./plugins/max-context",
+      "description": "Full context awareness: query_codebase, get_architecture, hooks, /reindex"
+    }
+  ]
+}

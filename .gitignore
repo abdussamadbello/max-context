@@ -1,0 +1,18 @@
+# Build artifacts
+max-context
+bin/max-context
+bin/max-context-*
+*.exe
+
+# Index data (generated per-project)
+.max-context/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

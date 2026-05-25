@@ -1,0 +1,6 @@
+{
+  "name": "max-context",
+  "version": "0.1.0",
+  "description": "Full context awareness: intercept grep/read with query_codebase, inject architecture at session start, persist summary before compact, /reindex command.",
+  "hooks": "./hooks/hooks.json"
+}
