@@ -1,6 +1,41 @@
 # Maximum Context
 
-Maximum Context is a **Go-based MCP (Model Context Protocol) server** that gives AI coding assistants deep, always-current awareness of a codebase. It indexes a project's structure, symbols, dependencies, and architecture, then exposes that knowledge through a minimal 2-tool MCP interface.
+Maximum Context is a **Go-based MCP (Model Context Protocol) server** that gives AI coding assistants deep, always-current awareness of a codebase. It indexes a project's structure, symbols, dependencies, and architecture, then exposes that knowledge through a minimal **4-tool MCP interface**.
+
+## Why max-context
+
+AI coding agents waste 30–60% of their context window grepping and re-reading files to figure out where things are. max-context pre-computes that understanding and serves it on demand.
+
+- **Always current** — file changes reflected in < 2 seconds via OS-native watchers
+- **No LLM at index time** — deterministic tree-sitter parsing; no API keys, no token spend on indexing
+- **Minimal surface, no breaking changes** — 4 focused MCP tools, stable schema
+
+See [`BENCHMARK.md`](./BENCHMARK.md) for measured token savings vs naive and skilled Grep+Read baselines. **Skilled-baseline headline: 29.5× fewer tokens per query on max-context's own codebase.**
+
+## How it works
+
+```
+┌─────────────────┐     fsnotify     ┌──────────────────────┐
+│   Codebase      │ ────────────────▶│  max-context binary  │
+│                 │                  │                       │
+└─────────────────┘                  │  ┌────────────────┐  │
+                                     │  │ tree-sitter    │  │
+                                     │  │ parser         │  │
+                                     │  └───────┬────────┘  │
+                                     │          ▼           │
+                                     │  ┌────────────────┐  │
+                                     │  │ SQLite FTS5    │  │
+                                     │  │ + call graph   │  │
+                                     │  └───────┬────────┘  │
+                                     │          ▼           │
+┌─────────────────┐     stdio MCP    │  ┌────────────────┐  │
+│  AI CLI / IDE   │ ◀────────────────│  │ MCP server     │  │
+└─────────────────┘                  │  │ (4 tools)      │  │
+                                     │  └────────────────┘  │
+                                     └──────────────────────┘
+```
+
+Tree-sitter parses every supported language deterministically. Symbols and call edges land in a SQLite database with FTS5 indexes on function/type names. Recursive CTEs power call-chain and impact queries. **No LLM is involved at index time** — the host CLI's model does all the reasoning, with max-context feeding it pre-computed structure.
 
 ## Features
 
