@@ -109,9 +109,86 @@ func QueryCodebaseHandler(database *sql.DB, q *db.Queries, projectRoot string) m
 			}
 		}
 
-		b, _ := json.Marshal(map[string]interface{}{"results": results, "total": len(results)})
+		// Constrained query expansion: when no results came back, surface candidate
+		// names from the index that substring-match the user's query terms. The LLM
+		// can re-issue a query with one of these to land on a real symbol.
+		var suggestions []string
+		if len(results) == 0 {
+			suggestions = nearbyTerms(database, a.Query)
+		}
+
+		payload := map[string]interface{}{"results": results, "total": len(results)}
+		if len(suggestions) > 0 {
+			payload["suggestions"] = suggestions
+		}
+		b, _ := json.Marshal(payload)
 		return []mcp.ContentItem{{Type: "text", Text: string(b)}}, nil
 	}
+}
+
+// nearbyTerms returns up to 5 indexed symbol names whose name contains any token
+// of length >= 3 from the user query. Cheap, no FTS dependency, degrades to empty.
+func nearbyTerms(database *sql.DB, query string) []string {
+	var terms []string
+	for _, t := range splitTerms(query) {
+		if len(t) >= 3 {
+			terms = append(terms, t)
+		}
+	}
+	if len(terms) == 0 {
+		return nil
+	}
+	out := []string{}
+	seen := map[string]bool{}
+	for _, t := range terms {
+		// Try all prefix substrings of the term down to length 3.
+		// This lets a typo like "authnticate" still match "AuthenticateUser"
+		// via the shared prefix "auth".
+		for prefixLen := len(t); prefixLen >= 3; prefixLen-- {
+			like := "%" + t[:prefixLen] + "%"
+			for _, table := range []string{"functions", "types"} {
+				rows, err := database.Query("SELECT DISTINCT name FROM "+table+" WHERE name LIKE ? COLLATE NOCASE LIMIT 5", like)
+				if err != nil {
+					continue
+				}
+				for rows.Next() {
+					var name string
+					if rows.Scan(&name) == nil && !seen[name] {
+						seen[name] = true
+						out = append(out, name)
+						if len(out) >= 5 {
+							rows.Close()
+							return out
+						}
+					}
+				}
+				rows.Close()
+			}
+			if len(out) >= 5 {
+				return out
+			}
+		}
+	}
+	return out
+}
+
+func splitTerms(query string) []string {
+	var out []string
+	cur := ""
+	for _, r := range query {
+		if r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			cur += string(r)
+			continue
+		}
+		if cur != "" {
+			out = append(out, cur)
+			cur = ""
+		}
+	}
+	if cur != "" {
+		out = append(out, cur)
+	}
+	return out
 }
 
 // getNames executes a prepared statement that returns a single name column per row.
