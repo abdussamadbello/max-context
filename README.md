@@ -147,7 +147,6 @@ IDEs that support MCP Resources (e.g. VS Code Copilot) can list and read these i
 - `pkg/treesitter/` — Tree-sitter bindings and language queries
 - `.claude-plugin/` — Claude Code plugin manifest (Phase 4)
 - `hooks/` — Claude Code plugin hooks (PreToolUse, SessionStart, PreCompact)
-- `.github/hooks/` — VS Code–style hooks and scripts (Phase 5; same behavior)
 - `commands/` — Plugin slash command (e.g. `/reindex`)
 - `npm-package/` — npm wrapper `@maxcontext/cli` with postinstall binary download + SHA256 (Phase 7)
 - `scripts/install.sh` — Install script for curl\|sh (Phase 7)
@@ -160,4 +159,6 @@ IDEs that support MCP Resources (e.g. VS Code Copilot) can list and read these i
 
 ## License
 
-See LICENSE file.
+Licensed under the [Apache License, Version 2.0](LICENSE). See [NOTICE](NOTICE) for attribution requirements when redistributing.
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).

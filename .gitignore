@@ -15,3 +15,16 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Local secrets / env
+.env
+.env.*
+!.env.example
+
+# Go test / coverage
+coverage.out
+*.test
+*.prof
+
+# Misc
+*.log
