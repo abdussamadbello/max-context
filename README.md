@@ -15,24 +15,20 @@ See [`BENCHMARK.md`](./BENCHMARK.md) for measured token savings vs naive and ski
 ## How it works
 
 ```
-┌─────────────────┐     fsnotify     ┌──────────────────────┐
-│   Codebase      │ ────────────────▶│  max-context binary  │
-│                 │                  │                       │
-└─────────────────┘                  │  ┌────────────────┐  │
-                                     │  │ tree-sitter    │  │
-                                     │  │ parser         │  │
-                                     │  └───────┬────────┘  │
-                                     │          ▼           │
-                                     │  ┌────────────────┐  │
-                                     │  │ SQLite FTS5    │  │
-                                     │  │ + call graph   │  │
-                                     │  └───────┬────────┘  │
-                                     │          ▼           │
-┌─────────────────┐     stdio MCP    │  ┌────────────────┐  │
-│  AI CLI / IDE   │ ◀────────────────│  │ MCP server     │  │
-└─────────────────┘                  │  │ (4 tools)      │  │
-                                     │  └────────────────┘  │
-                                     └──────────────────────┘
+                                  ┌─────────────────────────────────┐
+                                  │       max-context binary        │
+    ┌─────────────┐ fsnotify      │   ┌─────────────────────────┐   │
+    │ Codebase    │───────────────┼─▶ │   tree-sitter parser    │   │
+    └─────────────┘               │   └────────────┬────────────┘   │
+                                  │                ▼                │
+                                  │   ┌─────────────────────────┐   │
+                                  │   │SQLite FTS5 + call graph │   │
+                                  │   └────────────┬────────────┘   │
+    ┌─────────────┐               │                ▼                │
+    │ AI CLI / IDE│ stdio MCP     │   ┌─────────────────────────┐   │
+    └─────────────┘◀──────────────┼───│  MCP server · 4 tools   │   │
+                                  │   └─────────────────────────┘   │
+                                  └─────────────────────────────────┘
 ```
 
 Tree-sitter parses every supported language deterministically. Symbols and call edges land in a SQLite database with FTS5 indexes on function/type names. Recursive CTEs power call-chain and impact queries. **No LLM is involved at index time** — the host CLI's model does all the reasoning, with max-context feeding it pre-computed structure.
@@ -56,7 +52,11 @@ Pick one:
 | **GitHub Release** | Download the binary for your OS/arch from [Releases](https://github.com/maxcontext/max-context/releases); verify with `checksums.txt` (SHA256). |
 | **From source** | `make build` then `make install` (copies to `~/.local/bin`) or `make install-path` (install + add that dir to your shell PATH). On Windows, `make install-path` installs to `%LOCALAPPDATA%\max-context\bin` and prints instructions to add it to your user PATH. |
 
-After install, ensure the binary is on your `PATH`. With `make install-path` on macOS/Linux, `~/.local/bin` is appended to your `PATH` in `.bashrc`, `.zshrc`, or `.profile` if it isn’t already there; run `source ~/.bashrc` (or your rc file) to apply. On Windows, add the install directory to your user PATH (Settings → Environment Variables) or use the PowerShell one-liner printed by `make install-path`. The install script puts it in `~/.local/bin` by default; set `MAX_CONTEXT_INSTALL_DIR` to override.
+> [!NOTE]
+> Ensure the binary is on your `PATH` after install.
+> - **macOS/Linux:** `make install-path` appends `~/.local/bin` to your `PATH` in `.bashrc`, `.zshrc`, or `.profile` if it isn't already there — run `source ~/.bashrc` (or your rc file) to apply.
+> - **Windows:** add the install directory to your user PATH (Settings → Environment Variables), or use the PowerShell one-liner printed by `make install-path`.
+> - The install script defaults to `~/.local/bin`; set `MAX_CONTEXT_INSTALL_DIR` to override.
 
 ## Quick Start
 
