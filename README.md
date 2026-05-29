@@ -44,7 +44,7 @@ Tree-sitter parses every supported language deterministically. Symbols and call 
 - **Multi-language**: TypeScript, JavaScript, Python, Go, Rust, Java (and more via Tree-sitter)
 - **Universal CLI support**: One `max-context setup <cli>` configures Claude Code, VS Code Copilot, Codex CLI, Antigravity, Cursor, and Windsurf
 
-## Install (Phase 7)
+## Install
 
 Pick one:
 
@@ -84,7 +84,7 @@ After installing `max-context` and ensuring it’s on your PATH:
 
 | CLI | Steps |
 |-----|--------|
-| **Claude Code** | 1. Add MCP server (e.g. `max-context setup claude-code` or put `max-context` in `.mcp.json`). 2. Install plugin: `claude plugin install <path-to-max-context-repo>`. 3. In project: `max-context --index` then start Claude Code. |
+| **Claude Code** | 1. Add MCP server (e.g. `max-context setup claude-code` or put `max-context` in `.mcp.json`). 2. Install plugin: `/plugin marketplace add <path-to-repo>` then `/plugin install max-context@max-context-local` (see [Claude Code Plugin](#claude-code-plugin) below). 3. In project: `max-context --index` then start Claude Code. |
 | **VS Code Copilot** | 1. `max-context setup vscode` (writes `.vscode/mcp.json`, `.github/hooks/`, skills). 2. `max-context --index` in project. 3. Open VS Code; MCP and hooks load. |
 | **Codex CLI** | 1. `max-context setup codex` (adds MCP to `.codex/config.toml`, skill to `.codex/skills/max-context/`). 2. `max-context --index`. 3. Use Codex in the project. |
 | **Antigravity** | 1. `max-context setup antigravity` (MCP config, `.agent/skills/max-context/`, rules). 2. `max-context --index`. 3. Run Antigravity in the project. |
@@ -103,7 +103,7 @@ After installing `max-context` and ensuring it’s on your PATH:
 | `--version` | Print version and exit |
 | `setup <cli>` | Generate config for claude-code, vscode, codex, antigravity, cursor, windsurf, or all |
 
-## Claude Code Plugin (Phase 4)
+## Claude Code Plugin
 
 When used as a **Claude Code plugin** (install from this repo), you get:
 
@@ -118,11 +118,11 @@ When used as a **Claude Code plugin** (install from this repo), you get:
 
 Ensure the `max-context` binary is on your PATH so the MCP server can start. The running server watches `.max-context/.reindex-queue`; writing that file triggers a full reindex in the background.
 
-## VS Code Copilot Hooks (Phase 5)
+## VS Code Copilot Hooks
 
 Run `max-context setup vscode` to create `.github/hooks/hooks.json` and `.github/hooks/scripts/` (SessionStart, PreCompact, PreToolUse) so VS Code Copilot gets the same grep-interception and session-start context as Claude Code. The hook format is shared; script paths use `${CLAUDE_PROJECT_DIR}/.github/hooks/scripts/`. In this repo, the same hook definitions live under `hooks/` (Claude Code plugin) and `.github/hooks/` (VS Code / project).
 
-## MCP Resources (Phase 6)
+## MCP Resources
 
 The server advertises the `resources` capability and exposes two read-only resources:
 
@@ -141,16 +141,18 @@ IDEs that support MCP Resources (e.g. VS Code Copilot) can list and read these i
 - `internal/indexer/` — Tree-sitter parsing, full/incremental index
 - `internal/watcher/` — fsnotify file watcher, debounce, git-aware invalidation
 - `internal/mcp/` — JSON-RPC 2.0 server (stdio)
-- `internal/tools/` — `query_codebase`, `get_architecture`
+- `internal/tools/` — the 4 MCP tools: `query_codebase`, `get_call_chain`, `get_impact`, `get_architecture`
 - `internal/artifacts/` — `architecture.md`, `summary.md`, `status.json`
 - `internal/setup/` — Per-CLI config writers
 - `pkg/treesitter/` — Tree-sitter bindings and language queries
-- `.claude-plugin/` — Claude Code plugin manifest (Phase 4)
+- `.claude-plugin/` — Claude Code plugin + marketplace manifests (`source: "./"` — the repo root is the plugin)
 - `hooks/` — Claude Code plugin hooks (PreToolUse, SessionStart, PreCompact)
 - `commands/` — Plugin slash command (e.g. `/reindex`)
-- `npm-package/` — npm wrapper `@maxcontext/cli` with postinstall binary download + SHA256 (Phase 7)
-- `scripts/install.sh` — Install script for curl\|sh (Phase 7)
-- `Formula/` — Homebrew formula template; update SHA256 from `checksums.txt` after each release (Phase 7)
+- `skills/` — Plugin skills (`index-codebase`, `show-call-chain`)
+- `templates/` — Per-CLI skill/rules templates emitted by `max-context setup`
+- `npm-package/` — npm wrapper `@maxcontext/cli` with postinstall binary download + SHA256
+- `scripts/install.sh` — Install script for curl\|sh
+- `Formula/` — Homebrew formula template; update SHA256 from `checksums.txt` after each release
 
 ## Requirements
 

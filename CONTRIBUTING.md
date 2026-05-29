@@ -26,9 +26,9 @@ You need Go 1.22+ and a C toolchain (CGO is required for the SQLite driver and t
 - `cmd/max-context/` — CLI entrypoint
 - `internal/` — private Go packages (indexer, MCP server, tools, watcher, etc.)
 - `pkg/treesitter/` — tree-sitter bindings (public API)
-- `plugins/`, `commands/`, `hooks/`, `skills/`, `templates/` — Claude Code plugin assets
+- `.claude-plugin/`, `commands/`, `hooks/`, `skills/`, `templates/` — Claude Code plugin assets (the repo root is the plugin)
 - `benchmark/` — token-savings benchmark harness + question sets
-- `docs/` — PRD, strategy, launch posts
+- `docs/` — public benchmark transcripts and screenshots
 
 See [README.md](README.md) for the architectural overview.
 
