@@ -21,6 +21,9 @@ Thumbs.db
 .env.*
 !.env.example
 
+# Private/commercial docs — NEVER commit to the public repo (strategy, PRD, launch drafts)
+private-docs/
+
 # Go test / coverage
 coverage.out
 *.test
