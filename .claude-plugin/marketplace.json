@@ -4,7 +4,7 @@
   "plugins": [
     {
       "name": "max-context",
-      "source": "./plugins/max-context",
+      "source": "./",
       "description": "Full context awareness: query_codebase, get_architecture, hooks, /reindex"
     }
   ]
