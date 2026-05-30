@@ -88,6 +88,9 @@ func setupVSCode(root string) error {
 	if _, err := os.Stat(skillPath); os.IsNotExist(err) {
 		os.WriteFile(skillPath, []byte("# Max Context\nUse query_codebase and get_architecture.\n"), 0644)
 	}
+	if err := writeVSCodePrompts(root); err != nil {
+		return err
+	}
 	return appendWithMarkers(filepath.Join(root, "AGENTS.md"), "Use max-context: query_codebase, get_architecture.")
 }
 

@@ -82,6 +82,32 @@ func writeCursorCommands(root string) error {
 	return nil
 }
 
+// renderVSCodePrompt renders a command as a VS Code prompt file (.prompt.md).
+func renderVSCodePrompt(c Command) string {
+	var b strings.Builder
+	b.WriteString("---\n")
+	b.WriteString("agent: agent\n")
+	fmt.Fprintf(&b, "description: %s\n", c.Description)
+	b.WriteString("---\n\n")
+	b.WriteString(c.Body)
+	b.WriteString("\n\nRun in the project root:\n\n```bash\n")
+	b.WriteString(c.Shell)
+	b.WriteString("\n```\n")
+	return b.String()
+}
+
+// writeVSCodePrompts renders each command into .github/prompts/<name>.prompt.md.
+func writeVSCodePrompts(root string) error {
+	dir := filepath.Join(root, ".github", "prompts")
+	for _, c := range Commands {
+		path := filepath.Join(dir, c.Name+".prompt.md")
+		if err := writeIfNotExists(path, renderVSCodePrompt(c)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // writeIfNotExists writes content to path only if it does not already exist,
 // creating parent directories. Mirrors the package's idempotent convention.
 func writeIfNotExists(path, content string) error {

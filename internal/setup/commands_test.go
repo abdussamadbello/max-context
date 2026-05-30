@@ -61,6 +61,28 @@ func TestSetupClaudeCodeWritesCommands(t *testing.T) {
 	}
 }
 
+func TestSetupVSCodeWritesPrompts(t *testing.T) {
+	root := t.TempDir()
+	if err := setupVSCode(root); err != nil {
+		t.Fatalf("setupVSCode: %v", err)
+	}
+	for file, shell := range map[string]string{
+		"reindex.prompt.md": "max-context --reindex",
+		"index.prompt.md":   "max-context --index",
+		"status.prompt.md":  "max-context --status",
+	} {
+		p := filepath.Join(root, ".github", "prompts", file)
+		data, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatalf("expected %s: %v", p, err)
+		}
+		s := string(data)
+		if !strings.Contains(s, shell) || !strings.Contains(s, "description:") {
+			t.Errorf("%s missing shell %q or description frontmatter", file, shell)
+		}
+	}
+}
+
 func TestSetupCursorWritesCommands(t *testing.T) {
 	root := t.TempDir()
 	if err := setupCursor(root); err != nil {
