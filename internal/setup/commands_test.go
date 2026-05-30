@@ -168,3 +168,24 @@ func TestSetupAntigravitySkillHasCommands(t *testing.T) {
 		t.Errorf("antigravity SKILL.md missing commands section")
 	}
 }
+
+func TestSetupCommandsAreIdempotent(t *testing.T) {
+	root := t.TempDir()
+	for i := 0; i < 2; i++ {
+		if err := setupClaudeCode(root); err != nil {
+			t.Fatalf("run %d: %v", i, err)
+		}
+	}
+	// A user edit must survive a second setup run.
+	p := filepath.Join(root, ".claude", "commands", "reindex.md")
+	if err := os.WriteFile(p, []byte("EDITED"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := setupClaudeCode(root); err != nil {
+		t.Fatalf("re-run: %v", err)
+	}
+	data, _ := os.ReadFile(p)
+	if string(data) != "EDITED" {
+		t.Errorf("user edit was overwritten: %q", string(data))
+	}
+}
