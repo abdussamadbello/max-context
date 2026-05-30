@@ -48,7 +48,7 @@ func renderSkillCommandsSection(cmds []Command) string {
 	var b strings.Builder
 	b.WriteString("\n## Commands\n\n")
 	for _, c := range cmds {
-		fmt.Fprintf(&b, "- **%s** — %s\n  ```bash\n  %s\n  ```\n", c.Name, c.Description, c.Shell)
+		fmt.Fprintf(&b, "### %s\n\n%s\n\n%s\n\n```bash\n%s\n```\n\n", c.Name, c.Description, c.Body, c.Shell)
 	}
 	return b.String()
 }

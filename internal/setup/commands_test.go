@@ -129,9 +129,12 @@ func TestRenderSkillCommandsSection(t *testing.T) {
 	out := renderSkillCommandsSection(Commands)
 	for _, want := range []string{
 		"## Commands",
+		"### reindex",
 		"max-context --reindex",
 		"max-context --index",
 		"max-context --status",
+		// Body guidance must reach skill-doc IDEs too (parity with file-based IDEs).
+		".max-context/.reindex-queue",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("section missing %q", want)
