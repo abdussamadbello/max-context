@@ -103,3 +103,24 @@ func TestSetupCursorWritesCommands(t *testing.T) {
 		}
 	}
 }
+
+func TestSetupWindsurfWritesWorkflows(t *testing.T) {
+	root := t.TempDir()
+	if err := setupWindsurf(root); err != nil {
+		t.Fatalf("setupWindsurf: %v", err)
+	}
+	for file, shell := range map[string]string{
+		"reindex.md": "max-context --reindex",
+		"index.md":   "max-context --index",
+		"status.md":  "max-context --status",
+	} {
+		p := filepath.Join(root, ".windsurf", "workflows", file)
+		data, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatalf("expected %s: %v", p, err)
+		}
+		if !strings.Contains(string(data), shell) {
+			t.Errorf("%s missing %q", file, shell)
+		}
+	}
+}

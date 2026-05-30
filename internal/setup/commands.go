@@ -108,6 +108,32 @@ func writeVSCodePrompts(root string) error {
 	return nil
 }
 
+// renderWindsurfWorkflow renders a command as a Windsurf workflow file.
+func renderWindsurfWorkflow(c Command) string {
+	var b strings.Builder
+	b.WriteString("---\n")
+	fmt.Fprintf(&b, "description: %s\n", c.Description)
+	b.WriteString("---\n\n")
+	fmt.Fprintf(&b, "# %s\n\n", c.Description)
+	b.WriteString(c.Body)
+	b.WriteString("\n\n```bash\n")
+	b.WriteString(c.Shell)
+	b.WriteString("\n```\n")
+	return b.String()
+}
+
+// writeWindsurfCommands renders each command into .windsurf/workflows/<name>.md.
+func writeWindsurfCommands(root string) error {
+	dir := filepath.Join(root, ".windsurf", "workflows")
+	for _, c := range Commands {
+		path := filepath.Join(dir, c.Name+".md")
+		if err := writeIfNotExists(path, renderWindsurfWorkflow(c)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // writeIfNotExists writes content to path only if it does not already exist,
 // creating parent directories. Mirrors the package's idempotent convention.
 func writeIfNotExists(path, content string) error {
