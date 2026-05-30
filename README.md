@@ -1,6 +1,6 @@
 # Maximum Context
 
-Maximum Context is a **Go-based MCP (Model Context Protocol) server** that gives AI coding assistants deep, always-current awareness of a codebase. It indexes a project's structure, symbols, dependencies, and architecture, then exposes that knowledge through a minimal **4-tool MCP interface**.
+Maximum Context is a **Go-based MCP (Model Context Protocol) server** that gives AI coding assistants deep, always-current awareness of a codebase. It indexes a project's structure, symbols, dependencies, and architecture, then exposes that knowledge through a focused, **decisive MCP tool interface**.
 
 ## Why max-context
 
@@ -8,7 +8,7 @@ AI coding agents waste 30–60% of their context window grepping and re-reading 
 
 - **Always current** — file changes reflected in < 2 seconds via OS-native watchers
 - **No LLM at index time** — deterministic tree-sitter parsing; no API keys, no token spend on indexing
-- **Minimal surface, no breaking changes** — 4 focused MCP tools, stable schema
+- **Minimal surface, no breaking changes** — a small set of focused MCP tools, stable schema
 
 See [`BENCHMARK.md`](./BENCHMARK.md) for measured token savings vs naive and skilled Grep+Read baselines. **Skilled-baseline headline: 29.5× fewer tokens per query on max-context's own codebase.**
 
@@ -35,7 +35,7 @@ Tree-sitter parses every supported language deterministically. Symbols and call 
 
 ## Features
 
-- **Four MCP tools**: `query_codebase` (BM25 symbol search), `get_call_chain` (recursive caller/callee traversal), `get_impact` (change blast radius), `get_architecture` (pre-computed project summary)
+- **Focused MCP tools**: `get_definition` (exact-name, single decisive location), `query_codebase` (BM25 fuzzy symbol search), `get_call_chain` (recursive caller/callee traversal), `get_impact` (change blast radius), `get_architecture` (pre-computed project summary)
 - **Real-time index**: File watcher keeps the index current within 2 seconds of changes
 - **Multi-language**: TypeScript, JavaScript, Python, Go, Rust, Java (and more via Tree-sitter)
 - **Universal CLI support**: One `max-context setup <cli>` configures Claude Code, VS Code Copilot, Codex CLI, Antigravity, Cursor, and Windsurf
@@ -111,6 +111,8 @@ When used as a **Claude Code plugin** (install from this repo), you get:
 - **SessionStart hook** — Injects `.max-context/summary.md` and `architecture.md` into context
 - **PreCompact hook** — Appends a session-preserved note to `summary.md` before context compaction
 - **/reindex** — Slash command to run `max-context --reindex` or touch `.max-context/.reindex-queue`
+
+`max-context setup <cli>` also generates `reindex`, `index`, and `status` commands for each editor in its native format — slash commands for Claude Code (`.claude/commands/`), Cursor (`.cursor/commands/`), and VS Code Copilot (`.github/prompts/*.prompt.md`); workflows for Windsurf (`.windsurf/workflows/`); and a documented **Commands** section in the skill file for Codex and Antigravity.
 
 **Install (local):** This repo is a local marketplace. In Claude Code, run:
 1. **Add marketplace:** `/plugin marketplace add ./max-context` — use the path to the **repo root** (e.g. `./max-context`, `~/max-context`, or `/home/.../max-context`). Valid formats: `./path`, `owner/repo`, or `https://...`.
