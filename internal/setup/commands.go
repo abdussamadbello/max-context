@@ -42,6 +42,17 @@ var statusCmd = Command{
 // Commands is the canonical catalog rendered into every IDE.
 var Commands = []Command{reindexCmd, indexCmd, statusCmd}
 
+// renderSkillCommandsSection renders the catalog as a "## Commands" markdown
+// block for editors without a native command mechanism (Codex, Antigravity).
+func renderSkillCommandsSection(cmds []Command) string {
+	var b strings.Builder
+	b.WriteString("\n## Commands\n\n")
+	for _, c := range cmds {
+		fmt.Fprintf(&b, "- **%s** — %s\n  ```bash\n  %s\n  ```\n", c.Name, c.Description, c.Shell)
+	}
+	return b.String()
+}
+
 // renderFrontmatterCommand renders a command as markdown with YAML frontmatter
 // (name + description). Used by Claude Code and Cursor, which share this format.
 func renderFrontmatterCommand(c Command) string {

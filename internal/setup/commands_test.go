@@ -124,3 +124,47 @@ func TestSetupWindsurfWritesWorkflows(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderSkillCommandsSection(t *testing.T) {
+	out := renderSkillCommandsSection(Commands)
+	for _, want := range []string{
+		"## Commands",
+		"max-context --reindex",
+		"max-context --index",
+		"max-context --status",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("section missing %q", want)
+		}
+	}
+}
+
+func TestSetupCodexSkillHasCommands(t *testing.T) {
+	root := t.TempDir()
+	if err := setupCodex(root); err != nil {
+		t.Fatalf("setupCodex: %v", err)
+	}
+	p := filepath.Join(root, ".codex", "skills", "max-context", "SKILL.md")
+	data, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("expected %s: %v", p, err)
+	}
+	if !strings.Contains(string(data), "max-context --reindex") {
+		t.Errorf("codex SKILL.md missing commands section")
+	}
+}
+
+func TestSetupAntigravitySkillHasCommands(t *testing.T) {
+	root := t.TempDir()
+	if err := setupAntigravity(root); err != nil {
+		t.Fatalf("setupAntigravity: %v", err)
+	}
+	p := filepath.Join(root, ".agent", "skills", "max-context", "SKILL.md")
+	data, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("expected %s: %v", p, err)
+	}
+	if !strings.Contains(string(data), "max-context --status") {
+		t.Errorf("antigravity SKILL.md missing commands section")
+	}
+}
