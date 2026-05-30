@@ -15,5 +15,8 @@ func setupClaudeCode(root string) error {
 	if _, err := os.Stat(mcpPath); os.IsNotExist(err) {
 		os.WriteFile(mcpPath, []byte(`{"mcpServers":{"max-context":{"command":"max-context","args":[]}}}`), 0644)
 	}
+	if err := writeClaudeCommands(root); err != nil {
+		return err
+	}
 	return appendWithMarkers(filepath.Join(root, "AGENTS.md"), "Use max-context: query_codebase, get_architecture.")
 }

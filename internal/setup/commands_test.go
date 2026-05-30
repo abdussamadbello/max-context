@@ -1,6 +1,8 @@
 package setup
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -34,6 +36,27 @@ func TestRenderFrontmatterCommand(t *testing.T) {
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("rendered command missing %q\n---\n%s", want, out)
+		}
+	}
+}
+
+func TestSetupClaudeCodeWritesCommands(t *testing.T) {
+	root := t.TempDir()
+	if err := setupClaudeCode(root); err != nil {
+		t.Fatalf("setupClaudeCode: %v", err)
+	}
+	for file, shell := range map[string]string{
+		"reindex.md": "max-context --reindex",
+		"index.md":   "max-context --index",
+		"status.md":  "max-context --status",
+	} {
+		p := filepath.Join(root, ".claude", "commands", file)
+		data, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatalf("expected %s: %v", p, err)
+		}
+		if !strings.Contains(string(data), shell) {
+			t.Errorf("%s missing %q", file, shell)
 		}
 	}
 }
