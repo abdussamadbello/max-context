@@ -60,3 +60,24 @@ func TestSetupClaudeCodeWritesCommands(t *testing.T) {
 		}
 	}
 }
+
+func TestSetupCursorWritesCommands(t *testing.T) {
+	root := t.TempDir()
+	if err := setupCursor(root); err != nil {
+		t.Fatalf("setupCursor: %v", err)
+	}
+	for file, shell := range map[string]string{
+		"reindex.md": "max-context --reindex",
+		"index.md":   "max-context --index",
+		"status.md":  "max-context --status",
+	} {
+		p := filepath.Join(root, ".cursor", "commands", file)
+		data, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatalf("expected %s: %v", p, err)
+		}
+		if !strings.Contains(string(data), shell) {
+			t.Errorf("%s missing %q", file, shell)
+		}
+	}
+}

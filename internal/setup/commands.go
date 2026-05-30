@@ -70,6 +70,18 @@ func writeClaudeCommands(root string) error {
 	return nil
 }
 
+// writeCursorCommands renders each command into .cursor/commands/<name>.md.
+func writeCursorCommands(root string) error {
+	dir := filepath.Join(root, ".cursor", "commands")
+	for _, c := range Commands {
+		path := filepath.Join(dir, c.Name+".md")
+		if err := writeIfNotExists(path, renderFrontmatterCommand(c)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // writeIfNotExists writes content to path only if it does not already exist,
 // creating parent directories. Mirrors the package's idempotent convention.
 func writeIfNotExists(path, content string) error {

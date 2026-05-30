@@ -16,5 +16,8 @@ func setupCursor(root string) error {
 	if _, e := os.Stat(rulePath); os.IsNotExist(e) {
 		os.WriteFile(rulePath, []byte("# Max Context\nUse query_codebase and get_architecture.\n"), 0644)
 	}
+	if err := writeCursorCommands(root); err != nil {
+		return err
+	}
 	return appendWithMarkers(filepath.Join(root, "AGENTS.md"), "Use max-context: query_codebase, get_architecture.")
 }
