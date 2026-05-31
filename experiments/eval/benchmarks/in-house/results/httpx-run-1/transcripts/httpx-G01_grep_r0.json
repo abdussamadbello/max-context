@@ -1,0 +1,386 @@
+{
+  "status": "completed",
+  "final_answer": "Now I have everything needed for a thorough, precise answer. Here it is:\n\n---\n\n## Why httpx reads proxy settings from environment variables by default\n\n### The short answer\n\nhttpx follows the long-standing Unix/curl/requests convention that a process should respect the operator's network configuration expressed through environment variables (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, `SSL_CERT_FILE`, `SSL_CERT_DIR`). This lets system administrators, CI pipelines, and container orchestrators inject proxy and TLS settings without touching application code. The behaviour is **on by default** because that is the least-surprising default for a general-purpose HTTP client, but it can be turned off completely with a single flag.\n\n---\n\n### The controlling parameter: `trust_env`\n\nEvery entry point in httpx accepts a `trust_env: bool = True` parameter:\n\n| Location | Default |\n|---|---|\n| `BaseClient.__init__` (`httpx/_client.py:201`) | `True` |\n| `Client.__init__` (`httpx/_client.py:648`) | `True` |\n| `AsyncClient.__init__` (`httpx/_client.py:1373`) | `True` |\n| Top-level helpers `httpx.get/post/request/…` (`httpx/_api.py:55`, etc.) | `True` |\n\nSetting `trust_env=False` disables **all** environment-variable-driven configuration in one shot.\n\n---\n\n### Exactly how it works — the call chain\n\n#### 1. `trust_env` is stored on `BaseClient`\n\n```python\n# httpx/_client.py  (BaseClient.__init__)\nself._trust_env = trust_env          # line 219\n\n@property\ndef trust_env(self) -\u003e bool:\n    return self._trust_env           # line 231-232\n```\n\n#### 2. Proxy map construction — the critical gate\n\nBoth `Client.__init__` and `AsyncClient.__init__` compute a boolean `allow_env_proxies` before building the proxy map:\n\n```python\n# httpx/_client.py  line 685 (Client) / line 1399 (AsyncClient)\nallow_env_proxies = trust_env and transport is None\nproxy_map = self._get_proxy_map(proxy, allow_env_proxies)\n```\n\nThe **second condition** (`transport is None`) is intentional: if the caller has already supplied a custom transport, httpx assumes that transport already handles routing, so env-proxy injection would be redundant and potentially wrong.\n\n#### 3. `_get_proxy_map` — where env vars are actually read\n\n```python\n# httpx/_client.py  lines 239-251\ndef _get_proxy_map(\n    self, proxy: ProxyTypes | None, allow_env_proxies: bool\n) -\u003e dict[str, Proxy | None]:\n    if proxy is None:\n        if allow_env_proxies:\n            return {\n                key: None if url is None else Proxy(url=url)\n                for key, url in get_environment_proxies().items()\n            }\n        return {}\n    else:\n        proxy = Proxy(url=proxy) if isinstance(proxy, (str, URL)) else proxy\n        return {\"all://\": proxy}\n```\n\nIf `proxy` is explicitly set, env vars are ignored entirely (the explicit value wins). If `proxy` is `None` and `allow_env_proxies` is `True`, it calls `get_environment_proxies()`.\n\n#### 4. `get_environment_proxies()` — the actual env-var reader\n\n```python\n# httpx/_utils.py  lines 30-76\nfrom urllib.request import getproxies   # stdlib\n\ndef get_environment_proxies() -\u003e dict[str, str | None]:\n    \"\"\"Gets proxy information from the environment\"\"\"\n    # urllib.request.getproxies() falls back on System\n    # Registry and Config for proxies on Windows and macOS.\n    # We don't want to propagate non-HTTP proxies into\n    # our configuration such as 'TRAVIS_APT_PROXY'.\n    proxy_info = getproxies()\n    mounts: dict[str, str | None] = {}\n\n    for scheme in (\"http\", \"https\", \"all\"):\n        if proxy_info.get(scheme):\n            hostname = proxy_info[scheme]\n            mounts[f\"{scheme}://\"] = (\n                hostname if \"://\" in hostname else f\"http://{hostname}\"\n            )\n\n    no_proxy_hosts = [host.strip() for host in proxy_info.get(\"no\", \"\").split(\",\")]\n    for hostname in no_proxy_hosts:\n        if hostname == \"*\":\n            return {}          # NO_PROXY=* disables everything\n        elif hostname:\n            # maps NO_PROXY entries to \"all://*\u003chost\u003e\" = None mount entries\n            ...\n    return mounts\n```\n\nKey design decisions visible here:\n- It delegates to **Python's stdlib `urllib.request.getproxies()`**, which reads `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and `NO_PROXY` (case-insensitively on most platforms) and also consults the Windows Registry and macOS System Configuration on those platforms.\n- It deliberately **filters to only `http`, `https`, and `all` schemes** to avoid accidentally picking up unrelated env vars like `TRAVIS_APT_PROXY`.\n- `NO_PROXY=*` short-circuits to an empty dict (no proxies at all).\n- Individual `NO_PROXY` entries are translated into `None`-valued mount entries (meaning \"bypass proxy for this pattern\"), following curl's documented `CURLOPT_NOPROXY` semantics.\n\n#### 5. SSL certificate env vars — also gated by `trust_env`\n\n```python\n# httpx/_config.py  lines 34-40\ndef create_ssl_context(verify=True, cert=None, trust_env=True):\n    if verify is True:\n        if trust_env and os.environ.get(\"SSL_CERT_FILE\"):\n            ctx = ssl.create_default_context(cafile=os.environ[\"SSL_CERT_FILE\"])\n        elif trust_env and os.environ.get(\"SSL_CERT_DIR\"):\n            ctx = ssl.create_default_context(capath=os.environ[\"SSL_CERT_DIR\"])\n        else:\n            ctx = ssl.create_default_context(cafile=certifi.where())\n```\n\n`trust_env=False` also suppresses `SSL_CERT_FILE` / `SSL_CERT_DIR`, falling back to the bundled `certifi` CA store.\n\n---\n\n### Summary of the full control flow\n\n```\nhttpx.get(..., trust_env=True)          # _api.py\n  └─ Client(trust_env=True)             # _client.py\n       ├─ BaseClient stores _trust_env  # line 219\n       ├─ allow_env_proxies = trust_env and transport is None   # line 685\n       ├─ _get_proxy_map(proxy, allow_env_proxies)              # line 239\n       │    └─ get_environment_proxies()  ← reads HTTP_PROXY,  # _utils.py:30\n       │         HTTPS_PROXY, ALL_PROXY, NO_PROXY via stdlib\n       └─ create_ssl_context(trust_env=trust_env)               # _config.py:23\n            └─ reads SSL_CERT_FILE / SSL_CERT_DIR if trust_env\n```\n\n### How to opt out\n\n```python\n# Disable for a whole client session\nclient = httpx.Client(trust_env=False)\n\n# Disable for a one-shot call\nhttpx.get(\"https://example.com\", trust_env=False)\n```\n\nSetting `trust_env=False` makes httpx ignore all of `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, `SSL_CERT_FILE`, and `SSL_CERT_DIR`, and also skips the Windows Registry / macOS System Configuration proxy lookups that `urllib.request.getproxies()` would otherwise perform.",
+  "turns": [
+    {
+      "index": 0,
+      "content": [
+        {
+          "type": "text",
+          "text": "Let me trace through the httpx codebase to find exactly where and why proxy environment variable reading is controlled."
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_q0tmngz4SpObOakLiw4eS1",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn",
+              "-t",
+              "py"
+            ],
+            "pattern": "trust_env"
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_mjudZcillgYWrUBB7OBrs4",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn",
+              "-i",
+              "-t",
+              "py"
+            ],
+            "pattern": "env.*proxy|proxy.*env|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 1420,
+      "output_tokens": 190,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn",
+              "-t",
+              "py"
+            ],
+            "pattern": "trust_env"
+          },
+          "result": "./httpx/_api.py:55:    n: bool = True,\n./httpx/_api.py:88:    * **n** - *(optional)* Enables or disables usage of environment\n./httpx/_api.py:107:        n=n,\n./httpx/_api.py:140:    n: bool = True,\n./httpx/_api.py:157:        n=n,\n./httpx/_api.py:185:    n: bool = True,\n./httpx/_api.py:206:        n=n,\n./httpx/_api.py:221:    n: bool = True,\n./httpx/_api.py:242:        n=n,\n./httpx/_api.py:257:    n: bool = True,\n./httpx/_api.py:278:        n=n,\n./httpx/_api.py:297:    n: bool = True,\n./httpx/_api.py:319:        n=n,\n./httpx/_api.py:338:    n: bool = True,\n./httpx/_api.py:360:        n=n,\n./httpx/_api.py:379:    n: bool = True,\n./httpx/_api.py:401:        n=n,\n./httpx/_api.py:416:    n: bool = True,\n./httpx/_api.py:437:        n=n,\n./httpx/_client.py:201:        n: bool = True,\n./httpx/_client.py:219:        self._n = n\n./httpx/_client.py:231:    def n(self) -\u003e bool:\n./httpx/_client.py:232:        return self._n\n./httpx/_client.py:632:    * **n** - *(optional)* Enables or disables usage of environment\n./httpx/_client.py:648:        n: bool = True,\n./httpx/_client.py:672:            n=n,\n./httpx/_client.py:685:        allow_env_proxies = n and transport is None\n./httpx/_client.py:691:            n=n,\n./httpx/_client.py:704:                n=n,\n./httpx/_client.py:722:        n: bool = True,\n./httpx/_client.py:734:            n=n,\n./httpx/_client.py:745:        n: bool = True,\n./httpx/_client.py:753:            n=n,\n./httpx/_client.py:1346:    * **n** - *(optional)* Enables or disables usage of environment\n./httpx/_client.py:1373:        n: bool = True,\n./httpx/_client.py:1386:            n=n,\n./httpx/_client.py:1399:        allow_env_proxies = n and transport is None\n./httpx/_client.py:1405:            n=n,\n./httpx/_client.py:1419:                n=n,\n./httpx/_client.py:1436:        n: bool = True,\n./httpx/_client.py:1448:            n=n,\n./httpx/_client.py:1459:        n: bool = True,\n./httpx/_client.py:1467:            n=n,\n./httpx/_config.py:26:    n: bool = True,\n./httpx/_config.py:34:        if n and os.environ.get(\"SSL_CERT_FILE\"):  # pragma: nocover\n./httpx/_config.py:36:        elif n and os.environ.get(\"SSL_CERT_DIR\"):  # pragma: nocover\n./tests/client/test_properties.py:63:def test_client_n():\n./tests/client/test_properties.py:65:    assert client.n\n./tests/client/test_properties.py:67:    client = httpx.Client(n=False)\n./tests/client/test_properties.py:68:    assert not client.n\n./httpx/_transports/default.py:140:        n: bool = True,\n./httpx/_transports/default.py:153:        ssl_context = create_ssl_context(verify=verify, cert=cert, n=n)\n./httpx/_transports/default.py:284:        n: bool = True,\n./httpx/_transports/default.py:297:        ssl_context = create_ssl_context(verify=verify, cert=cert, n=n)\n",
+          "is_error": false
+        },
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn",
+              "-i",
+              "-t",
+              "py"
+            ],
+            "pattern": "env.*proxy|proxy.*env|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY"
+          },
+          "result": "./tests/conftest.py:26:    \"n\",\n./tests/conftest.py:27:    \"n\",\n./tests/conftest.py:28:    \"n\",\n./tests/test_utils.py:93:        ({\"n\": \"http://127.0.0.1\"}, {\"http://\": \"http://127.0.0.1\"}),\n./tests/test_utils.py:95:            {\"n\": \"http://127.0.0.1\", \"n\": \"https://127.0.0.1\"},\n./tests/test_utils.py:98:        ({\"n\": \"http://127.0.0.1\"}, {\"all://\": \"http://127.0.0.1\"}),\n./tests/client/test_proxies.py:134:            {\"n\": \"http://example.com\"},\n./tests/client/test_proxies.py:138:        (\"http://google.com\", {\"n\": \"example.com\"}, \"http://example.com\"),\n./tests/client/test_proxies.py:141:            {\"n\": \"http://example.com\", \"NO_PROXY\": \"google.com\"},\n./tests/client/test_proxies.py:147:            {\"n\": \"http://localhost:123\", \"NO_PROXY\": \"\"},\n./tests/client/test_proxies.py:153:            {\"n\": \"http://localhost:123\", \"NO_PROXY\": \"127.0.0.1\"},\n./tests/client/test_proxies.py:159:            {\"n\": \"http://localhost:123\", \"NO_PROXY\": \"https://127.0.0.1\"},\n./tests/client/test_proxies.py:165:            {\"n\": \"http://localhost:123\", \"NO_PROXY\": \"1.1.1.1\"},\n./tests/client/test_proxies.py:171:            {\"n\": \"http://localhost:123\", \"NO_PROXY\": \"mit.edu\"},\n./tests/client/test_proxies.py:177:            {\"n\": \"http://localhost:123\", \"NO_PROXY\": \"mit.edu\"},\n./tests/client/test_proxies.py:183:            {\"n\": \"http://localhost:123\", \"NO_PROXY\": \"mit.edu,edu.info\"},\n./tests/client/test_proxies.py:190:            {\"n\": \"http://localhost:123\", \"NO_PROXY\": \"mit.edu, edu.info\"},\n./tests/client/test_proxies.py:196:            {\"n\": \"http://localhost:123\", \"NO_PROXY\": \"mit.edu,mit.info\"},\n./tests/client/test_proxies.py:202:            {\"n\": \"http://localhost:123\", \"NO_PROXY\": \"www.example.com\"},\n./tests/client/test_proxies.py:208:            {\"n\": \"http://localhost:123\", \"NO_PROXY\": \".example1.com\"},\n./tests/client/test_proxies.py:214:            {\"n\": \"http://localhost:123\", \"NO_PROXY\": \"ample2.com\"},\n./tests/client/test_proxies.py:220:            {\"n\": \"http://localhost:123\", \"NO_PROXY\": \"*\"},\n./httpx/_client.py:240:        self, n_proxies: bool\n./httpx/_client.py:686:        n_proxies)\n./httpx/_client.py:1400:        n_proxies)\n./httpx/_utils.py:31:    \"\"\"Gets nironment\"\"\"\n./httpx/_utils.py:54:            # from n, n, n, and always ignore\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "content": [
+        {
+          "type": "text",
+          "text": "The output is partially obfuscated (variable names are truncated). Let me read the key files directly."
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_kUquxV3PDZuTtqDWbQxzuc",
+          "name": "read_file",
+          "input": {
+            "end": 730,
+            "path": "httpx/_client.py",
+            "start": 620
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_To773yi3kBpdvVS3MSHUPY",
+          "name": "read_file",
+          "input": {
+            "end": 100,
+            "path": "httpx/_utils.py",
+            "start": 1
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 3629,
+      "output_tokens": 191,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "end": 730,
+            "path": "httpx/_client.py",
+            "start": 620
+          },
+          "result": "620\t    * **http2** - *(optional)* A boolean indicating if HTTP/2 support should be\n621\t    enabled. Defaults to `False`.\n622\t    * **proxy** - *(optional)* A proxy URL where all the traffic should be routed.\n623\t    * **timeout** - *(optional)* The timeout configuration to use when sending\n624\t    requests.\n625\t    * **limits** - *(optional)* The limits configuration to use.\n626\t    * **max_redirects** - *(optional)* The maximum number of redirect responses\n627\t    that should be followed.\n628\t    * **base_url** - *(optional)* A URL to use as the base when building\n629\t    request URLs.\n630\t    * **transport** - *(optional)* A transport class to use for sending requests\n631\t    over the network.\n632\t    * **trust_env** - *(optional)* Enables or disables usage of environment\n633\t    variables for configuration.\n634\t    * **default_encoding** - *(optional)* The default encoding to use for decoding\n635\t    response text, if no charset information is included in a response Content-Type\n636\t    header. Set to a callable for automatic character set detection. Default: \"utf-8\".\n637\t    \"\"\"\n638\t\n639\t    def __init__(\n640\t        self,\n641\t        *,\n642\t        auth: AuthTypes | None = None,\n643\t        params: QueryParamTypes | None = None,\n644\t        headers: HeaderTypes | None = None,\n645\t        cookies: CookieTypes | None = None,\n646\t        verify: ssl.SSLContext | str | bool = True,\n647\t        cert: CertTypes | None = None,\n648\t        trust_env: bool = True,\n649\t        http1: bool = True,\n650\t        http2: bool = False,\n651\t        proxy: ProxyTypes | None = None,\n652\t        mounts: None | (typing.Mapping[str, BaseTransport | None]) = None,\n653\t        timeout: TimeoutTypes = DEFAULT_TIMEOUT_CONFIG,\n654\t        follow_redirects: bool = False,\n655\t        limits: Limits = DEFAULT_LIMITS,\n656\t        max_redirects: int = DEFAULT_MAX_REDIRECTS,\n657\t        event_hooks: None | (typing.Mapping[str, list[EventHook]]) = None,\n658\t        base_url: URL | str = \"\",\n659\t        transport: BaseTransport | None = None,\n660\t        default_encoding: str | typing.Callable[[bytes], str] = \"utf-8\",\n661\t    ) -\u003e None:\n662\t        super().__init__(\n663\t            auth=auth,\n664\t            params=params,\n665\t            headers=headers,\n666\t            cookies=cookies,\n667\t            timeout=timeout,\n668\t            follow_redirects=follow_redirects,\n669\t            max_redirects=max_redirects,\n670\t            event_hooks=event_hooks,\n671\t            base_url=base_url,\n672\t            trust_env=trust_env,\n673\t            default_encoding=default_encoding,\n674\t        )\n675\t\n676\t        if http2:\n677\t            try:\n678\t                import h2  # noqa\n679\t            except ImportError:  # pragma: no cover\n680\t                raise ImportError(\n681\t                    \"Using http2=True, but the 'h2' package is not installed. \"\n682\t                    \"Make sure to install httpx using `pip install httpx[http2]`.\"\n683\t                ) from None\n684\t\n685\t        allow_env_proxies = trust_env and transport is None\n686\t        proxy_map = self._get_proxy_map(proxy, allow_env_proxies)\n687\t\n688\t        self._transport = self._init_transport(\n689\t            verify=verify,\n690\t            cert=cert,\n691\t            trust_env=trust_env,\n692\t            http1=http1,\n693\t            http2=http2,\n694\t            limits=limits,\n695\t            transport=transport,\n696\t        )\n697\t        self._mounts: dict[URLPattern, BaseTransport | None] = {\n698\t            URLPattern(key): None\n699\t            if proxy is None\n700\t            else self._init_proxy_transport(\n701\t                proxy,\n702\t                verify=verify,\n703\t                cert=cert,\n704\t                trust_env=trust_env,\n705\t                http1=http1,\n706\t                http2=http2,\n707\t                limits=limits,\n708\t            )\n709\t            for key, proxy in proxy_map.items()\n710\t        }\n711\t        if mounts is not None:\n712\t            self._mounts.update(\n713\t                {URLPattern(key): transport for key, transport in mounts.items()}\n714\t            )\n715\t\n716\t        self._mounts = dict(sorted(self._mounts.items()))\n717\t\n718\t    def _init_transport(\n719\t        self,\n720\t        verify: ssl.SSLContext | str | bool = True,\n721\t        cert: CertTypes | None = None,\n722\t        trust_env: bool = True,\n723\t        http1: bool = True,\n724\t        http2: bool = False,\n725\t        limits: Limits = DEFAULT_LIMITS,\n726\t        transport: BaseTransport | None = None,\n727\t    ) -\u003e BaseTransport:\n728\t        if transport is not None:\n729\t            return transport\n730\t\n",
+          "is_error": false
+        },
+        {
+          "name": "read_file",
+          "input": {
+            "end": 100,
+            "path": "httpx/_utils.py",
+            "start": 1
+          },
+          "result": "1\tfrom __future__ import annotations\n2\t\n3\timport ipaddress\n4\timport os\n5\timport re\n6\timport typing\n7\tfrom urllib.request import getproxies\n8\t\n9\tfrom ._types import PrimitiveData\n10\t\n11\tif typing.TYPE_CHECKING:  # pragma: no cover\n12\t    from ._urls import URL\n13\t\n14\t\n15\tdef primitive_value_to_str(value: PrimitiveData) -\u003e str:\n16\t    \"\"\"\n17\t    Coerce a primitive data type into a string value.\n18\t\n19\t    Note that we prefer JSON-style 'true'/'false' for boolean values here.\n20\t    \"\"\"\n21\t    if value is True:\n22\t        return \"true\"\n23\t    elif value is False:\n24\t        return \"false\"\n25\t    elif value is None:\n26\t        return \"\"\n27\t    return str(value)\n28\t\n29\t\n30\tdef get_environment_proxies() -\u003e dict[str, str | None]:\n31\t    \"\"\"Gets proxy information from the environment\"\"\"\n32\t\n33\t    # urllib.request.getproxies() falls back on System\n34\t    # Registry and Config for proxies on Windows and macOS.\n35\t    # We don't want to propagate non-HTTP proxies into\n36\t    # our configuration such as 'TRAVIS_APT_PROXY'.\n37\t    proxy_info = getproxies()\n38\t    mounts: dict[str, str | None] = {}\n39\t\n40\t    for scheme in (\"http\", \"https\", \"all\"):\n41\t        if proxy_info.get(scheme):\n42\t            hostname = proxy_info[scheme]\n43\t            mounts[f\"{scheme}://\"] = (\n44\t                hostname if \"://\" in hostname else f\"http://{hostname}\"\n45\t            )\n46\t\n47\t    no_proxy_hosts = [host.strip() for host in proxy_info.get(\"no\", \"\").split(\",\")]\n48\t    for hostname in no_proxy_hosts:\n49\t        # See https://curl.haxx.se/libcurl/c/CURLOPT_NOPROXY.html for details\n50\t        # on how names in `NO_PROXY` are handled.\n51\t        if hostname == \"*\":\n52\t            # If NO_PROXY=* is used or if \"*\" occurs as any one of the comma\n53\t            # separated hostnames, then we should just bypass any information\n54\t            # from HTTP_PROXY, HTTPS_PROXY, ALL_PROXY, and always ignore\n55\t            # proxies.\n56\t            return {}\n57\t        elif hostname:\n58\t            # NO_PROXY=.google.com is marked as \"all://*.google.com,\n59\t            #   which disables \"www.google.com\" but not \"google.com\"\n60\t            # NO_PROXY=google.com is marked as \"all://*google.com,\n61\t            #   which disables \"www.google.com\" and \"google.com\".\n62\t            #   (But not \"wwwgoogle.com\")\n63\t            # NO_PROXY can include domains, IPv6, IPv4 addresses and \"localhost\"\n64\t            #   NO_PROXY=example.com,::1,localhost,192.168.0.0/16\n65\t            if \"://\" in hostname:\n66\t                mounts[hostname] = None\n67\t            elif is_ipv4_hostname(hostname):\n68\t                mounts[f\"all://{hostname}\"] = None\n69\t            elif is_ipv6_hostname(hostname):\n70\t                mounts[f\"all://[{hostname}]\"] = None\n71\t            elif hostname.lower() == \"localhost\":\n72\t                mounts[f\"all://{hostname}\"] = None\n73\t            else:\n74\t                mounts[f\"all://*{hostname}\"] = None\n75\t\n76\t    return mounts\n77\t\n78\t\n79\tdef to_bytes(value: str | bytes, encoding: str = \"utf-8\") -\u003e bytes:\n80\t    return value.encode(encoding) if isinstance(value, str) else value\n81\t\n82\t\n83\tdef to_str(value: str | bytes, encoding: str = \"utf-8\") -\u003e str:\n84\t    return value if isinstance(value, str) else value.decode(encoding)\n85\t\n86\t\n87\tdef to_bytes_or_str(value: str, match_type_of: typing.AnyStr) -\u003e typing.AnyStr:\n88\t    return value if isinstance(match_type_of, str) else value.encode()\n89\t\n90\t\n91\tdef unquote(value: str) -\u003e str:\n92\t    return value[1:-1] if value[0] == value[-1] == '\"' else value\n93\t\n94\t\n95\tdef peek_filelike_length(stream: typing.Any) -\u003e int | None:\n96\t    \"\"\"\n97\t    Given a file-like stream object, return its length in number of bytes\n98\t    without reading it into memory.\n99\t    \"\"\"\n100\t    try:\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_grtYMEP81w8NtC3fDKgzeL",
+          "name": "read_file",
+          "input": {
+            "end": 290,
+            "path": "httpx/_client.py",
+            "start": 230
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_ryKpUSEB1p1FECRvdUoSw8",
+          "name": "read_file",
+          "input": {
+            "end": 1440,
+            "path": "httpx/_client.py",
+            "start": 1340
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 6504,
+      "output_tokens": 169,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "end": 290,
+            "path": "httpx/_client.py",
+            "start": 230
+          },
+          "result": "230\t    @property\n231\t    def trust_env(self) -\u003e bool:\n232\t        return self._trust_env\n233\t\n234\t    def _enforce_trailing_slash(self, url: URL) -\u003e URL:\n235\t        if url.raw_path.endswith(b\"/\"):\n236\t            return url\n237\t        return url.copy_with(raw_path=url.raw_path + b\"/\")\n238\t\n239\t    def _get_proxy_map(\n240\t        self, proxy: ProxyTypes | None, allow_env_proxies: bool\n241\t    ) -\u003e dict[str, Proxy | None]:\n242\t        if proxy is None:\n243\t            if allow_env_proxies:\n244\t                return {\n245\t                    key: None if url is None else Proxy(url=url)\n246\t                    for key, url in get_environment_proxies().items()\n247\t                }\n248\t            return {}\n249\t        else:\n250\t            proxy = Proxy(url=proxy) if isinstance(proxy, (str, URL)) else proxy\n251\t            return {\"all://\": proxy}\n252\t\n253\t    @property\n254\t    def timeout(self) -\u003e Timeout:\n255\t        return self._timeout\n256\t\n257\t    @timeout.setter\n258\t    def timeout(self, timeout: TimeoutTypes) -\u003e None:\n259\t        self._timeout = Timeout(timeout)\n260\t\n261\t    @property\n262\t    def event_hooks(self) -\u003e dict[str, list[EventHook]]:\n263\t        return self._event_hooks\n264\t\n265\t    @event_hooks.setter\n266\t    def event_hooks(self, event_hooks: dict[str, list[EventHook]]) -\u003e None:\n267\t        self._event_hooks = {\n268\t            \"request\": list(event_hooks.get(\"request\", [])),\n269\t            \"response\": list(event_hooks.get(\"response\", [])),\n270\t        }\n271\t\n272\t    @property\n273\t    def auth(self) -\u003e Auth | None:\n274\t        \"\"\"\n275\t        Authentication class used when none is passed at the request-level.\n276\t\n277\t        See also [Authentication][0].\n278\t\n279\t        [0]: /quickstart/#authentication\n280\t        \"\"\"\n281\t        return self._auth\n282\t\n283\t    @auth.setter\n284\t    def auth(self, auth: AuthTypes) -\u003e None:\n285\t        self._auth = self._build_auth(auth)\n286\t\n287\t    @property\n288\t    def base_url(self) -\u003e URL:\n289\t        \"\"\"\n290\t        Base URL to use when sending requests with relative URLs.\n",
+          "is_error": false
+        },
+        {
+          "name": "read_file",
+          "input": {
+            "end": 1440,
+            "path": "httpx/_client.py",
+            "start": 1340
+          },
+          "result": "1340\t    * **max_redirects** - *(optional)* The maximum number of redirect responses\n1341\t    that should be followed.\n1342\t    * **base_url** - *(optional)* A URL to use as the base when building\n1343\t    request URLs.\n1344\t    * **transport** - *(optional)* A transport class to use for sending requests\n1345\t    over the network.\n1346\t    * **trust_env** - *(optional)* Enables or disables usage of environment\n1347\t    variables for configuration.\n1348\t    * **default_encoding** - *(optional)* The default encoding to use for decoding\n1349\t    response text, if no charset information is included in a response Content-Type\n1350\t    header. Set to a callable for automatic character set detection. Default: \"utf-8\".\n1351\t    \"\"\"\n1352\t\n1353\t    def __init__(\n1354\t        self,\n1355\t        *,\n1356\t        auth: AuthTypes | None = None,\n1357\t        params: QueryParamTypes | None = None,\n1358\t        headers: HeaderTypes | None = None,\n1359\t        cookies: CookieTypes | None = None,\n1360\t        verify: ssl.SSLContext | str | bool = True,\n1361\t        cert: CertTypes | None = None,\n1362\t        http1: bool = True,\n1363\t        http2: bool = False,\n1364\t        proxy: ProxyTypes | None = None,\n1365\t        mounts: None | (typing.Mapping[str, AsyncBaseTransport | None]) = None,\n1366\t        timeout: TimeoutTypes = DEFAULT_TIMEOUT_CONFIG,\n1367\t        follow_redirects: bool = False,\n1368\t        limits: Limits = DEFAULT_LIMITS,\n1369\t        max_redirects: int = DEFAULT_MAX_REDIRECTS,\n1370\t        event_hooks: None | (typing.Mapping[str, list[EventHook]]) = None,\n1371\t        base_url: URL | str = \"\",\n1372\t        transport: AsyncBaseTransport | None = None,\n1373\t        trust_env: bool = True,\n1374\t        default_encoding: str | typing.Callable[[bytes], str] = \"utf-8\",\n1375\t    ) -\u003e None:\n1376\t        super().__init__(\n1377\t            auth=auth,\n1378\t            params=params,\n1379\t            headers=headers,\n1380\t            cookies=cookies,\n1381\t            timeout=timeout,\n1382\t            follow_redirects=follow_redirects,\n1383\t            max_redirects=max_redirects,\n1384\t            event_hooks=event_hooks,\n1385\t            base_url=base_url,\n1386\t            trust_env=trust_env,\n1387\t            default_encoding=default_encoding,\n1388\t        )\n1389\t\n1390\t        if http2:\n1391\t            try:\n1392\t                import h2  # noqa\n1393\t            except ImportError:  # pragma: no cover\n1394\t                raise ImportError(\n1395\t                    \"Using http2=True, but the 'h2' package is not installed. \"\n1396\t                    \"Make sure to install httpx using `pip install httpx[http2]`.\"\n1397\t                ) from None\n1398\t\n1399\t        allow_env_proxies = trust_env and transport is None\n1400\t        proxy_map = self._get_proxy_map(proxy, allow_env_proxies)\n1401\t\n1402\t        self._transport = self._init_transport(\n1403\t            verify=verify,\n1404\t            cert=cert,\n1405\t            trust_env=trust_env,\n1406\t            http1=http1,\n1407\t            http2=http2,\n1408\t            limits=limits,\n1409\t            transport=transport,\n1410\t        )\n1411\t\n1412\t        self._mounts: dict[URLPattern, AsyncBaseTransport | None] = {\n1413\t            URLPattern(key): None\n1414\t            if proxy is None\n1415\t            else self._init_proxy_transport(\n1416\t                proxy,\n1417\t                verify=verify,\n1418\t                cert=cert,\n1419\t                trust_env=trust_env,\n1420\t                http1=http1,\n1421\t                http2=http2,\n1422\t                limits=limits,\n1423\t            )\n1424\t            for key, proxy in proxy_map.items()\n1425\t        }\n1426\t        if mounts is not None:\n1427\t            self._mounts.update(\n1428\t                {URLPattern(key): transport for key, transport in mounts.items()}\n1429\t            )\n1430\t        self._mounts = dict(sorted(self._mounts.items()))\n1431\t\n1432\t    def _init_transport(\n1433\t        self,\n1434\t        verify: ssl.SSLContext | str | bool = True,\n1435\t        cert: CertTypes | None = None,\n1436\t        trust_env: bool = True,\n1437\t        http1: bool = True,\n1438\t        http2: bool = False,\n1439\t        limits: Limits = DEFAULT_LIMITS,\n1440\t        transport: AsyncBaseTransport | None = None,\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_NXIS0uaF1aApDBMjNcW4Ft",
+          "name": "read_file",
+          "input": {
+            "end": 235,
+            "path": "httpx/_client.py",
+            "start": 185
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_mZ3z0YcY7gP2JLUHQwUH19",
+          "name": "read_file",
+          "input": {
+            "end": 60,
+            "path": "httpx/_config.py",
+            "start": 1
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 8722,
+      "output_tokens": 167,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "end": 235,
+            "path": "httpx/_client.py",
+            "start": 185
+          },
+          "result": "185\tEventHook = typing.Callable[..., typing.Any]\n186\t\n187\t\n188\tclass BaseClient:\n189\t    def __init__(\n190\t        self,\n191\t        *,\n192\t        auth: AuthTypes | None = None,\n193\t        params: QueryParamTypes | None = None,\n194\t        headers: HeaderTypes | None = None,\n195\t        cookies: CookieTypes | None = None,\n196\t        timeout: TimeoutTypes = DEFAULT_TIMEOUT_CONFIG,\n197\t        follow_redirects: bool = False,\n198\t        max_redirects: int = DEFAULT_MAX_REDIRECTS,\n199\t        event_hooks: None | (typing.Mapping[str, list[EventHook]]) = None,\n200\t        base_url: URL | str = \"\",\n201\t        trust_env: bool = True,\n202\t        default_encoding: str | typing.Callable[[bytes], str] = \"utf-8\",\n203\t    ) -\u003e None:\n204\t        event_hooks = {} if event_hooks is None else event_hooks\n205\t\n206\t        self._base_url = self._enforce_trailing_slash(URL(base_url))\n207\t\n208\t        self._auth = self._build_auth(auth)\n209\t        self._params = QueryParams(params)\n210\t        self.headers = Headers(headers)\n211\t        self._cookies = Cookies(cookies)\n212\t        self._timeout = Timeout(timeout)\n213\t        self.follow_redirects = follow_redirects\n214\t        self.max_redirects = max_redirects\n215\t        self._event_hooks = {\n216\t            \"request\": list(event_hooks.get(\"request\", [])),\n217\t            \"response\": list(event_hooks.get(\"response\", [])),\n218\t        }\n219\t        self._trust_env = trust_env\n220\t        self._default_encoding = default_encoding\n221\t        self._state = ClientState.UNOPENED\n222\t\n223\t    @property\n224\t    def is_closed(self) -\u003e bool:\n225\t        \"\"\"\n226\t        Check if the client being closed\n227\t        \"\"\"\n228\t        return self._state == ClientState.CLOSED\n229\t\n230\t    @property\n231\t    def trust_env(self) -\u003e bool:\n232\t        return self._trust_env\n233\t\n234\t    def _enforce_trailing_slash(self, url: URL) -\u003e URL:\n235\t        if url.raw_path.endswith(b\"/\"):\n",
+          "is_error": false
+        },
+        {
+          "name": "read_file",
+          "input": {
+            "end": 60,
+            "path": "httpx/_config.py",
+            "start": 1
+          },
+          "result": "1\tfrom __future__ import annotations\n2\t\n3\timport os\n4\timport typing\n5\t\n6\tfrom ._models import Headers\n7\tfrom ._types import CertTypes, HeaderTypes, TimeoutTypes\n8\tfrom ._urls import URL\n9\t\n10\tif typing.TYPE_CHECKING:\n11\t    import ssl  # pragma: no cover\n12\t\n13\t__all__ = [\"Limits\", \"Proxy\", \"Timeout\", \"create_ssl_context\"]\n14\t\n15\t\n16\tclass UnsetType:\n17\t    pass  # pragma: no cover\n18\t\n19\t\n20\tUNSET = UnsetType()\n21\t\n22\t\n23\tdef create_ssl_context(\n24\t    verify: ssl.SSLContext | str | bool = True,\n25\t    cert: CertTypes | None = None,\n26\t    trust_env: bool = True,\n27\t) -\u003e ssl.SSLContext:\n28\t    import ssl\n29\t    import warnings\n30\t\n31\t    import certifi\n32\t\n33\t    if verify is True:\n34\t        if trust_env and os.environ.get(\"SSL_CERT_FILE\"):  # pragma: nocover\n35\t            ctx = ssl.create_default_context(cafile=os.environ[\"SSL_CERT_FILE\"])\n36\t        elif trust_env and os.environ.get(\"SSL_CERT_DIR\"):  # pragma: nocover\n37\t            ctx = ssl.create_default_context(capath=os.environ[\"SSL_CERT_DIR\"])\n38\t        else:\n39\t            # Default case...\n40\t            ctx = ssl.create_default_context(cafile=certifi.where())\n41\t    elif verify is False:\n42\t        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)\n43\t        ctx.check_hostname = False\n44\t        ctx.verify_mode = ssl.CERT_NONE\n45\t    elif isinstance(verify, str):  # pragma: nocover\n46\t        message = (\n47\t            \"`verify=\u003cstr\u003e` is deprecated. \"\n48\t            \"Use `verify=ssl.create_default_context(cafile=...)` \"\n49\t            \"or `verify=ssl.create_default_context(capath=...)` instead.\"\n50\t        )\n51\t        warnings.warn(message, DeprecationWarning)\n52\t        if os.path.isdir(verify):\n53\t            return ssl.create_default_context(capath=verify)\n54\t        return ssl.create_default_context(cafile=verify)\n55\t    else:\n56\t        ctx = verify\n57\t\n58\t    if cert:  # pragma: nocover\n59\t        message = (\n60\t            \"`cert=...` is deprecated. Use `verify=\u003cssl_context\u003e` instead,\"\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_i7PW7uSX8ml8cI9ZjwZYlW",
+          "name": "read_file",
+          "input": {
+            "end": 120,
+            "path": "httpx/_api.py",
+            "start": 40
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_u9OCpY02acS6PVcQGofLXg",
+          "name": "read_file",
+          "input": {
+            "end": 160,
+            "path": "httpx/_utils.py",
+            "start": 100
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 10255,
+      "output_tokens": 167,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "end": 120,
+            "path": "httpx/_api.py",
+            "start": 40
+          },
+          "result": "40\t    method: str,\n41\t    url: URL | str,\n42\t    *,\n43\t    params: QueryParamTypes | None = None,\n44\t    content: RequestContent | None = None,\n45\t    data: RequestData | None = None,\n46\t    files: RequestFiles | None = None,\n47\t    json: typing.Any | None = None,\n48\t    headers: HeaderTypes | None = None,\n49\t    cookies: CookieTypes | None = None,\n50\t    auth: AuthTypes | None = None,\n51\t    proxy: ProxyTypes | None = None,\n52\t    timeout: TimeoutTypes = DEFAULT_TIMEOUT_CONFIG,\n53\t    follow_redirects: bool = False,\n54\t    verify: ssl.SSLContext | str | bool = True,\n55\t    trust_env: bool = True,\n56\t) -\u003e Response:\n57\t    \"\"\"\n58\t    Sends an HTTP request.\n59\t\n60\t    **Parameters:**\n61\t\n62\t    * **method** - HTTP method for the new `Request` object: `GET`, `OPTIONS`,\n63\t    `HEAD`, `POST`, `PUT`, `PATCH`, or `DELETE`.\n64\t    * **url** - URL for the new `Request` object.\n65\t    * **params** - *(optional)* Query parameters to include in the URL, as a\n66\t    string, dictionary, or sequence of two-tuples.\n67\t    * **content** - *(optional)* Binary content to include in the body of the\n68\t    request, as bytes or a byte iterator.\n69\t    * **data** - *(optional)* Form data to include in the body of the request,\n70\t    as a dictionary.\n71\t    * **files** - *(optional)* A dictionary of upload files to include in the\n72\t    body of the request.\n73\t    * **json** - *(optional)* A JSON serializable object to include in the body\n74\t    of the request.\n75\t    * **headers** - *(optional)* Dictionary of HTTP headers to include in the\n76\t    request.\n77\t    * **cookies** - *(optional)* Dictionary of Cookie items to include in the\n78\t    request.\n79\t    * **auth** - *(optional)* An authentication class to use when sending the\n80\t    request.\n81\t    * **proxy** - *(optional)* A proxy URL where all the traffic should be routed.\n82\t    * **timeout** - *(optional)* The timeout configuration to use when sending\n83\t    the request.\n84\t    * **follow_redirects** - *(optional)* Enables or disables HTTP redirects.\n85\t    * **verify** - *(optional)* Either `True` to use an SSL context with the\n86\t    default CA bundle, `False` to disable verification, or an instance of\n87\t    `ssl.SSLContext` to use a custom context.\n88\t    * **trust_env** - *(optional)* Enables or disables usage of environment\n89\t    variables for configuration.\n90\t\n91\t    **Returns:** `Response`\n92\t\n93\t    Usage:\n94\t\n95\t    ```\n96\t    \u003e\u003e\u003e import httpx\n97\t    \u003e\u003e\u003e response = httpx.request('GET', 'https://httpbin.org/get')\n98\t    \u003e\u003e\u003e response\n99\t    \u003cResponse [200 OK]\u003e\n100\t    ```\n101\t    \"\"\"\n102\t    with Client(\n103\t        cookies=cookies,\n104\t        proxy=proxy,\n105\t        verify=verify,\n106\t        timeout=timeout,\n107\t        trust_env=trust_env,\n108\t    ) as client:\n109\t        return client.request(\n110\t            method=method,\n111\t            url=url,\n112\t            content=content,\n113\t            data=data,\n114\t            files=files,\n115\t            json=json,\n116\t            params=params,\n117\t            headers=headers,\n118\t            auth=auth,\n119\t            follow_redirects=follow_redirects,\n120\t        )\n",
+          "is_error": false
+        },
+        {
+          "name": "read_file",
+          "input": {
+            "end": 160,
+            "path": "httpx/_utils.py",
+            "start": 100
+          },
+          "result": "100\t    try:\n101\t        # Is it an actual file?\n102\t        fd = stream.fileno()\n103\t        # Yup, seems to be an actual file.\n104\t        length = os.fstat(fd).st_size\n105\t    except (AttributeError, OSError):\n106\t        # No... Maybe it's something that supports random access, like `io.BytesIO`?\n107\t        try:\n108\t            # Assuming so, go to end of stream to figure out its length,\n109\t            # then put it back in place.\n110\t            offset = stream.tell()\n111\t            length = stream.seek(0, os.SEEK_END)\n112\t            stream.seek(offset)\n113\t        except (AttributeError, OSError):\n114\t            # Not even that? Sorry, we're doomed...\n115\t            return None\n116\t\n117\t    return length\n118\t\n119\t\n120\tclass URLPattern:\n121\t    \"\"\"\n122\t    A utility class currently used for making lookups against proxy keys...\n123\t\n124\t    # Wildcard matching...\n125\t    \u003e\u003e\u003e pattern = URLPattern(\"all://\")\n126\t    \u003e\u003e\u003e pattern.matches(httpx.URL(\"http://example.com\"))\n127\t    True\n128\t\n129\t    # Witch scheme matching...\n130\t    \u003e\u003e\u003e pattern = URLPattern(\"https://\")\n131\t    \u003e\u003e\u003e pattern.matches(httpx.URL(\"https://example.com\"))\n132\t    True\n133\t    \u003e\u003e\u003e pattern.matches(httpx.URL(\"http://example.com\"))\n134\t    False\n135\t\n136\t    # With domain matching...\n137\t    \u003e\u003e\u003e pattern = URLPattern(\"https://example.com\")\n138\t    \u003e\u003e\u003e pattern.matches(httpx.URL(\"https://example.com\"))\n139\t    True\n140\t    \u003e\u003e\u003e pattern.matches(httpx.URL(\"http://example.com\"))\n141\t    False\n142\t    \u003e\u003e\u003e pattern.matches(httpx.URL(\"https://other.com\"))\n143\t    False\n144\t\n145\t    # Wildcard scheme, with domain matching...\n146\t    \u003e\u003e\u003e pattern = URLPattern(\"all://example.com\")\n147\t    \u003e\u003e\u003e pattern.matches(httpx.URL(\"https://example.com\"))\n148\t    True\n149\t    \u003e\u003e\u003e pattern.matches(httpx.URL(\"http://example.com\"))\n150\t    True\n151\t    \u003e\u003e\u003e pattern.matches(httpx.URL(\"https://other.com\"))\n152\t    False\n153\t\n154\t    # With port matching...\n155\t    \u003e\u003e\u003e pattern = URLPattern(\"https://example.com:1234\")\n156\t    \u003e\u003e\u003e pattern.matches(httpx.URL(\"https://example.com:1234\"))\n157\t    True\n158\t    \u003e\u003e\u003e pattern.matches(httpx.URL(\"https://example.com\"))\n159\t    False\n160\t    \"\"\"\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "content": [
+        {
+          "type": "text",
+          "text": "Now I have a complete picture. Let me also check the test file for proxy env vars to confirm the full behavior:"
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_bSx3Z7hEl7R2zSYRPesZ93",
+          "name": "read_file",
+          "input": {
+            "end": 240,
+            "path": "httpx/tests/client/test_proxies.py",
+            "start": 120
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_6VNrRMosCUDua9Ov3cyNKl",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n",
+              "-t",
+              "py"
+            ],
+            "pattern": "allow_env_proxies"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 12152,
+      "output_tokens": 189,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "end": 240,
+            "path": "httpx/tests/client/test_proxies.py",
+            "start": 120
+          },
+          "result": "cannot open httpx/tests/client/test_proxies.py: open /tmp/eval-repos/httpx/httpx/tests/client/test_proxies.py: no such file or directory",
+          "is_error": true
+        },
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n",
+              "-t",
+              "py"
+            ],
+            "pattern": "allow_env_proxies"
+          },
+          "result": "./httpx/_client.py:240:        self, proxy: ProxyTypes | None, allow_env_proxies: bool\n./httpx/_client.py:243:            if allow_env_proxies:\n./httpx/_client.py:685:        allow_env_proxies = trust_env and transport is None\n./httpx/_client.py:686:        proxy_map = self._get_proxy_map(proxy, allow_env_proxies)\n./httpx/_client.py:1399:        allow_env_proxies = trust_env and transport is None\n./httpx/_client.py:1400:        proxy_map = self._get_proxy_map(proxy, allow_env_proxies)\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_hwPBdXi2OMd9HbOXDOlsCX",
+          "name": "read_file",
+          "input": {
+            "end": 240,
+            "path": "tests/client/test_proxies.py",
+            "start": 120
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 12618,
+      "output_tokens": 96,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "end": 240,
+            "path": "tests/client/test_proxies.py",
+            "start": 120
+          },
+          "result": "120\t        client.close()\n121\t\n122\t\n123\tdef test_unsupported_proxy_scheme():\n124\t    with pytest.raises(ValueError):\n125\t        httpx.Client(proxy=\"ftp://127.0.0.1\")\n126\t\n127\t\n128\t@pytest.mark.parametrize(\n129\t    [\"url\", \"env\", \"expected\"],\n130\t    [\n131\t        (\"http://google.com\", {}, None),\n132\t        (\n133\t            \"http://google.com\",\n134\t            {\"HTTP_PROXY\": \"http://example.com\"},\n135\t            \"http://example.com\",\n136\t        ),\n137\t        # Auto prepend http scheme\n138\t        (\"http://google.com\", {\"HTTP_PROXY\": \"example.com\"}, \"http://example.com\"),\n139\t        (\n140\t            \"http://google.com\",\n141\t            {\"HTTP_PROXY\": \"http://example.com\", \"NO_PROXY\": \"google.com\"},\n142\t            None,\n143\t        ),\n144\t        # Everything proxied when NO_PROXY is empty/unset\n145\t        (\n146\t            \"http://127.0.0.1\",\n147\t            {\"ALL_PROXY\": \"http://localhost:123\", \"NO_PROXY\": \"\"},\n148\t            \"http://localhost:123\",\n149\t        ),\n150\t        # Not proxied if NO_PROXY matches URL.\n151\t        (\n152\t            \"http://127.0.0.1\",\n153\t            {\"ALL_PROXY\": \"http://localhost:123\", \"NO_PROXY\": \"127.0.0.1\"},\n154\t            None,\n155\t        ),\n156\t        # Proxied if NO_PROXY scheme does not match URL.\n157\t        (\n158\t            \"http://127.0.0.1\",\n159\t            {\"ALL_PROXY\": \"http://localhost:123\", \"NO_PROXY\": \"https://127.0.0.1\"},\n160\t            \"http://localhost:123\",\n161\t        ),\n162\t        # Proxied if NO_PROXY scheme does not match host.\n163\t        (\n164\t            \"http://127.0.0.1\",\n165\t            {\"ALL_PROXY\": \"http://localhost:123\", \"NO_PROXY\": \"1.1.1.1\"},\n166\t            \"http://localhost:123\",\n167\t        ),\n168\t        # Not proxied if NO_PROXY matches host domain suffix.\n169\t        (\n170\t            \"http://courses.mit.edu\",\n171\t            {\"ALL_PROXY\": \"http://localhost:123\", \"NO_PROXY\": \"mit.edu\"},\n172\t            None,\n173\t        ),\n174\t        # Proxied even though NO_PROXY matches host domain *prefix*.\n175\t        (\n176\t            \"https://mit.edu.info\",\n177\t            {\"ALL_PROXY\": \"http://localhost:123\", \"NO_PROXY\": \"mit.edu\"},\n178\t            \"http://localhost:123\",\n179\t        ),\n180\t        # Not proxied if one item in NO_PROXY case matches host domain suffix.\n181\t        (\n182\t            \"https://mit.edu.info\",\n183\t            {\"ALL_PROXY\": \"http://localhost:123\", \"NO_PROXY\": \"mit.edu,edu.info\"},\n184\t            None,\n185\t        ),\n186\t        # Not proxied if one item in NO_PROXY case matches host domain suffix.\n187\t        # May include whitespace.\n188\t        (\n189\t            \"https://mit.edu.info\",\n190\t            {\"ALL_PROXY\": \"http://localhost:123\", \"NO_PROXY\": \"mit.edu, edu.info\"},\n191\t            None,\n192\t        ),\n193\t        # Proxied if no items in NO_PROXY match.\n194\t        (\n195\t            \"https://mit.edu.info\",\n196\t            {\"ALL_PROXY\": \"http://localhost:123\", \"NO_PROXY\": \"mit.edu,mit.info\"},\n197\t            \"http://localhost:123\",\n198\t        ),\n199\t        # Proxied if NO_PROXY domain doesn't match.\n200\t        (\n201\t            \"https://foo.example.com\",\n202\t            {\"ALL_PROXY\": \"http://localhost:123\", \"NO_PROXY\": \"www.example.com\"},\n203\t            \"http://localhost:123\",\n204\t        ),\n205\t        # Not proxied for subdomains matching NO_PROXY, with a leading \".\".\n206\t        (\n207\t            \"https://www.example1.com\",\n208\t            {\"ALL_PROXY\": \"http://localhost:123\", \"NO_PROXY\": \".example1.com\"},\n209\t            None,\n210\t        ),\n211\t        # Proxied, because NO_PROXY subdomains only match if \".\" separated.\n212\t        (\n213\t            \"https://www.example2.com\",\n214\t            {\"ALL_PROXY\": \"http://localhost:123\", \"NO_PROXY\": \"ample2.com\"},\n215\t            \"http://localhost:123\",\n216\t        ),\n217\t        # No requests are proxied if NO_PROXY=\"*\" is set.\n218\t        (\n219\t            \"https://www.example3.com\",\n220\t            {\"ALL_PROXY\": \"http://localhost:123\", \"NO_PROXY\": \"*\"},\n221\t            None,\n222\t        ),\n223\t    ],\n224\t)\n225\t@pytest.mark.parametrize(\"client_class\", [httpx.Client, httpx.AsyncClient])\n226\tdef test_proxies_environ(monkeypatch, client_class, url, env, expected):\n227\t    for name, value in env.items():\n228\t        monkeypatch.setenv(name, value)\n229\t\n230\t    client = client_class()\n231\t    transport = client._transport_for_url(httpx.URL(url))\n232\t\n233\t    if expected is None:\n234\t        assert transport == client._transport\n235\t    else:\n236\t        assert transport._pool._proxy_url == url_to_origin(expected)\n237\t\n238\t\n239\t@pytest.mark.parametrize(\n240\t    [\"proxies\", \"is_valid\"],\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "content": [
+        {
+          "type": "text",
+          "text": "Now I have everything needed for a thorough, precise answer. Here it is:\n\n---\n\n## Why httpx reads proxy settings from environment variables by default\n\n### The short answer\n\nhttpx follows the long-standing Unix/curl/requests convention that a process should respect the operator's network configuration expressed through environment variables (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, `SSL_CERT_FILE`, `SSL_CERT_DIR`). This lets system administrators, CI pipelines, and container orchestrators inject proxy and TLS settings without touching application code. The behaviour is **on by default** because that is the least-surprising default for a general-purpose HTTP client, but it can be turned off completely with a single flag.\n\n---\n\n### The controlling parameter: `trust_env`\n\nEvery entry point in httpx accepts a `trust_env: bool = True` parameter:\n\n| Location | Default |\n|---|---|\n| `BaseClient.__init__` (`httpx/_client.py:201`) | `True` |\n| `Client.__init__` (`httpx/_client.py:648`) | `True` |\n| `AsyncClient.__init__` (`httpx/_client.py:1373`) | `True` |\n| Top-level helpers `httpx.get/post/request/…` (`httpx/_api.py:55`, etc.) | `True` |\n\nSetting `trust_env=False` disables **all** environment-variable-driven configuration in one shot.\n\n---\n\n### Exactly how it works — the call chain\n\n#### 1. `trust_env` is stored on `BaseClient`\n\n```python\n# httpx/_client.py  (BaseClient.__init__)\nself._trust_env = trust_env          # line 219\n\n@property\ndef trust_env(self) -\u003e bool:\n    return self._trust_env           # line 231-232\n```\n\n#### 2. Proxy map construction — the critical gate\n\nBoth `Client.__init__` and `AsyncClient.__init__` compute a boolean `allow_env_proxies` before building the proxy map:\n\n```python\n# httpx/_client.py  line 685 (Client) / line 1399 (AsyncClient)\nallow_env_proxies = trust_env and transport is None\nproxy_map = self._get_proxy_map(proxy, allow_env_proxies)\n```\n\nThe **second condition** (`transport is None`) is intentional: if the caller has already supplied a custom transport, httpx assumes that transport already handles routing, so env-proxy injection would be redundant and potentially wrong.\n\n#### 3. `_get_proxy_map` — where env vars are actually read\n\n```python\n# httpx/_client.py  lines 239-251\ndef _get_proxy_map(\n    self, proxy: ProxyTypes | None, allow_env_proxies: bool\n) -\u003e dict[str, Proxy | None]:\n    if proxy is None:\n        if allow_env_proxies:\n            return {\n                key: None if url is None else Proxy(url=url)\n                for key, url in get_environment_proxies().items()\n            }\n        return {}\n    else:\n        proxy = Proxy(url=proxy) if isinstance(proxy, (str, URL)) else proxy\n        return {\"all://\": proxy}\n```\n\nIf `proxy` is explicitly set, env vars are ignored entirely (the explicit value wins). If `proxy` is `None` and `allow_env_proxies` is `True`, it calls `get_environment_proxies()`.\n\n#### 4. `get_environment_proxies()` — the actual env-var reader\n\n```python\n# httpx/_utils.py  lines 30-76\nfrom urllib.request import getproxies   # stdlib\n\ndef get_environment_proxies() -\u003e dict[str, str | None]:\n    \"\"\"Gets proxy information from the environment\"\"\"\n    # urllib.request.getproxies() falls back on System\n    # Registry and Config for proxies on Windows and macOS.\n    # We don't want to propagate non-HTTP proxies into\n    # our configuration such as 'TRAVIS_APT_PROXY'.\n    proxy_info = getproxies()\n    mounts: dict[str, str | None] = {}\n\n    for scheme in (\"http\", \"https\", \"all\"):\n        if proxy_info.get(scheme):\n            hostname = proxy_info[scheme]\n            mounts[f\"{scheme}://\"] = (\n                hostname if \"://\" in hostname else f\"http://{hostname}\"\n            )\n\n    no_proxy_hosts = [host.strip() for host in proxy_info.get(\"no\", \"\").split(\",\")]\n    for hostname in no_proxy_hosts:\n        if hostname == \"*\":\n            return {}          # NO_PROXY=* disables everything\n        elif hostname:\n            # maps NO_PROXY entries to \"all://*\u003chost\u003e\" = None mount entries\n            ...\n    return mounts\n```\n\nKey design decisions visible here:\n- It delegates to **Python's stdlib `urllib.request.getproxies()`**, which reads `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and `NO_PROXY` (case-insensitively on most platforms) and also consults the Windows Registry and macOS System Configuration on those platforms.\n- It deliberately **filters to only `http`, `https`, and `all` schemes** to avoid accidentally picking up unrelated env vars like `TRAVIS_APT_PROXY`.\n- `NO_PROXY=*` short-circuits to an empty dict (no proxies at all).\n- Individual `NO_PROXY` entries are translated into `None`-valued mount entries (meaning \"bypass proxy for this pattern\"), following curl's documented `CURLOPT_NOPROXY` semantics.\n\n#### 5. SSL certificate env vars — also gated by `trust_env`\n\n```python\n# httpx/_config.py  lines 34-40\ndef create_ssl_context(verify=True, cert=None, trust_env=True):\n    if verify is True:\n        if trust_env and os.environ.get(\"SSL_CERT_FILE\"):\n            ctx = ssl.create_default_context(cafile=os.environ[\"SSL_CERT_FILE\"])\n        elif trust_env and os.environ.get(\"SSL_CERT_DIR\"):\n            ctx = ssl.create_default_context(capath=os.environ[\"SSL_CERT_DIR\"])\n        else:\n            ctx = ssl.create_default_context(cafile=certifi.where())\n```\n\n`trust_env=False` also suppresses `SSL_CERT_FILE` / `SSL_CERT_DIR`, falling back to the bundled `certifi` CA store.\n\n---\n\n### Summary of the full control flow\n\n```\nhttpx.get(..., trust_env=True)          # _api.py\n  └─ Client(trust_env=True)             # _client.py\n       ├─ BaseClient stores _trust_env  # line 219\n       ├─ allow_env_proxies = trust_env and transport is None   # line 685\n       ├─ _get_proxy_map(proxy, allow_env_proxies)              # line 239\n       │    └─ get_environment_proxies()  ← reads HTTP_PROXY,  # _utils.py:30\n       │         HTTPS_PROXY, ALL_PROXY, NO_PROXY via stdlib\n       └─ create_ssl_context(trust_env=trust_env)               # _config.py:23\n            └─ reads SSL_CERT_FILE / SSL_CERT_DIR if trust_env\n```\n\n### How to opt out\n\n```python\n# Disable for a whole client session\nclient = httpx.Client(trust_env=False)\n\n# Disable for a one-shot call\nhttpx.get(\"https://example.com\", trust_env=False)\n```\n\nSetting `trust_env=False` makes httpx ignore all of `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, `SSL_CERT_FILE`, and `SSL_CERT_DIR`, and also skips the Windows Registry / macOS System Configuration proxy lookups that `urllib.request.getproxies()` would otherwise perform."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "input_tokens": 14268,
+      "output_tokens": 1956
+    }
+  ],
+  "total_input_tokens": 69568,
+  "total_output_tokens": 3125,
+  "tool_call_count": 13,
+  "turns_to_answer": 8,
+  "wall_clock_ms": 64422,
+  "retries": 0
+}

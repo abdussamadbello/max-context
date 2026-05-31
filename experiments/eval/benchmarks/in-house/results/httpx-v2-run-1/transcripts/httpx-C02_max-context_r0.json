@@ -1,0 +1,84 @@
+{
+  "status": "completed",
+  "final_answer": "Here is the **complete set of calling methods** for `_build_auth_header`, organized by call depth:\n\n---\n\n### Direct Callers (Depth 1) — `httpx/_auth.py`\nThese three methods call `_build_auth_header` directly:\n\n| Method | File | Line |\n|---|---|---|\n| `__init__` | `httpx/_auth.py` | 132 |\n| `auth_flow` | `httpx/_auth.py` | 157 |\n| `auth_flow` | `httpx/_auth.py` | 193 |\n\n---\n\n### Indirect Callers via `auth_flow` (Depth 2) — `httpx/_auth.py`\n| Method | File | Line |\n|---|---|---|\n| `async_auth_flow` | `httpx/_auth.py` | 87 |\n| `sync_auth_flow` | `httpx/_auth.py` | 62 |\n\n---\n\n### Indirect Callers via `sync/async_auth_flow` (Depth 3) — `httpx/_client.py`\n| Method | File | Line |\n|---|---|---|\n| `_send_handling_auth` | `httpx/_client.py` | 930 |\n| `_send_handling_auth` | `httpx/_client.py` | 1645 |\n\n---\n\n### Indirect Callers via `_send_handling_auth` (Depth 4) — `httpx/_client.py`\n| Method | File | Line |\n|---|---|---|\n| `send` | `httpx/_client.py` | 879 |\n| `send` | `httpx/_client.py` | 1594 |\n\n---\n\n### Indirect Callers via `send` (Depth 5) — `httpx/_client.py`\n| Method | File | Line |\n|---|---|---|\n| `request` | `httpx/_client.py` | 771 |\n| `request` | `httpx/_client.py` | 1485 |\n| `stream` | `httpx/_client.py` | 828 |\n| `stream` | `httpx/_client.py` | 1543 |\n| `get` | `httpx/_client.py` | 1036 |\n| `get` | `httpx/_client.py` | 1751 |\n| `head` | `httpx/_client.py` | 1094 |\n| `head` | `httpx/_client.py` | 1809 |\n| `options` | `httpx/_client.py` | 1065 |\n| `options` | `httpx/_client.py` | 1780 |\n| `post` | `httpx/_client.py` | 1123 |\n| `post` | `httpx/_client.py` | 1838 |\n| `put` | `httpx/_client.py` | 1160 |\n| `put` | `httpx/_client.py` | 1875 |\n| `patch` | `httpx/_client.py` | 1197 |\n| `patch` | `httpx/_client.py` | 1912 |\n| `delete` | `httpx/_client.py` | 1234 |\n| `delete` | `httpx/_client.py` | 1949 |\n\n---\n\n### Summary\n- **3 direct callers** in `httpx/_auth.py` (`__init__` and two `auth_flow` overloads).\n- **22 total indirect callers** across `httpx/_auth.py` and `httpx/_client.py`, tracing through `sync_auth_flow`/`async_auth_flow` → `_send_handling_auth` → `send` → all high-level HTTP verb methods (`request`, `stream`, `get`, `head`, `options`, `post`, `put`, `patch`, `delete`).\n\nThe duplicate line numbers for most methods reflect the pattern of **two client classes** in `httpx/_client.py`: a synchronous `Client` and an asynchronous `AsyncClient`, each with their own implementations.",
+  "turns": [
+    {
+      "index": 0,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_0XYSQQ4mGaKbJ2f1DOPhcA",
+          "name": "get_call_chain",
+          "input": {
+            "depth": 5,
+            "direction": "callers",
+            "function_name": "_build_auth_header"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 1765,
+      "output_tokens": 98,
+      "tool_calls": [
+        {
+          "name": "get_call_chain",
+          "input": {
+            "depth": 5,
+            "direction": "callers",
+            "function_name": "_build_auth_header"
+          },
+          "result": "{\"callers\":[{\"name\":\"__init__\",\"file_path\":\"httpx/_auth.py\",\"line\":132,\"depth\":1,\"resolution\":\"receiver-typed\"},{\"name\":\"auth_flow\",\"file_path\":\"httpx/_auth.py\",\"line\":157,\"depth\":1,\"resolution\":\"receiver-typed\"},{\"name\":\"auth_flow\",\"file_path\":\"httpx/_auth.py\",\"line\":193,\"depth\":1,\"resolution\":\"receiver-typed\"}],\"depth\":5,\"function\":\"_build_auth_header\"}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_GSH9a7URQoeC5TZm3ozU5l",
+          "name": "get_call_chain",
+          "input": {
+            "depth": 5,
+            "direction": "callers",
+            "function_name": "auth_flow"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 1991,
+      "output_tokens": 94,
+      "tool_calls": [
+        {
+          "name": "get_call_chain",
+          "input": {
+            "depth": 5,
+            "direction": "callers",
+            "function_name": "auth_flow"
+          },
+          "result": "{\"callers\":[{\"name\":\"async_auth_flow\",\"file_path\":\"httpx/_auth.py\",\"line\":87,\"depth\":1,\"resolution\":\"receiver-typed\"},{\"name\":\"sync_auth_flow\",\"file_path\":\"httpx/_auth.py\",\"line\":62,\"depth\":1,\"resolution\":\"receiver-typed\"},{\"name\":\"_send_handling_auth\",\"file_path\":\"httpx/_client.py\",\"line\":930,\"depth\":2,\"resolution\":\"receiver-typed\"},{\"name\":\"_send_handling_auth\",\"file_path\":\"httpx/_client.py\",\"line\":1645,\"depth\":2,\"resolution\":\"receiver-typed\"},{\"name\":\"send\",\"file_path\":\"httpx/_client.py\",\"line\":879,\"depth\":3,\"resolution\":\"receiver-typed\"},{\"name\":\"send\",\"file_path\":\"httpx/_client.py\",\"line\":1594,\"depth\":3,\"resolution\":\"receiver-typed\"},{\"name\":\"request\",\"file_path\":\"httpx/_client.py\",\"line\":771,\"depth\":4,\"resolution\":\"receiver-typed\"},{\"name\":\"request\",\"file_path\":\"httpx/_client.py\",\"line\":1485,\"depth\":4,\"resolution\":\"receiver-typed\"},{\"name\":\"stream\",\"file_path\":\"httpx/_client.py\",\"line\":828,\"depth\":4,\"resolution\":\"receiver-typed\"},{\"name\":\"stream\",\"file_path\":\"httpx/_client.py\",\"line\":1543,\"depth\":4,\"resolution\":\"receiver-typed\"},{\"name\":\"delete\",\"file_path\":\"httpx/_client.py\",\"line\":1234,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"delete\",\"file_path\":\"httpx/_client.py\",\"line\":1949,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"get\",\"file_path\":\"httpx/_client.py\",\"line\":1036,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"get\",\"file_path\":\"httpx/_client.py\",\"line\":1751,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"head\",\"file_path\":\"httpx/_client.py\",\"line\":1094,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"head\",\"file_path\":\"httpx/_client.py\",\"line\":1809,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"options\",\"file_path\":\"httpx/_client.py\",\"line\":1065,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"options\",\"file_path\":\"httpx/_client.py\",\"line\":1780,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"patch\",\"file_path\":\"httpx/_client.py\",\"line\":1197,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"patch\",\"file_path\":\"httpx/_client.py\",\"line\":1912,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"post\",\"file_path\":\"httpx/_client.py\",\"line\":1123,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"post\",\"file_path\":\"httpx/_client.py\",\"line\":1838,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"put\",\"file_path\":\"httpx/_client.py\",\"line\":1160,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"put\",\"file_path\":\"httpx/_client.py\",\"line\":1875,\"depth\":5,\"resolution\":\"receiver-typed\"}],\"depth\":5,\"function\":\"auth_flow\"}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "content": [
+        {
+          "type": "text",
+          "text": "Here is the **complete set of calling methods** for `_build_auth_header`, organized by call depth:\n\n---\n\n### Direct Callers (Depth 1) — `httpx/_auth.py`\nThese three methods call `_build_auth_header` directly:\n\n| Method | File | Line |\n|---|---|---|\n| `__init__` | `httpx/_auth.py` | 132 |\n| `auth_flow` | `httpx/_auth.py` | 157 |\n| `auth_flow` | `httpx/_auth.py` | 193 |\n\n---\n\n### Indirect Callers via `auth_flow` (Depth 2) — `httpx/_auth.py`\n| Method | File | Line |\n|---|---|---|\n| `async_auth_flow` | `httpx/_auth.py` | 87 |\n| `sync_auth_flow` | `httpx/_auth.py` | 62 |\n\n---\n\n### Indirect Callers via `sync/async_auth_flow` (Depth 3) — `httpx/_client.py`\n| Method | File | Line |\n|---|---|---|\n| `_send_handling_auth` | `httpx/_client.py` | 930 |\n| `_send_handling_auth` | `httpx/_client.py` | 1645 |\n\n---\n\n### Indirect Callers via `_send_handling_auth` (Depth 4) — `httpx/_client.py`\n| Method | File | Line |\n|---|---|---|\n| `send` | `httpx/_client.py` | 879 |\n| `send` | `httpx/_client.py` | 1594 |\n\n---\n\n### Indirect Callers via `send` (Depth 5) — `httpx/_client.py`\n| Method | File | Line |\n|---|---|---|\n| `request` | `httpx/_client.py` | 771 |\n| `request` | `httpx/_client.py` | 1485 |\n| `stream` | `httpx/_client.py` | 828 |\n| `stream` | `httpx/_client.py` | 1543 |\n| `get` | `httpx/_client.py` | 1036 |\n| `get` | `httpx/_client.py` | 1751 |\n| `head` | `httpx/_client.py` | 1094 |\n| `head` | `httpx/_client.py` | 1809 |\n| `options` | `httpx/_client.py` | 1065 |\n| `options` | `httpx/_client.py` | 1780 |\n| `post` | `httpx/_client.py` | 1123 |\n| `post` | `httpx/_client.py` | 1838 |\n| `put` | `httpx/_client.py` | 1160 |\n| `put` | `httpx/_client.py` | 1875 |\n| `patch` | `httpx/_client.py` | 1197 |\n| `patch` | `httpx/_client.py` | 1912 |\n| `delete` | `httpx/_client.py` | 1234 |\n| `delete` | `httpx/_client.py` | 1949 |\n\n---\n\n### Summary\n- **3 direct callers** in `httpx/_auth.py` (`__init__` and two `auth_flow` overloads).\n- **22 total indirect callers** across `httpx/_auth.py` and `httpx/_client.py`, tracing through `sync_auth_flow`/`async_auth_flow` → `_send_handling_auth` → `send` → all high-level HTTP verb methods (`request`, `stream`, `get`, `head`, `options`, `post`, `put`, `patch`, `delete`).\n\nThe duplicate line numbers for most methods reflect the pattern of **two client classes** in `httpx/_client.py`: a synchronous `Client` and an asynchronous `AsyncClient`, each with their own implementations."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "input_tokens": 2870,
+      "output_tokens": 991
+    }
+  ],
+  "total_input_tokens": 6626,
+  "total_output_tokens": 1183,
+  "tool_call_count": 2,
+  "turns_to_answer": 3,
+  "wall_clock_ms": 16987,
+  "retries": 0
+}

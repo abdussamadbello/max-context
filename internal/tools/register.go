@@ -10,6 +10,7 @@ import (
 func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot string) []mcp.ToolSchema {
 	store := db.NewSQLiteStore(database)
 
+	h.Register("get_definition", GetDefinitionHandler(database))
 	h.Register("query_codebase", QueryCodebaseHandler(database, q, projectRoot))
 	h.Register("get_call_chain", GetCallChainHandler(database))
 	h.Register("get_impact", GetImpactHandler(store, projectRoot))
@@ -17,13 +18,24 @@ func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot st
 
 	return []mcp.ToolSchema{
 		{
+			Name:        "get_definition",
+			Description: "Find where a symbol is defined by EXACT name. Use this first for 'where is X defined?' questions. Returns answer_status, recommended_next_action, and a canonical result when a class/type should outrank same-named methods or properties. If the result is definitive, answer immediately without further searching.",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"symbol": map[string]string{"type": "string", "description": "Exact symbol name (function, method, type, class)"},
+				},
+				"required": []string{"symbol"},
+			},
+		},
+		{
 			Name:        "query_codebase",
-			Description: "Search the indexed codebase for functions, types, or files by keyword. Returns BM25-ranked results with file paths, line numbers, and code snippets. Returns 'suggestions' when results are weak.",
+			Description: "Fuzzy/keyword search of the indexed codebase for functions and types. Returns terse ranked results plus answer_status and recommended_next_action. For overloaded exact names, canonical type/class definitions outrank same-named methods/properties. For 'where is X defined?' prefer get_definition; for dependency/usage questions prefer get_impact or get_call_chain. One or two queries is usually enough.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"query":       map[string]string{"type": "string", "description": "Search query (keywords or function/type name)"},
-					"max_results": map[string]interface{}{"type": "integer", "description": "Max results to return (1-50)", "default": 5},
+					"max_results": map[string]interface{}{"type": "integer", "description": "Max results to return (1-50)", "default": 3},
 					"scope":       map[string]interface{}{"type": "string", "description": "Restrict search scope", "enum": []string{"all", "functions", "types", "files"}, "default": "all"},
 					"file_filter": map[string]interface{}{"type": "string", "description": "Glob pattern to filter by file path (e.g. 'src/**/*.ts')"},
 				},
@@ -49,11 +61,12 @@ func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot st
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"files":         map[string]interface{}{"type": "array", "items": map[string]string{"type": "string"}, "description": "Explicit file list (project-root relative). If omitted, uses from_git or defaults to HEAD."},
-					"from_git":      map[string]string{"type": "string", "description": "Git revision (e.g. 'HEAD' or 'main..HEAD'). Ignored if 'files' is set."},
-					"depth":         map[string]interface{}{"type": "integer", "description": "Max recursion depth (1-5)", "default": 2},
-					"direction":     map[string]interface{}{"type": "string", "description": "callers (blast radius), callees (dependencies), or both", "enum": []string{"callers", "callees", "both"}, "default": "callers"},
-					"include_tests": map[string]interface{}{"type": "boolean", "description": "Include test files in results", "default": true},
+					"files":          map[string]interface{}{"type": "array", "items": map[string]string{"type": "string"}, "description": "Explicit file list (project-root relative). If omitted, uses from_git or defaults to HEAD."},
+					"from_git":       map[string]string{"type": "string", "description": "Git revision (e.g. 'HEAD' or 'main..HEAD'). Ignored if 'files' is set."},
+					"depth":          map[string]interface{}{"type": "integer", "description": "Max recursion depth (1-5)", "default": 2},
+					"direction":      map[string]interface{}{"type": "string", "description": "callers (blast radius), callees (dependencies), or both", "enum": []string{"callers", "callees", "both"}, "default": "callers"},
+					"include_tests":  map[string]interface{}{"type": "boolean", "description": "Include test files in results", "default": true},
+					"min_confidence": map[string]interface{}{"type": "string", "description": "Only traverse call edges at or above this resolution confidence. Use to exclude lower-confidence guesses from the blast radius.", "enum": []string{"name-global", "receiver-typed", "same-package", "same-file"}},
 				},
 			},
 		},

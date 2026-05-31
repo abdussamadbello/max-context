@@ -1,0 +1,213 @@
+{
+  "repo": "max-context-core",
+  "questions": [
+    {
+      "id": "I01",
+      "text": "If I change internal/db/queries.go, what's affected?",
+      "category": "impact",
+      "mc_tokens": 78,
+      "naive_tokens": 47499559,
+      "skilled_tokens": 17961,
+      "naive_ratio": 608968,
+      "skilled_ratio": 230
+    },
+    {
+      "id": "I02",
+      "text": "If I refactor RegisterAll, what's affected?",
+      "category": "impact",
+      "mc_tokens": 99,
+      "naive_tokens": 23858765,
+      "skilled_tokens": 5322,
+      "naive_ratio": 240997,
+      "skilled_ratio": 53
+    },
+    {
+      "id": "I03",
+      "text": "If I change SymbolsInFile, what calls it?",
+      "category": "impact",
+      "mc_tokens": 99,
+      "naive_tokens": 44993,
+      "skilled_tokens": 12863,
+      "naive_ratio": 454,
+      "skilled_ratio": 129
+    },
+    {
+      "id": "I04",
+      "text": "If I change the calls table schema, what code needs updating?",
+      "category": "impact",
+      "mc_tokens": 99,
+      "naive_tokens": 71101735,
+      "skilled_tokens": 42071,
+      "naive_ratio": 718199,
+      "skilled_ratio": 424
+    },
+    {
+      "id": "I05",
+      "text": "If I rename queryCallChain, what's affected?",
+      "category": "impact",
+      "mc_tokens": 99,
+      "naive_tokens": 23855765,
+      "skilled_tokens": 3660,
+      "naive_ratio": 240967,
+      "skilled_ratio": 36
+    },
+    {
+      "id": "I06",
+      "text": "If I change the MCP handler signature, what needs to be updated?",
+      "category": "impact",
+      "mc_tokens": 99,
+      "naive_tokens": 47203247,
+      "skilled_tokens": 4127,
+      "naive_ratio": 476800,
+      "skilled_ratio": 41
+    },
+    {
+      "id": "I07",
+      "text": "If I touch internal/tools/register.go, what's affected?",
+      "category": "impact",
+      "mc_tokens": 78,
+      "naive_tokens": 47449472,
+      "skilled_tokens": 6503,
+      "naive_ratio": 608326,
+      "skilled_ratio": 83
+    },
+    {
+      "id": "L01",
+      "text": "Where is the function that opens the SQLite database?",
+      "category": "lookup",
+      "mc_tokens": 776,
+      "naive_tokens": 23929913,
+      "skilled_tokens": 23627,
+      "naive_ratio": 30837,
+      "skilled_ratio": 30
+    },
+    {
+      "id": "L02",
+      "text": "Where is the file watcher started?",
+      "category": "lookup",
+      "mc_tokens": 432,
+      "naive_tokens": 23904762,
+      "skilled_tokens": 11615,
+      "naive_ratio": 55335,
+      "skilled_ratio": 26
+    },
+    {
+      "id": "L03",
+      "text": "Which file defines the MCP tool handler signature?",
+      "category": "lookup",
+      "mc_tokens": 179,
+      "naive_tokens": 23601853,
+      "skilled_tokens": 3870,
+      "naive_ratio": 131853,
+      "skilled_ratio": 21
+    },
+    {
+      "id": "L04",
+      "text": "Where is the query_codebase tool registered?",
+      "category": "lookup",
+      "mc_tokens": 1174,
+      "naive_tokens": 23626186,
+      "skilled_tokens": 31729,
+      "naive_ratio": 20124,
+      "skilled_ratio": 27
+    },
+    {
+      "id": "L05",
+      "text": "What is the schema migration for the functions table?",
+      "category": "lookup",
+      "mc_tokens": 165,
+      "naive_tokens": 23881144,
+      "skilled_tokens": 2676,
+      "naive_ratio": 144734,
+      "skilled_ratio": 16
+    },
+    {
+      "id": "L06",
+      "text": "Where is the architecture summary generated?",
+      "category": "lookup",
+      "mc_tokens": 533,
+      "naive_tokens": 47714064,
+      "skilled_tokens": 3053,
+      "naive_ratio": 89519,
+      "skilled_ratio": 5
+    },
+    {
+      "id": "L07",
+      "text": "What's the structure of a search result?",
+      "category": "lookup",
+      "mc_tokens": 174,
+      "naive_tokens": 23587145,
+      "skilled_tokens": 2803,
+      "naive_ratio": 135558,
+      "skilled_ratio": 16
+    },
+    {
+      "id": "T01",
+      "text": "What calls IndexFile?",
+      "category": "trace",
+      "mc_tokens": 72,
+      "naive_tokens": 23864146,
+      "skilled_tokens": 4914,
+      "naive_ratio": 331446,
+      "skilled_ratio": 68
+    },
+    {
+      "id": "T02",
+      "text": "What does Migrate call?",
+      "category": "trace",
+      "mc_tokens": 134,
+      "naive_tokens": 23881936,
+      "skilled_tokens": 11045,
+      "naive_ratio": 178223,
+      "skilled_ratio": 82
+    },
+    {
+      "id": "T03",
+      "text": "What calls PrepareQueries?",
+      "category": "trace",
+      "mc_tokens": 100,
+      "naive_tokens": 23871472,
+      "skilled_tokens": 9023,
+      "naive_ratio": 238714,
+      "skilled_ratio": 90
+    },
+    {
+      "id": "T04",
+      "text": "What calls Open in the db package?",
+      "category": "trace",
+      "mc_tokens": 49,
+      "naive_tokens": 47582135,
+      "skilled_tokens": 10453,
+      "naive_ratio": 971063,
+      "skilled_ratio": 213
+    },
+    {
+      "id": "T05",
+      "text": "What does Index() in indexer call?",
+      "category": "trace",
+      "mc_tokens": 50,
+      "naive_tokens": 23853616,
+      "skilled_tokens": 1986,
+      "naive_ratio": 477072,
+      "skilled_ratio": 39
+    },
+    {
+      "id": "T06",
+      "text": "Trace what the MCP Serve method ends up doing",
+      "category": "trace",
+      "mc_tokens": 97,
+      "naive_tokens": 23916369,
+      "skilled_tokens": 14935,
+      "naive_ratio": 246560,
+      "skilled_ratio": 153
+    }
+  ],
+  "summary": {
+    "question_count": 20,
+    "avg_mc_tokens": 229.3,
+    "avg_naive_tokens": 30911413.85,
+    "avg_skilled_tokens": 11211.8,
+    "naive_savings_x": 134807.73593545574,
+    "skilled_savings_x": 48.895769733972955
+  }
+}

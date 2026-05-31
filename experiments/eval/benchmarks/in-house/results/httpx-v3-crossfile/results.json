@@ -1,0 +1,87 @@
+{
+  "manifest": {
+    "protocol_hash": "503d6dac58144c8ef6974a898072317b7945784647f7650e3a2337efa30d7195",
+    "protocol_file": "protocol/httpx-v3-crossfile.json",
+    "task_model": "us.anthropic.claude-sonnet-4-6",
+    "judge_model": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "temperature": 0,
+    "max_turns": 15,
+    "token_budget": 600000,
+    "replicates": 1,
+    "repo_shas": {
+      "httpx": "b5addb64f0161ff6bfe94c124ef76f6a1fba5254"
+    },
+    "index_shas": {
+      "httpx": "b5addb64f0161ff6bfe94c124ef76f6a1fba5254"
+    },
+    "max_context_bin": "/tmp/max-context",
+    "rg_version": "ripgrep 14.1.1 (rev 4649aa9700)",
+    "started_at": "2026-05-31T15:48:05Z",
+    "grep_playbook": "\nYou have three tools for exploring the repository: grep, read_file, list_files.\n\nWork like a skilled engineer at a terminal:\n- Start by SEARCHING for the most specific term in the task. Prefer definition-anchored\n  patterns: for a symbol Foo, try patterns like \"class Foo\", \"def Foo\", \"function Foo\",\n  \"Foo =\", or \"interface Foo\" depending on the language.\n- Use ripgrep flags via \"args\": -w for whole-word, -i for case-insensitive, -F for a\n  literal (non-regex) string, -t py / -t ts to restrict by language, -g to include/exclude\n  by glob, -l to list only matching files, -A/-B/-C for surrounding context.\n- If a search is too noisy, make the pattern more specific or add a type/glob filter.\n  If it returns nothing, broaden it or try a synonym.\n- Use list_files to understand layout when a search alone is ambiguous.\n- read_file with a line range to confirm a definition or read just the relevant region;\n  read the whole file only when you truly need it.\n- To trace who CALLS a function (and transitively, what reaches it): search for the\n  function's name to find its direct callers, identify the enclosing function of each call\n  site, then search for THOSE functions' names to find their callers, and repeat outward\n  until no new callers appear. For a complete transitive set you must follow every level.\n- Stop as soon as you can answer confidently. Always cite exact repo-relative file paths.\n",
+    "mc_playbook": "\nYou have max-context's tools for exploring the repository (see each tool's description\nfor its exact arguments). They query a pre-built index of the codebase.\n\nWork efficiently:\n- To FIND where a function, type, or file lives, search the index by keyword or name; it\n  returns ranked results with file paths, line numbers, and snippets.\n- To understand how code connects, trace the call graph in either direction (who calls a\n  function, and what it calls), to a chosen depth. For a COMPLETE transitive caller set,\n  trace to a sufficient depth so every indirect caller up the chain is included.\n- To assess what a change affects, ask for the impact/blast-radius of the relevant files\n  or symbols.\n- To get oriented in an unfamiliar repo, request the architecture summary.\n- Prefer a targeted query over reading whole files. Stop as soon as you can answer\n  confidently. Always cite exact repo-relative file paths.\n"
+  },
+  "runs": [
+    {
+      "task_id": "httpx-C06",
+      "repo": "httpx",
+      "arm": "grep",
+      "replicate": 0,
+      "phrasing": "List every function or method that calls to_bytes. I need the complete set of callers across the whole codebase — name each calling function. to_bytes is a small utility used in several modules.",
+      "status": "completed",
+      "final_answer": "The tool is stripping `to_bytes` from the output (treating it as a highlight marker). The actual source is confirmed from `read_file`. Now I have everything needed. Let me compile the complete picture from the confirmed source reads.\n\nHere is the complete set of every function/method that calls `to_bytes` across the codebase:\n\n---\n\n## All Callers of `to_bytes`\n\n`to_bytes` is defined in **`httpx/_utils.py`** (line 79). It is imported and called in two modules: `httpx/_auth.py` and `httpx/_multipart.py`.\n\n---\n\n### `httpx/_auth.py`\n\n| Calling Method | Class | Line(s) | Notes |\n|---|---|---|---|\n| `BasicAuth._build_auth_header` | `BasicAuth` | 140 | `to_bytes(username)`, `to_bytes(password)` |\n| `NetRCAuth._build_auth_header` | `NetRCAuth` | 170 | `to_bytes(username)`, `to_bytes(password)` |\n| `DigestAuth.__init__` | `DigestAuth` | 188–189 | `to_bytes(username)`, `to_bytes(password)` |\n\n---\n\n### `httpx/_multipart.py`\n\n| Calling Method | Class | Line(s) | Notes |\n|---|---|---|---|\n| `DataField.render_data` | `DataField` | 101 | `to_bytes(self.value)` |\n| `FileField.get_length` | `FileField` | 175 | `to_bytes(self.file)` |\n| `FileField.render_data` | `FileField` | 205, 216 | `to_bytes(self.file)` and `to_bytes(chunk)` |\n\n---\n\n### Summary — Complete Caller List (7 functions/methods)\n\n1. **`BasicAuth._build_auth_header`** — `httpx/_auth.py:140`\n2. **`NetRCAuth._build_auth_header`** — `httpx/_auth.py:170`\n3. **`DigestAuth.__init__`** — `httpx/_auth.py:188–189`\n4. **`DataField.render_data`** — `httpx/_multipart.py:101`\n5. **`FileField.get_length`** — `httpx/_multipart.py:175`\n6. **`FileField.render_data`** — `httpx/_multipart.py:205, 216`\n\n\u003e **Note:** `to_bytes` is **not** called anywhere in the test suite, `_models.py`, `_client.py`, `_content.py`, or any other module — only the six methods above (across two files) call it directly.",
+      "input_tokens": 84451,
+      "output_tokens": 1972,
+      "tool_calls": 14,
+      "turns_to_answer": 10,
+      "wall_clock_ms": 50904,
+      "retries": 0,
+      "retrieval": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "hit": true,
+        "predicted": null,
+        "matched": [
+          "_build_auth_header",
+          "__init__",
+          "render_data",
+          "get_length"
+        ],
+        "missed": null,
+        "lead_correct": false
+      },
+      "transcript_file": "transcripts/httpx-C06_grep_r0.json"
+    },
+    {
+      "task_id": "httpx-C06",
+      "repo": "httpx",
+      "arm": "max-context",
+      "replicate": 0,
+      "phrasing": "List every function or method that calls to_bytes. I need the complete set of callers across the whole codebase — name each calling function. to_bytes is a small utility used in several modules.",
+      "status": "completed",
+      "final_answer": "Here is the **complete set of callers** of `to_bytes` (defined at `httpx/_utils.py:79`) across the codebase:\n\n---\n\n### Direct Callers of `to_bytes`\n\n| # | Calling Function/Method | File | Line |\n|---|------------------------|------|------|\n| 1 | `_build_auth_header` (on `BasicAuth`) | `httpx/_auth.py` | 139 |\n| 2 | `_build_auth_header` (on `NetRCAuth`) | `httpx/_auth.py` | 169 |\n| 3 | `__init__` (on `DigestAuth`) | `httpx/_auth.py` | 187 |\n| 4 | `render_data` (on `DataField`) | `httpx/_multipart.py` | 99 |\n| 5 | `get_length` (on `FileField`) | `httpx/_multipart.py` | 171 |\n| 6 | `render_data` (on `FileField`) | `httpx/_multipart.py` | 203 |\n\n---\n\n### Indirect Callers (functions that call the above)\n\nThese call into the direct callers above, completing the transitive chain:\n\n| # | Calling Function/Method | File | Calls Into |\n|---|------------------------|------|------------|\n| 7 | `__init__` (on `BasicAuth`) | `httpx/_auth.py:132` | `_build_auth_header` |\n| 8 | `auth_flow` (on `BasicAuth`/`NetRCAuth`) | `httpx/_auth.py:157` | `_build_auth_header` |\n| 9 | `get_length` (on `DataField`) | `httpx/_multipart.py:105` | `render_data` |\n| 10 | `render` (on `DataField`) | `httpx/_multipart.py:110` | `render_data` |\n| 11 | `render` (on `FileField`) | `httpx/_multipart.py:219` | `render_data` |\n\n---\n\n### Notable Non-Caller (same file)\n- `_obfuscate_sensitive_headers` in `httpx/_models.py:130` calls the **similarly named** `to_bytes_or_str` (a different utility at `httpx/_utils.py:87`), **not** `to_bytes` directly.\n\n---\n\n### Summary\n`to_bytes` is called from **two modules** — `httpx/_auth.py` and `httpx/_multipart.py` — by a total of **6 direct calling functions/methods**: `_build_auth_header` (×2 classes), `DigestAuth.__init__`, `DataField.render_data`, `FileField.get_length`, and `FileField.render_data`.",
+      "input_tokens": 7588,
+      "output_tokens": 902,
+      "tool_calls": 3,
+      "turns_to_answer": 3,
+      "wall_clock_ms": 16871,
+      "retries": 0,
+      "retrieval": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "hit": true,
+        "predicted": null,
+        "matched": [
+          "_build_auth_header",
+          "__init__",
+          "render_data",
+          "get_length"
+        ],
+        "missed": null,
+        "lead_correct": false
+      },
+      "transcript_file": "transcripts/httpx-C06_max-context_r0.json"
+    }
+  ]
+}

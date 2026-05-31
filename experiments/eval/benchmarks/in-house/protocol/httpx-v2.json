@@ -1,0 +1,361 @@
+{
+  "version": "v2-transitive",
+  "task_model": "claude-sonnet-4-6",
+  "judge_model": "claude-haiku-4-5",
+  "replicates": 1,
+  "max_turns": 15,
+  "token_budget": 600000,
+  "system_skeleton": "You are a senior software engineer working in an unfamiliar codebase. Answer the user's task accurately using the tools provided. Be concise. When you state where code lives, give the exact repo-relative file path(s). When you finish, stop calling tools and write your final answer as plain text.",
+  "repos": [
+    {
+      "name": "httpx",
+      "clone_url": "https://github.com/encode/httpx.git",
+      "sha": "b5addb64f0161ff6bfe94c124ef76f6a1fba5254",
+      "lang": "python"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "httpx-R01",
+      "repo": "httpx",
+      "type": "retrieval",
+      "intent": "Which file defines the main URL class in this library?",
+      "paraphrases": [
+        "Where is the URL type implemented?",
+        "I need to find the source file that contains the URL class definition."
+      ]
+    },
+    {
+      "id": "httpx-R02",
+      "repo": "httpx",
+      "type": "retrieval",
+      "intent": "Where is the Response class defined?",
+      "paraphrases": [
+        "Find the file containing the Response class.",
+        "Which module implements the HTTP Response object?"
+      ]
+    },
+    {
+      "id": "httpx-R03",
+      "repo": "httpx",
+      "type": "retrieval",
+      "intent": "Which file and class implements HTTP digest authentication?",
+      "paraphrases": [
+        "Where is digest auth implemented?",
+        "Find the digest authentication class."
+      ]
+    },
+    {
+      "id": "httpx-R04",
+      "repo": "httpx",
+      "type": "retrieval",
+      "intent": "Where is the request-building logic \u2014 the method that assembles an outgoing request from method, url, headers etc.?",
+      "paraphrases": [
+        "Find the build_request method.",
+        "Which file contains the code that constructs a Request object on the client?"
+      ]
+    },
+    {
+      "id": "httpx-R05",
+      "repo": "httpx",
+      "type": "retrieval",
+      "intent": "Which file defines the Timeout configuration type?",
+      "paraphrases": [
+        "Where is the Timeout class?",
+        "Find where request timeouts are configured as a class."
+      ]
+    },
+    {
+      "id": "httpx-E01",
+      "repo": "httpx",
+      "type": "edit",
+      "intent": "I want to add a new default header to every outgoing request made by the Client. Where in the code should I make this change, and what is the minimal edit?",
+      "paraphrases": [
+        "How would I make the Client send an extra header on all requests? Point me to the exact place to edit.",
+        "Where do I hook in to inject a header into every request the client sends?"
+      ],
+      "rubric": [
+        {
+          "id": "file",
+          "criterion": "Identifies httpx/_client.py as the primary file to edit",
+          "max_points": 1
+        },
+        {
+          "id": "locus",
+          "criterion": "Points to header construction in build_request or the client default-headers handling (not an unrelated spot)",
+          "max_points": 2
+        },
+        {
+          "id": "actionable",
+          "criterion": "Gives a concrete, minimal edit a developer could apply",
+          "max_points": 2
+        }
+      ]
+    },
+    {
+      "id": "httpx-E02",
+      "repo": "httpx",
+      "type": "edit",
+      "intent": "We need to change how the connection/timeout defaults are applied. Where is the Timeout default constructed and used so I can adjust the default value safely?",
+      "paraphrases": [
+        "Where would I change the default timeout value and what depends on it?",
+        "Point me to where Timeout defaults live and what I must keep consistent when changing them."
+      ],
+      "rubric": [
+        {
+          "id": "file",
+          "criterion": "Identifies httpx/_config.py (Timeout) as the definition site",
+          "max_points": 1
+        },
+        {
+          "id": "usage",
+          "criterion": "Notes where the default is consumed (client construction / _client.py) so the change stays consistent",
+          "max_points": 2
+        },
+        {
+          "id": "actionable",
+          "criterion": "Gives a concrete, safe edit path",
+          "max_points": 2
+        }
+      ]
+    },
+    {
+      "id": "httpx-G01",
+      "repo": "httpx",
+      "type": "edit",
+      "intent": "Why does httpx read proxy settings from environment variables by default, and where is that behavior controlled? Explain the rationale.",
+      "planted_grep_win": true,
+      "paraphrases": [
+        "Explain the reasoning behind trust_env and where it is handled.",
+        "What is the design intent of environment-based proxy/cert trust in httpx?"
+      ],
+      "rubric": [
+        {
+          "id": "locus",
+          "criterion": "Identifies trust_env in _client.py / _config.py as the control point",
+          "max_points": 1
+        },
+        {
+          "id": "rationale",
+          "criterion": "Explains the WHY (env-based config convention, opt-out for isolation) using prose/comments, not just symbol locations",
+          "max_points": 2
+        }
+      ]
+    },
+    {
+      "id": "httpx-C01",
+      "repo": "httpx",
+      "type": "impact",
+      "intent": "List every function or method that calls build_request. I need the complete set of callers, not examples \u2014 name each calling function.",
+      "paraphrases": [
+        "Which functions invoke build_request? Give me all of them.",
+        "Enumerate all call sites of build_request by their enclosing function."
+      ]
+    },
+    {
+      "id": "httpx-C02",
+      "repo": "httpx",
+      "type": "impact",
+      "intent": "What functions call _build_auth_header? List the complete set of calling methods.",
+      "paraphrases": [
+        "Find every caller of _build_auth_header.",
+        "Which auth methods invoke _build_auth_header? List all of them."
+      ]
+    },
+    {
+      "id": "httpx-C03",
+      "repo": "httpx",
+      "type": "impact",
+      "intent": "If I change the signature of _merge_url, which functions would I need to update? List every caller.",
+      "paraphrases": [
+        "What is the blast radius of changing _merge_url \u2014 name the callers.",
+        "Which functions depend on _merge_url directly?"
+      ]
+    },
+    {
+      "id": "httpx-C04",
+      "repo": "httpx",
+      "type": "impact",
+      "intent": "I'm about to refactor _send_single_request. I need the COMPLETE blast radius: every method that can eventually reach it through the call chain \u2014 not just the direct caller, but every indirect caller up the stack too. List each one.",
+      "paraphrases": [
+        "Trace the full transitive set of callers of _send_single_request \u2014 direct and indirect \u2014 and name every method in the chain.",
+        "If _send_single_request changes behavior, which public and internal methods are affected through the call graph? Enumerate the complete reachable-caller set."
+      ]
+    },
+    {
+      "id": "httpx-C05",
+      "repo": "httpx",
+      "type": "impact",
+      "intent": "_merge_url is buried deep in request construction. I need the full transitive caller set \u2014 every method that ends up invoking it through any number of intermediate calls, including the public request methods. List them all.",
+      "paraphrases": [
+        "What is the complete transitive blast radius of _merge_url, including indirect callers reached through build_request and request?",
+        "Enumerate every method (direct and indirect) whose execution can lead to a call to _merge_url."
+      ]
+    }
+  ],
+  "keys": [
+    {
+      "task_id": "httpx-R01",
+      "expected_files": [
+        "httpx/_urls.py"
+      ],
+      "expected_symbols": [
+        "URL"
+      ],
+      "oracle": "ripgrep '^class URL' (independent of max-context) + hand-verified",
+      "oracle_version": "ripgrep 14.1.1",
+      "human_verified": true
+    },
+    {
+      "task_id": "httpx-R02",
+      "expected_files": [
+        "httpx/_models.py"
+      ],
+      "expected_symbols": [
+        "Response"
+      ],
+      "oracle": "ripgrep '^class Response' + hand-verified",
+      "oracle_version": "ripgrep 14.1.1",
+      "human_verified": true
+    },
+    {
+      "task_id": "httpx-R03",
+      "expected_files": [
+        "httpx/_auth.py"
+      ],
+      "expected_symbols": [
+        "DigestAuth"
+      ],
+      "oracle": "ripgrep '^class DigestAuth' + hand-verified",
+      "oracle_version": "ripgrep 14.1.1",
+      "human_verified": true
+    },
+    {
+      "task_id": "httpx-R04",
+      "expected_files": [
+        "httpx/_client.py"
+      ],
+      "expected_symbols": [
+        "build_request"
+      ],
+      "oracle": "ripgrep 'def build_request' + hand-verified",
+      "oracle_version": "ripgrep 14.1.1",
+      "human_verified": true
+    },
+    {
+      "task_id": "httpx-R05",
+      "expected_files": [
+        "httpx/_config.py"
+      ],
+      "expected_symbols": [
+        "Timeout"
+      ],
+      "oracle": "ripgrep '^class Timeout' + hand-verified",
+      "oracle_version": "ripgrep 14.1.1",
+      "human_verified": true
+    },
+    {
+      "task_id": "httpx-E01",
+      "expected_files": [
+        "httpx/_client.py"
+      ],
+      "oracle": "hand-verified edit locus",
+      "oracle_version": "manual",
+      "human_verified": true,
+      "reference_answer": "The Client builds outgoing requests in build_request() in httpx/_client.py, which merges self.headers (the client's default headers, set in __init__) with per-request headers. To add a default header on every request, add it to the client's default headers (self._headers / headers handling in Client.__init__ in _client.py) or in build_request where headers are assembled."
+    },
+    {
+      "task_id": "httpx-E02",
+      "expected_files": [
+        "httpx/_config.py",
+        "httpx/_client.py"
+      ],
+      "oracle": "hand-verified edit locus",
+      "oracle_version": "manual",
+      "human_verified": true,
+      "reference_answer": "Timeout is defined in httpx/_config.py (class Timeout) with a module-level default (DEFAULT_TIMEOUT_CONFIG). It is consumed when constructing clients in httpx/_client.py. Changing the default means editing the Timeout default in _config.py and verifying client construction in _client.py still passes it through consistently."
+    },
+    {
+      "task_id": "httpx-G01",
+      "expected_files": [
+        "httpx/_client.py",
+        "httpx/_config.py"
+      ],
+      "oracle": "hand-verified; rationale from prose/comments",
+      "oracle_version": "manual",
+      "human_verified": true,
+      "partial": true,
+      "reference_answer": "trust_env (default True) controls whether httpx reads proxy/cert settings from environment variables. It is a constructor parameter on the Client in _client.py (stored as self._trust_env) and influences environment/proxy resolution. The rationale: follow the conventional env-var configuration model (HTTP_PROXY etc.) by default, while allowing opt-out (trust_env=False) for isolated/testing environments. This 'why' lives in docs/comments, not in the call graph."
+    },
+    {
+      "task_id": "httpx-C01",
+      "expected_symbols": [
+        "request",
+        "stream"
+      ],
+      "oracle": "ripgrep 'self.build_request(' in _client.py, enclosing-function hand-verified (excludes docstring/comment mentions); real call sites at _client.py:812(request),855(stream),1527(request async),1570(stream async)",
+      "oracle_version": "ripgrep 14.1.1 + manual",
+      "human_verified": true,
+      "notes": "grep over 'build_request' returns ~10 hits but most are docstrings/comments; the real callers are request and stream on Client and AsyncClient."
+    },
+    {
+      "task_id": "httpx-C02",
+      "expected_symbols": [
+        "__init__",
+        "auth_flow"
+      ],
+      "oracle": "ripgrep 'self._build_auth_header(' in _auth.py, enclosing-method hand-verified; call sites at _auth.py:133(BasicAuth.__init__),164(NetRCAuth.auth_flow),195/217(DigestAuth.auth_flow)",
+      "oracle_version": "ripgrep 14.1.1 + manual",
+      "human_verified": true
+    },
+    {
+      "task_id": "httpx-C03",
+      "expected_symbols": [
+        "build_request"
+      ],
+      "oracle": "ripgrep 'self._merge_url(' in _client.py, enclosing-function hand-verified; single call site at _client.py:366 inside build_request",
+      "oracle_version": "ripgrep 14.1.1 + manual",
+      "human_verified": true
+    },
+    {
+      "task_id": "httpx-C04",
+      "expected_symbols": [
+        "_send_handling_redirects",
+        "_send_handling_auth",
+        "send",
+        "request",
+        "stream",
+        "get",
+        "options",
+        "head",
+        "post",
+        "put",
+        "patch",
+        "delete"
+      ],
+      "oracle": "ripgrep on httpx/_client.py + manual enclosing-function assignment; chain: get/options/head/post/put/patch/delete(1053..1251) -> request(771) -> send(879) -> _send_handling_auth(930)@914 -> _send_handling_redirects(964)@942 -> _send_single_request(1001)@979; stream(828)@868 -> send. Async mirror shares method names.",
+      "oracle_version": "ripgrep 14.1.1 + manual",
+      "human_verified": true,
+      "notes": "Transitive reverse-reachability set (5 levels). grep finds the direct caller easily but tends to drop the deep public methods (get/post/...) under a turn budget because they share no text with _send_single_request; this is a RECALL test, not a cost test."
+    },
+    {
+      "task_id": "httpx-C05",
+      "expected_symbols": [
+        "build_request",
+        "request",
+        "stream",
+        "get",
+        "options",
+        "head",
+        "post",
+        "put",
+        "patch",
+        "delete"
+      ],
+      "oracle": "ripgrep on httpx/_client.py + manual; _merge_url(391)@366 <- build_request(340); build_request <- request(771),stream(828) [verified C01]; request <- get/options/head/post/put/patch/delete(1053..1251).",
+      "oracle_version": "ripgrep 14.1.1 + manual",
+      "human_verified": true,
+      "notes": "Transitive reverse-reachability set (4 levels) through build_request. Same recall structure as C04."
+    }
+  ]
+}

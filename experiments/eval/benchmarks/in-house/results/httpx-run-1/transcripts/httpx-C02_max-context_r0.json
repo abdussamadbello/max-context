@@ -1,0 +1,80 @@
+{
+  "status": "completed",
+  "final_answer": "The complete set of functions that call `_build_auth_header` are all located in `httpx/_auth.py`:\n\n| Caller | File | Line | Notes |\n|---|---|---|---|\n| `__init__` | `httpx/_auth.py` | 132 | Constructor (depth 1) |\n| `auth_flow` | `httpx/_auth.py` | 157 | First `auth_flow` method (depth 1) |\n| `auth_flow` | `httpx/_auth.py` | 193 | Second `auth_flow` method (depth 1) |\n\n### Summary\n\nThere are **3 direct callers** of `_build_auth_header`, all within `httpx/_auth.py`:\n\n1. **`__init__`** (line 132) — calls `_build_auth_header` during object initialization (likely for `BasicAuth` or a similar auth class that pre-builds the header at construction time).\n2. **`auth_flow`** (line 157) — one auth class's `auth_flow` method calls it to build the header during the request flow.\n3. **`auth_flow`** (line 193) — a second auth class's `auth_flow` method also calls it, suggesting at least two different auth classes (e.g., `BasicAuth` and `DigestAuth` or similar) each have their own `auth_flow` that invokes `_build_auth_header`.\n\nNotably, `_build_auth_header` itself is defined in **3 places** (lines 139, 169, and 255 in `httpx/_auth.py`), meaning it is a method on three separate classes — and the callers above correspond to those class instances invoking their own version of the method.",
+  "turns": [
+    {
+      "index": 0,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_A6hWz5pb9uOpOhvUZ0d1EU",
+          "name": "get_call_chain",
+          "input": {
+            "depth": 3,
+            "direction": "callers",
+            "function_name": "_build_auth_header"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 1739,
+      "output_tokens": 98,
+      "tool_calls": [
+        {
+          "name": "get_call_chain",
+          "input": {
+            "depth": 3,
+            "direction": "callers",
+            "function_name": "_build_auth_header"
+          },
+          "result": "{\"callers\":[{\"name\":\"__init__\",\"file_path\":\"httpx/_auth.py\",\"line\":132,\"depth\":1,\"resolution\":\"receiver-typed\"},{\"name\":\"auth_flow\",\"file_path\":\"httpx/_auth.py\",\"line\":157,\"depth\":1,\"resolution\":\"receiver-typed\"},{\"name\":\"auth_flow\",\"file_path\":\"httpx/_auth.py\",\"line\":193,\"depth\":1,\"resolution\":\"receiver-typed\"}],\"depth\":3,\"function\":\"_build_auth_header\"}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_Hckt45LMOCjDvxjGoWpPnb",
+          "name": "get_definition",
+          "input": {
+            "symbol": "_build_auth_header"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 1965,
+      "output_tokens": 58,
+      "tool_calls": [
+        {
+          "name": "get_definition",
+          "input": {
+            "symbol": "_build_auth_header"
+          },
+          "result": "{\"ambiguity_reason\":\"3 exact matches have equal priority; use the relevant module/file from matches.\",\"ambiguous\":true,\"answer\":\"\\\"_build_auth_header\\\" is defined in 3 places (listed in matches). Pick the one in the relevant module; no further keyword search needed.\",\"answer_status\":\"ambiguous\",\"matches\":[{\"name\":\"_build_auth_header\",\"kind\":\"method\",\"label\":\"method\",\"file\":\"httpx/_auth.py\",\"line\":139},{\"name\":\"_build_auth_header\",\"kind\":\"method\",\"label\":\"method\",\"file\":\"httpx/_auth.py\",\"line\":169},{\"name\":\"_build_auth_header\",\"kind\":\"method\",\"label\":\"method\",\"file\":\"httpx/_auth.py\",\"line\":255}],\"recommended_next_action\":\"inspect_relevant_file\",\"total\":3}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "content": [
+        {
+          "type": "text",
+          "text": "The complete set of functions that call `_build_auth_header` are all located in `httpx/_auth.py`:\n\n| Caller | File | Line | Notes |\n|---|---|---|---|\n| `__init__` | `httpx/_auth.py` | 132 | Constructor (depth 1) |\n| `auth_flow` | `httpx/_auth.py` | 157 | First `auth_flow` method (depth 1) |\n| `auth_flow` | `httpx/_auth.py` | 193 | Second `auth_flow` method (depth 1) |\n\n### Summary\n\nThere are **3 direct callers** of `_build_auth_header`, all within `httpx/_auth.py`:\n\n1. **`__init__`** (line 132) — calls `_build_auth_header` during object initialization (likely for `BasicAuth` or a similar auth class that pre-builds the header at construction time).\n2. **`auth_flow`** (line 157) — one auth class's `auth_flow` method calls it to build the header during the request flow.\n3. **`auth_flow`** (line 193) — a second auth class's `auth_flow` method also calls it, suggesting at least two different auth classes (e.g., `BasicAuth` and `DigestAuth` or similar) each have their own `auth_flow` that invokes `_build_auth_header`.\n\nNotably, `_build_auth_header` itself is defined in **3 places** (lines 139, 169, and 255 in `httpx/_auth.py`), meaning it is a method on three separate classes — and the callers above correspond to those class instances invoking their own version of the method."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "input_tokens": 2222,
+      "output_tokens": 410
+    }
+  ],
+  "total_input_tokens": 5926,
+  "total_output_tokens": 566,
+  "tool_call_count": 2,
+  "turns_to_answer": 3,
+  "wall_clock_ms": 13555,
+  "retries": 0
+}

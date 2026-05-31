@@ -10,7 +10,9 @@ AI coding agents waste 30–60% of their context window grepping and re-reading 
 - **No LLM at index time** — deterministic tree-sitter parsing; no API keys, no token spend on indexing
 - **Minimal surface, no breaking changes** — a small set of focused MCP tools, stable schema
 
-See [`BENCHMARK.md`](./BENCHMARK.md) for measured token savings vs naive and skilled Grep+Read baselines. **Skilled-baseline headline: 29.5× fewer tokens per query on max-context's own codebase.**
+See [`BENCHMARK.md`](./BENCHMARK.md) for per-tool-call token savings vs naive and skilled Grep+Read baselines. The current skilled-baseline headline is **29.5× fewer tokens per deterministic query on max-context's own codebase**.
+
+For *agent-session* quality and cost — does an LLM actually do better with these tools? — see the causal A/B in [`experiments/eval/FINDINGS.md`](./experiments/eval/FINDINGS.md) (same model, same tasks, only the toolset differs; blind different-model judge; pre-registered). On the tasks measured so far it finds **equal answer quality to a skilled grep agent, at materially lower cost** — up to 94% fewer tokens (≈90% in aggregate) on call-graph / "what-calls-this" questions — plus a structural edge on **aliased imports** (`from m import f as g; g()`), where text search can't connect the call site to the definition and max-context can. Honest scope: small sample (1 repo family, 1 replicate); quality is a *tie*, not a win, except the alias case.
 
 ## How it works
 
@@ -26,7 +28,7 @@ See [`BENCHMARK.md`](./BENCHMARK.md) for measured token savings vs naive and ski
                                   │   └────────────┬────────────┘   │
     ┌─────────────┐               │                ▼                │
     │ AI CLI / IDE│ stdio MCP     │   ┌─────────────────────────┐   │
-    └─────────────┘◀──────────────┼───│  MCP server · 4 tools   │   │
+    └─────────────┘◀──────────────┼───│  MCP server · 5 tools   │   │
                                   │   └─────────────────────────┘   │
                                   └─────────────────────────────────┘
 ```
@@ -35,7 +37,7 @@ Tree-sitter parses every supported language deterministically. Symbols and call 
 
 ## Features
 
-- **Focused MCP tools**: `get_definition` (exact-name, single decisive location), `query_codebase` (BM25 fuzzy symbol search), `get_call_chain` (recursive caller/callee traversal), `get_impact` (change blast radius), `get_architecture` (pre-computed project summary)
+- **Focused MCP tools**: `get_definition` (exact-name, canonical definition), `query_codebase` (BM25 fuzzy symbol search with explicit next action), `get_call_chain` (recursive caller/callee traversal), `get_impact` (change blast radius), `get_architecture` (pre-computed project summary)
 - **Real-time index**: File watcher keeps the index current within 2 seconds of changes
 - **Multi-language**: TypeScript, JavaScript, Python, Go, Rust, Java (and more via Tree-sitter)
 - **Universal CLI support**: One `max-context setup <cli>` configures Claude Code, VS Code Copilot, Codex CLI, Antigravity, Cursor, and Windsurf
@@ -143,7 +145,7 @@ IDEs that support MCP Resources (e.g. VS Code Copilot) can list and read these i
 - `internal/indexer/` — Tree-sitter parsing, full/incremental index
 - `internal/watcher/` — fsnotify file watcher, debounce, git-aware invalidation
 - `internal/mcp/` — JSON-RPC 2.0 server (stdio)
-- `internal/tools/` — the 4 MCP tools: `query_codebase`, `get_call_chain`, `get_impact`, `get_architecture`
+- `internal/tools/` — the MCP tools: `get_definition`, `query_codebase`, `get_call_chain`, `get_impact`, `get_architecture`
 - `internal/artifacts/` — `architecture.md`, `summary.md`, `status.json`
 - `internal/setup/` — Per-CLI config writers
 - `pkg/treesitter/` — Tree-sitter bindings and language queries

@@ -1,0 +1,128 @@
+{
+  "status": "completed",
+  "final_answer": "That's exactly what I needed. The `headers` setter in `BaseClient` is the single place where all default headers are defined.\n\n---\n\n## Where to make the change\n\n**File:** `httpx/_client.py`\n**Location:** The `headers` setter of `BaseClient`, starting at **line 306**.\n\n---\n\n## The relevant code today\n\n```python\n# httpx/_client.py  (lines 306–316)\n@headers.setter\ndef headers(self, headers: HeaderTypes) -\u003e None:\n    client_headers = Headers(\n        {\n            b\"Accept\": b\"*/*\",\n            b\"Accept-Encoding\": ACCEPT_ENCODING.encode(\"ascii\"),\n            b\"Connection\": b\"keep-alive\",\n            b\"User-Agent\": USER_AGENT.encode(\"ascii\"),\n        }\n    )\n    client_headers.update(headers)\n    self._headers = client_headers\n```\n\nEvery time `self.headers` is assigned (which happens once in `BaseClient.__init__` at line 210), this setter builds the canonical dict of default headers and then merges in any caller-supplied headers on top.\n\n---\n\n## The minimal edit\n\nSimply add your new header to the dictionary literal inside the setter. For example, to add `X-My-Header: my-value`:\n\n```python\n@headers.setter\ndef headers(self, headers: HeaderTypes) -\u003e None:\n    client_headers = Headers(\n        {\n            b\"Accept\": b\"*/*\",\n            b\"Accept-Encoding\": ACCEPT_ENCODING.encode(\"ascii\"),\n            b\"Connection\": b\"keep-alive\",\n            b\"User-Agent\": USER_AGENT.encode(\"ascii\"),\n            b\"X-My-Header\": b\"my-value\",   # ← add this line\n        }\n    )\n    client_headers.update(headers)\n    self._headers = client_headers\n```\n\nThat's the only change needed. Because:\n\n1. **`BaseClient.__init__`** calls `self.headers = Headers(headers)` (line 210), which triggers this setter for every new `Client` or `AsyncClient` instance.\n2. The `client_headers.update(headers)` call that follows means any header the caller explicitly passes at construction time will still override your default, preserving the expected precedence.\n3. Both `Client` (sync) and `AsyncClient` (async) inherit from `BaseClient`, so the new default will apply to both automatically.",
+  "turns": [
+    {
+      "index": 0,
+      "content": [
+        {
+          "type": "text",
+          "text": "Let me explore the repository structure to understand the codebase first."
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_8TG35uIUAbuCIGt4EPtChH",
+          "name": "list_files",
+          "input": {}
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_c8KUGqYD4bhBrSHPdS5MRP",
+          "name": "grep",
+          "input": {
+            "pattern": "class Client"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 1514,
+      "output_tokens": 86,
+      "tool_calls": [
+        {
+          "name": "list_files",
+          "input": {},
+          "result": "CHANGELOG.md\nLICENSE.md\nREADME.md\nrequirements.txt\nmkdocs.yml\npyproject.toml\nscripts/install\nscripts/lint\nscripts/publish\nscripts/sync-version\nscripts/test\nscripts/clean\nscripts/coverage\nscripts/docs\nscripts/check\nscripts/build\ndocs/CNAME\ndocs/code_of_conduct.md\ntests/__init__.py\ndocs/compatibility.md\ndocs/contributing.md\ndocs/async.md\ndocs/api.md\ntests/test_content.py\ntests/test_decoders.py\ntests/test_exceptions.py\ntests/test_exported_members.py\ntests/test_main.py\ntests/test_multipart.py\ntests/test_status_codes.py\ntests/test_timeouts.py\nhttpx/__init__.py\ntests/test_wsgi.py\ndocs/advanced/authentication.md\ndocs/overrides/partials/nav.html\ndocs/quickstart.md\ndocs/third_party_packages.md\ndocs/troubleshooting.md\ntests/test_utils.py\ndocs/advanced/resource-limits.md\ndocs/advanced/ssl.md\ndocs/advanced/text-encodings.md\ndocs/advanced/timeouts.md\ndocs/advanced/transports.md\ndocs/advanced/extensions.md\ndocs/advanced/proxies.md\ndocs/advanced/event-hooks.md\ndocs/advanced/clients.md\ntests/common.py\ntests/concurrency.py\ntests/conftest.py\ndocs/css/custom.css\ndocs/environment_variables.md\ndocs/exceptions.md\ndocs/http2.md\nhttpx/_models.py\nhttpx/_multipart.py\nhttpx/_status_codes.py\nhttpx/__version__.py\nhttpx/_api.py\nhttpx/_auth.py\nhttpx/_client.py\ntests/client/__init__.py\nhttpx/_config.py\nhttpx/_content.py\nhttpx/_decoders.py\ntests/client/test_async_client.py\nhttpx/_exceptions.py\ntests/client/test_auth.py\nhttpx/_main.py\ntests/client/test_client.py\ntests/client/test_cookies.py\ntests/client/test_event_hooks.py\ntests/client/test_headers.py\ntests/test_api.py\ntests/client/test_properties.py\ntests/test_asgi.py\ntests/client/test_proxies.py\ntests/client/test_queryparams.py\ntests/client/test_redirects.py\ntests/test_auth.py\ntests/test_config.py\ndocs/img/rich-progress.gif\ndocs/index.md\ndocs/img/speakeasy.png\ndocs/logging.md\ndocs/img/tqdm-progress.gif\ndocs/img/httpx-request.png\ndocs/img/logo.jpg\nhttpx/_urls.py\ndocs/img/httpx-help.png\nhttpx/_utils.py\nhttpx/_types.py\ndocs/img/gh-actions-fail-test.png\nhttpx/_urlparse.py\nhttpx/_transports/wsgi.py\ndocs/img/gh-actions-fail-check.png\nhttpx/_transports/mock.py\nhttpx/py.typed\ndocs/img/butterfly.png\nhttpx/_transports/default.py\nhttpx/_transports/base.py\nhttpx/_transports/asgi.py\nhttpx/_transports/__init__.py\ndocs/img/gh-actions-fail.png\ntests/models/__init__.py\ntests/models/test_cookies.py\ntests/models/test_headers.py\ntests/models/test_queryparams.py\ntests/models/test_requests.py\ntests/models/test_responses.py\ntests/models/test_url.py\ntests/models/test_whatwg.py\ntests/models/whatwg.json\n",
+          "is_error": false
+        },
+        {
+          "name": "grep",
+          "input": {
+            "pattern": "class Client"
+          },
+          "result": "./httpx/_client.py:125:class ClientState(enum.Enum):\n./httpx/_client.py:594:class Client(BaseClient):\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_U2Cgmm6V3EGdizLCNAsqr3",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n"
+            ],
+            "pattern": "class BaseClient"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 2637,
+      "output_tokens": 73,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n"
+            ],
+            "pattern": "class BaseClient"
+          },
+          "result": "./httpx/_client.py:188:class BaseClient:\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_mKnWbP9vQqfbLwN78pxU6I",
+          "name": "read_file",
+          "input": {
+            "end": 320,
+            "path": "httpx/_client.py",
+            "start": 188
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 2737,
+      "output_tokens": 92,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "end": 320,
+            "path": "httpx/_client.py",
+            "start": 188
+          },
+          "result": "188\tclass BaseClient:\n189\t    def __init__(\n190\t        self,\n191\t        *,\n192\t        auth: AuthTypes | None = None,\n193\t        params: QueryParamTypes | None = None,\n194\t        headers: HeaderTypes | None = None,\n195\t        cookies: CookieTypes | None = None,\n196\t        timeout: TimeoutTypes = DEFAULT_TIMEOUT_CONFIG,\n197\t        follow_redirects: bool = False,\n198\t        max_redirects: int = DEFAULT_MAX_REDIRECTS,\n199\t        event_hooks: None | (typing.Mapping[str, list[EventHook]]) = None,\n200\t        base_url: URL | str = \"\",\n201\t        trust_env: bool = True,\n202\t        default_encoding: str | typing.Callable[[bytes], str] = \"utf-8\",\n203\t    ) -\u003e None:\n204\t        event_hooks = {} if event_hooks is None else event_hooks\n205\t\n206\t        self._base_url = self._enforce_trailing_slash(URL(base_url))\n207\t\n208\t        self._auth = self._build_auth(auth)\n209\t        self._params = QueryParams(params)\n210\t        self.headers = Headers(headers)\n211\t        self._cookies = Cookies(cookies)\n212\t        self._timeout = Timeout(timeout)\n213\t        self.follow_redirects = follow_redirects\n214\t        self.max_redirects = max_redirects\n215\t        self._event_hooks = {\n216\t            \"request\": list(event_hooks.get(\"request\", [])),\n217\t            \"response\": list(event_hooks.get(\"response\", [])),\n218\t        }\n219\t        self._trust_env = trust_env\n220\t        self._default_encoding = default_encoding\n221\t        self._state = ClientState.UNOPENED\n222\t\n223\t    @property\n224\t    def is_closed(self) -\u003e bool:\n225\t        \"\"\"\n226\t        Check if the client being closed\n227\t        \"\"\"\n228\t        return self._state == ClientState.CLOSED\n229\t\n230\t    @property\n231\t    def trust_env(self) -\u003e bool:\n232\t        return self._trust_env\n233\t\n234\t    def _enforce_trailing_slash(self, url: URL) -\u003e URL:\n235\t        if url.raw_path.endswith(b\"/\"):\n236\t            return url\n237\t        return url.copy_with(raw_path=url.raw_path + b\"/\")\n238\t\n239\t    def _get_proxy_map(\n240\t        self, proxy: ProxyTypes | None, allow_env_proxies: bool\n241\t    ) -\u003e dict[str, Proxy | None]:\n242\t        if proxy is None:\n243\t            if allow_env_proxies:\n244\t                return {\n245\t                    key: None if url is None else Proxy(url=url)\n246\t                    for key, url in get_environment_proxies().items()\n247\t                }\n248\t            return {}\n249\t        else:\n250\t            proxy = Proxy(url=proxy) if isinstance(proxy, (str, URL)) else proxy\n251\t            return {\"all://\": proxy}\n252\t\n253\t    @property\n254\t    def timeout(self) -\u003e Timeout:\n255\t        return self._timeout\n256\t\n257\t    @timeout.setter\n258\t    def timeout(self, timeout: TimeoutTypes) -\u003e None:\n259\t        self._timeout = Timeout(timeout)\n260\t\n261\t    @property\n262\t    def event_hooks(self) -\u003e dict[str, list[EventHook]]:\n263\t        return self._event_hooks\n264\t\n265\t    @event_hooks.setter\n266\t    def event_hooks(self, event_hooks: dict[str, list[EventHook]]) -\u003e None:\n267\t        self._event_hooks = {\n268\t            \"request\": list(event_hooks.get(\"request\", [])),\n269\t            \"response\": list(event_hooks.get(\"response\", [])),\n270\t        }\n271\t\n272\t    @property\n273\t    def auth(self) -\u003e Auth | None:\n274\t        \"\"\"\n275\t        Authentication class used when none is passed at the request-level.\n276\t\n277\t        See also [Authentication][0].\n278\t\n279\t        [0]: /quickstart/#authentication\n280\t        \"\"\"\n281\t        return self._auth\n282\t\n283\t    @auth.setter\n284\t    def auth(self, auth: AuthTypes) -\u003e None:\n285\t        self._auth = self._build_auth(auth)\n286\t\n287\t    @property\n288\t    def base_url(self) -\u003e URL:\n289\t        \"\"\"\n290\t        Base URL to use when sending requests with relative URLs.\n291\t        \"\"\"\n292\t        return self._base_url\n293\t\n294\t    @base_url.setter\n295\t    def base_url(self, url: URL | str) -\u003e None:\n296\t        self._base_url = self._enforce_trailing_slash(URL(url))\n297\t\n298\t    @property\n299\t    def headers(self) -\u003e Headers:\n300\t        \"\"\"\n301\t        HTTP headers to include when sending requests.\n302\t        \"\"\"\n303\t        return self._headers\n304\t\n305\t    @headers.setter\n306\t    def headers(self, headers: HeaderTypes) -\u003e None:\n307\t        client_headers = Headers(\n308\t            {\n309\t                b\"Accept\": b\"*/*\",\n310\t                b\"Accept-Encoding\": ACCEPT_ENCODING.encode(\"ascii\"),\n311\t                b\"Connection\": b\"keep-alive\",\n312\t                b\"User-Agent\": USER_AGENT.encode(\"ascii\"),\n313\t            }\n314\t        )\n315\t        client_headers.update(headers)\n316\t        self._headers = client_headers\n317\t\n318\t    @property\n319\t    def cookies(self) -\u003e Cookies:\n320\t        \"\"\"\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "content": [
+        {
+          "type": "text",
+          "text": "That's exactly what I needed. The `headers` setter in `BaseClient` is the single place where all default headers are defined.\n\n---\n\n## Where to make the change\n\n**File:** `httpx/_client.py`\n**Location:** The `headers` setter of `BaseClient`, starting at **line 306**.\n\n---\n\n## The relevant code today\n\n```python\n# httpx/_client.py  (lines 306–316)\n@headers.setter\ndef headers(self, headers: HeaderTypes) -\u003e None:\n    client_headers = Headers(\n        {\n            b\"Accept\": b\"*/*\",\n            b\"Accept-Encoding\": ACCEPT_ENCODING.encode(\"ascii\"),\n            b\"Connection\": b\"keep-alive\",\n            b\"User-Agent\": USER_AGENT.encode(\"ascii\"),\n        }\n    )\n    client_headers.update(headers)\n    self._headers = client_headers\n```\n\nEvery time `self.headers` is assigned (which happens once in `BaseClient.__init__` at line 210), this setter builds the canonical dict of default headers and then merges in any caller-supplied headers on top.\n\n---\n\n## The minimal edit\n\nSimply add your new header to the dictionary literal inside the setter. For example, to add `X-My-Header: my-value`:\n\n```python\n@headers.setter\ndef headers(self, headers: HeaderTypes) -\u003e None:\n    client_headers = Headers(\n        {\n            b\"Accept\": b\"*/*\",\n            b\"Accept-Encoding\": ACCEPT_ENCODING.encode(\"ascii\"),\n            b\"Connection\": b\"keep-alive\",\n            b\"User-Agent\": USER_AGENT.encode(\"ascii\"),\n            b\"X-My-Header\": b\"my-value\",   # ← add this line\n        }\n    )\n    client_headers.update(headers)\n    self._headers = client_headers\n```\n\nThat's the only change needed. Because:\n\n1. **`BaseClient.__init__`** calls `self.headers = Headers(headers)` (line 210), which triggers this setter for every new `Client` or `AsyncClient` instance.\n2. The `client_headers.update(headers)` call that follows means any header the caller explicitly passes at construction time will still override your default, preserving the expected precedence.\n3. Both `Client` (sync) and `AsyncClient` (async) inherit from `BaseClient`, so the new default will apply to both automatically."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "input_tokens": 4306,
+      "output_tokens": 573
+    }
+  ],
+  "total_input_tokens": 11194,
+  "total_output_tokens": 824,
+  "tool_call_count": 4,
+  "turns_to_answer": 4,
+  "wall_clock_ms": 20359,
+  "retries": 0
+}

@@ -1,0 +1,124 @@
+{
+  "status": "completed",
+  "final_answer": "The `Timeout` configuration type is defined in **`httpx/_config.py`** at line 72.",
+  "turns": [
+    {
+      "index": 0,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_n4EoZOgNctmUrj1rRFA075",
+          "name": "grep",
+          "input": {
+            "pattern": "type Timeout"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 1488,
+      "output_tokens": 54,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "pattern": "type Timeout"
+          },
+          "result": "(no matches)",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_yKMKDTdxuXZWNpEcg01Gwd",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-l"
+            ],
+            "pattern": "Timeout"
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_zrvmtZiVkLFeLN2kqmjpbW",
+          "name": "grep",
+          "input": {
+            "pattern": "interface Timeout"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 1556,
+      "output_tokens": 108,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-l"
+            ],
+            "pattern": "Timeout"
+          },
+          "result": "./CHANGELOG.md\n./mkdocs.yml\n./README.md\n./httpx/__init__.py\n./httpx/_api.py\n./docs/advanced/extensions.md\n./httpx/_client.py\n./docs/advanced/timeouts.md\n./httpx/_config.py\n./docs/compatibility.md\n./httpx/_exceptions.py\n./httpx/_main.py\n./docs/advanced/transports.md\n./httpx/_status_codes.py\n./tests/test_config.py\n./tests/client/test_properties.py\n./tests/test_exceptions.py\n./docs/index.md\n./docs/exceptions.md\n./httpx/_transports/default.py\n./httpx/_types.py\n./docs/quickstart.md\n./tests/test_timeouts.py\n./tests/conftest.py\n",
+          "is_error": false
+        },
+        {
+          "name": "grep",
+          "input": {
+            "pattern": "interface Timeout"
+          },
+          "result": "(no matches)",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_nJxuCPzqYNyuzrTgCvTHey",
+          "name": "grep",
+          "input": {
+            "pattern": "class Timeout"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 1925,
+      "output_tokens": 53,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "pattern": "class Timeout"
+          },
+          "result": "./httpx/_config.py:72:class Timeout:\n./httpx/_exceptions.py:132:class TimeoutException(TransportError):\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "content": [
+        {
+          "type": "text",
+          "text": "The `Timeout` configuration type is defined in **`httpx/_config.py`** at line 72."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "input_tokens": 2025,
+      "output_tokens": 28
+    }
+  ],
+  "total_input_tokens": 6994,
+  "total_output_tokens": 243,
+  "tool_call_count": 4,
+  "turns_to_answer": 4,
+  "wall_clock_ms": 11016,
+  "retries": 0
+}

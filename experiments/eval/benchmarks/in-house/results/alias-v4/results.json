@@ -1,0 +1,147 @@
+{
+  "manifest": {
+    "protocol_hash": "249ecc5e394932bf2a79302d2f8851e87141e0fba030b30b8529390b2355ed9e",
+    "protocol_file": "protocol/alias-v4.json",
+    "task_model": "us.anthropic.claude-sonnet-4-6",
+    "judge_model": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "temperature": 0,
+    "max_turns": 15,
+    "token_budget": 600000,
+    "replicates": 1,
+    "repo_shas": {
+      "celery": "90e2a13cbe2d3a40b93fe31ec9f09b64b33e0f64",
+      "payments": "bc194b5a9ecf62a8d40117de8444898f472cc9c8"
+    },
+    "index_shas": {
+      "celery": "90e2a13cbe2d3a40b93fe31ec9f09b64b33e0f64",
+      "payments": "bc194b5a9ecf62a8d40117de8444898f472cc9c8"
+    },
+    "max_context_bin": "/tmp/max-context",
+    "rg_version": "ripgrep 14.1.1 (rev 4649aa9700)",
+    "started_at": "2026-05-31T16:06:38Z",
+    "grep_playbook": "\nYou have three tools for exploring the repository: grep, read_file, list_files.\n\nWork like a skilled engineer at a terminal:\n- Start by SEARCHING for the most specific term in the task. Prefer definition-anchored\n  patterns: for a symbol Foo, try patterns like \"class Foo\", \"def Foo\", \"function Foo\",\n  \"Foo =\", or \"interface Foo\" depending on the language.\n- Use ripgrep flags via \"args\": -w for whole-word, -i for case-insensitive, -F for a\n  literal (non-regex) string, -t py / -t ts to restrict by language, -g to include/exclude\n  by glob, -l to list only matching files, -A/-B/-C for surrounding context.\n- If a search is too noisy, make the pattern more specific or add a type/glob filter.\n  If it returns nothing, broaden it or try a synonym.\n- Use list_files to understand layout when a search alone is ambiguous.\n- read_file with a line range to confirm a definition or read just the relevant region;\n  read the whole file only when you truly need it.\n- To trace who CALLS a function (and transitively, what reaches it): search for the\n  function's name to find its direct callers, identify the enclosing function of each call\n  site, then search for THOSE functions' names to find their callers, and repeat outward\n  until no new callers appear. For a complete transitive set you must follow every level.\n- Stop as soon as you can answer confidently. Always cite exact repo-relative file paths.\n",
+    "mc_playbook": "\nYou have max-context's tools for exploring the repository (see each tool's description\nfor its exact arguments). They query a pre-built index of the codebase.\n\nWork efficiently:\n- To FIND where a function, type, or file lives, search the index by keyword or name; it\n  returns ranked results with file paths, line numbers, and snippets.\n- To understand how code connects, trace the call graph in either direction (who calls a\n  function, and what it calls), to a chosen depth. For a COMPLETE transitive caller set,\n  trace to a sufficient depth so every indirect caller up the chain is included.\n- To assess what a change affects, ask for the impact/blast-radius of the relevant files\n  or symbols.\n- To get oriented in an unfamiliar repo, request the architecture summary.\n- Prefer a targeted query over reading whole files. Stop as soon as you can answer\n  confidently. Always cite exact repo-relative file paths.\n"
+  },
+  "runs": [
+    {
+      "task_id": "A01",
+      "repo": "payments",
+      "arm": "grep",
+      "replicate": 0,
+      "phrasing": "List every function that calls post_transaction. I need the complete set of callers across the whole codebase — name each calling function.",
+      "status": "completed",
+      "final_answer": "The symbol `post_transaction` does not exist anywhere in this codebase. Here is a complete summary of the findings:\n\n---\n\n### Result: `post_transaction` has **zero callers** — it does not exist in this codebase.\n\nA thorough search was performed across **all files** in the repository using:\n- Exact match: `post_transaction`\n- Case-insensitive match: `post_transaction` (any casing)\n- camelCase variant: `postTransaction`\n- Hyphenated variant: `post-transaction`\n\n**None of these patterns appear anywhere.**\n\nThe repository contains only three files:\n\n| File | Contents |\n|---|---|\n| `ledger.py` | Defines a single function (not named `post_transaction`) |\n| `billing.py` | Imports from `ledger.py` under the alias `apply_entry` |\n| `payroll.py` | Imports from `ledger.py` under the alias `record_payment` |\n\n**There are no callers of `post_transaction` because the function does not exist in this codebase.** If you believe it may be defined or called under a different name or in a file not yet present, please double-check the function name or share additional context.",
+      "input_tokens": 7872,
+      "output_tokens": 704,
+      "tool_calls": 6,
+      "turns_to_answer": 4,
+      "wall_clock_ms": 18133,
+      "retries": 0,
+      "retrieval": {
+        "precision": 0,
+        "recall": 0,
+        "f1": 0,
+        "hit": false,
+        "predicted": null,
+        "matched": null,
+        "missed": [
+          "charge_subscription",
+          "issue_refund",
+          "apply_late_fee",
+          "pay_salary",
+          "pay_bonus"
+        ],
+        "lead_correct": false
+      },
+      "transcript_file": "transcripts/A01_grep_r0.json"
+    },
+    {
+      "task_id": "A01",
+      "repo": "payments",
+      "arm": "max-context",
+      "replicate": 0,
+      "phrasing": "List every function that calls post_transaction. I need the complete set of callers across the whole codebase — name each calling function.",
+      "status": "completed",
+      "final_answer": "Here is the **complete set of callers** of `post_transaction` (defined in `ledger.py:4`) across the entire codebase:\n\n| # | Calling Function | File | Line |\n|---|---|---|---|\n| 1 | `apply_late_fee` | `billing.py` | 13 |\n| 2 | `charge_subscription` | `billing.py` | 5 |\n| 3 | `issue_refund` | `billing.py` | 9 |\n| 4 | `pay_bonus` | `payroll.py` | 10 |\n| 5 | `pay_salary` | `payroll.py` | 5 |\n\n**Summary:**\n- **`billing.py`** contains 3 direct callers: `charge_subscription`, `issue_refund`, and `apply_late_fee`.\n- **`payroll.py`** contains 2 direct callers: `pay_salary` and `pay_bonus`.\n\nNo indirect (depth 2+) callers were found beyond these five — they are all direct callers, and the call graph terminates here. This is the exhaustive set across the whole codebase.",
+      "input_tokens": 4043,
+      "output_tokens": 417,
+      "tool_calls": 2,
+      "turns_to_answer": 2,
+      "wall_clock_ms": 8269,
+      "retries": 0,
+      "retrieval": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "hit": true,
+        "predicted": null,
+        "matched": [
+          "charge_subscription",
+          "issue_refund",
+          "apply_late_fee",
+          "pay_salary",
+          "pay_bonus"
+        ],
+        "missed": null,
+        "lead_correct": false
+      },
+      "transcript_file": "transcripts/A01_max-context_r0.json"
+    },
+    {
+      "task_id": "A02",
+      "repo": "celery",
+      "arm": "grep",
+      "replicate": 0,
+      "phrasing": "List every function or method that calls resolve_all (the task-annotation resolver defined in celery/app/annotations.py). Name each caller.",
+      "status": "completed",
+      "final_answer": "The ripgrep output is inconsistent between runs (likely a caching artifact). The actual file content confirmed by `read_file` is authoritative. Here is the definitive summary:\n\n---\n\n## Every caller of `resolve_all` (`celery/app/annotations.py:50`)\n\nThere is exactly **one production caller** and **one test-level reference**:\n\n### 1. `Task.annotate` — `celery/app/task.py`, line 477–484\n\n```python\n@classmethod\ndef annotate(cls):\n    for d in resolve_all_annotations(cls.app.annotations, cls):\n        for key, value in d.items():\n            if key.startswith('@'):\n                cls.add_around(key[1:], value)\n            else:\n                setattr(cls, key, value)\n```\n\n`resolve_all` is imported at the top of that file under the alias `resolve_all_annotations`:\n\n```python\nfrom .annotations import resolve_all as resolve_all_annotations   # line 22\n```\n\n`Task.annotate` is the **only function in the production codebase** that calls `resolve_all`.\n\n---\n\n### 2. `test_annotate` — `t/unit/tasks/test_tasks.py`, line 1333–1342\n\n```python\ndef test_annotate(self):\n    with patch('celery.app.task.resolve_all_annotations') as anno:\n        ...\n        task.annotate()\n        assert task.FOO == 'BAR'\n```\n\nThis is a unit test that patches `resolve_all_annotations` (i.e. `resolve_all`) to verify the behaviour of `Task.annotate`. It does not call `resolve_all` directly; it mocks it.\n\n---\n\n### Summary table\n\n| Caller | File | Line | Nature |\n|---|---|---|---|\n| `Task.annotate` | `celery/app/task.py` | 477 | Production caller (via alias `resolve_all_annotations`) |\n| `test_annotate` | `t/unit/tasks/test_tasks.py` | 1333 | Test — patches/mocks `resolve_all_annotations` |\n\nNo other function or method anywhere in the repository calls `resolve_all`.",
+      "input_tokens": 31796,
+      "output_tokens": 1818,
+      "tool_calls": 13,
+      "turns_to_answer": 9,
+      "wall_clock_ms": 41125,
+      "retries": 0,
+      "retrieval": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "hit": true,
+        "predicted": null,
+        "matched": [
+          "annotate"
+        ],
+        "missed": null,
+        "lead_correct": false
+      },
+      "transcript_file": "transcripts/A02_grep_r0.json"
+    },
+    {
+      "task_id": "A02",
+      "repo": "celery",
+      "arm": "max-context",
+      "replicate": 0,
+      "phrasing": "List every function or method that calls resolve_all (the task-annotation resolver defined in celery/app/annotations.py). Name each caller.",
+      "status": "completed",
+      "final_answer": "Here is the complete caller chain for `resolve_all` (defined at `celery/app/annotations.py:50`):\n\n---\n\n### Direct Caller (depth 1)\n\n| Caller | File | Line | Notes |\n|---|---|---|---|\n| **`annotate`** | `celery/app/task.py` | 478 | Production method on the `Task` class; calls `resolve_all` directly via an imported reference |\n\n---\n\n### Indirect Caller (depth 2)\n\n| Caller | File | Line | Notes |\n|---|---|---|---|\n| **`test_annotate_decorator`** | `t/unit/app/test_app.py` | 857 | Test function that exercises `annotate`, which in turn calls `resolve_all` |\n\n---\n\n### Summary\n\nOnly **one production caller** exists:\n\n- **`annotate`** (`celery/app/task.py:478`) — this is the sole method that directly invokes `resolve_all`. It is the task annotation hook that applies per-task and wildcard annotations at task registration time.\n\nThe only other reachable caller is the test **`test_annotate_decorator`** (`t/unit/app/test_app.py:857`), which calls `annotate` and therefore reaches `resolve_all` transitively. No other functions or methods in the codebase call `resolve_all`, either directly or indirectly.",
+      "input_tokens": 3998,
+      "output_tokens": 479,
+      "tool_calls": 2,
+      "turns_to_answer": 2,
+      "wall_clock_ms": 10375,
+      "retries": 0,
+      "retrieval": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "hit": true,
+        "predicted": null,
+        "matched": [
+          "annotate"
+        ],
+        "missed": null,
+        "lead_correct": false
+      },
+      "transcript_file": "transcripts/A02_max-context_r0.json"
+    }
+  ]
+}

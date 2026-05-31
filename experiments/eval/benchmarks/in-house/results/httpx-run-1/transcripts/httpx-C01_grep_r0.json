@@ -1,0 +1,488 @@
+{
+  "status": "completed",
+  "final_answer": "I now have the complete picture. Here is the full set of every function/method that calls `build_request`, all located in `httpx/_client.py` (production code) and the test files:\n\n---\n\n## Production code — `httpx/_client.py`\n\nThese are the only two places in the library source where `self.build_request(...)` is actually invoked (lines 812, 855, 1527, 1570):\n\n| Class | Method | Line(s) |\n|---|---|---|\n| `Client` | `request` | 812 |\n| `Client` | `stream` | 855 |\n| `AsyncClient` | `request` | 1527 |\n| `AsyncClient` | `stream` | 1570 |\n\nBoth `Client.request` and `AsyncClient.request` build the request and immediately pass it to `send`. Both `Client.stream` and `AsyncClient.stream` do the same for streaming responses.\n\n---\n\n## Test code\n\n| File | Function | Notes |\n|---|---|---|\n| `tests/client/test_client.py` | `test_build_request` | calls `client.build_request(\"GET\", ...)` |\n| `tests/client/test_client.py` | `test_build_post_request` | calls `client.build_request(\"POST\", ...)` |\n| `tests/client/test_client.py` | `test_merge_absolute_url` | calls `client.build_request(\"GET\", ...)` |\n| `tests/client/test_client.py` | `test_merge_relative_url` | calls `client.build_request(\"GET\", ...)` |\n| `tests/client/test_client.py` | `test_merge_relative_url_with_path` | calls `client.build_request(\"GET\", ...)` |\n| `tests/client/test_client.py` | `test_merge_relative_url_with_dotted_path` | calls `client.build_request(\"GET\", ...)` |\n| `tests/client/test_client.py` | `test_merge_relative_url_with_path_including_colon` | calls `client.build_request(\"GET\", ...)` |\n| `tests/client/test_client.py` | `test_merge_relative_url_with_encoded_slashes` | calls `client.build_request(\"GET\", ...)` (twice) |\n| `tests/client/test_async_client.py` | `test_build_request` | calls `client.build_request(\"GET\", ...)` |\n| `tests/client/test_redirects.py` | `test_next_request` | calls `client.build_request(\"POST\", ...)` |\n| `tests/client/test_redirects.py` | `test_async_next_request` | calls `client.build_request(\"POST\", ...)` |\n| `tests/test_auth.py` | `test_digest_auth_setting_cookie_in_request` | calls `client.build_request(\"GET\", ...)` |\n\n---\n\n### Summary\n\n**In production source**, `build_request` is called by exactly **4 methods**:\n1. `Client.request` (`httpx/_client.py`)\n2. `Client.stream` (`httpx/_client.py`)\n3. `AsyncClient.request` (`httpx/_client.py`)\n4. `AsyncClient.stream` (`httpx/_client.py`)\n\n**In tests**, it is called by **12 test functions** across `tests/client/test_client.py`, `tests/client/test_async_client.py`, `tests/client/test_redirects.py`, and `tests/test_auth.py`.",
+  "turns": [
+    {
+      "index": 0,
+      "content": [
+        {
+          "type": "text",
+          "text": "Let me search for all callers of `build_request` across the repository."
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_cHdranxYy8zCElzoNDUSdg",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn"
+            ],
+            "pattern": "build_request\\s*\\("
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 1422,
+      "output_tokens": 97,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn"
+            ],
+            "pattern": "build_request\\s*\\("
+          },
+          "result": "./CHANGELOG.md:322:  `client.n)` does. This required by the signature change of the\n./CHANGELOG.md:1046:- Add `.n)` method to `Client` and `AsyncClient`. (Pull #319)\n./docs/advanced/clients.md:162:If you need to mix client-level and request-level options in a way that is not supported by the default [Merging of parameters](#merging-of-parameters), you can use `.n)` and then make arbitrary modifications to the `Request` instance. For example:\n./docs/advanced/clients.md:168:    request = client.n\"GET\", \"https://api.example.com\")\n./tests/test_auth.py:123:    request = client.n\"GET\", url)\n./tests/client/test_async_client.py:40:async def test_nserver):\n./tests/client/test_async_client.py:44:        request = client.n\"GET\", url)\n./docs/async.md:99:    req = client.n\"GET\", \"https://www.example.com/\")\n./tests/client/test_client.py:47:def test_nserver):\n./tests/client/test_client.py:52:        request = client.n\"GET\", url)\n./tests/client/test_client.py:67:        request = client.n\"POST\", url)\n./tests/client/test_client.py:194:    request = client.n\"GET\", \"http://www.example.com/\")\n./tests/client/test_client.py:200:    request = client.n\"GET\", \"/testing/123\")\n./tests/client/test_client.py:206:    request = client.n\"GET\", \"/testing/123\")\n./tests/client/test_client.py:212:    request = client.n\"GET\", \"../testing/123\")\n./tests/client/test_client.py:218:    request = client.n\"GET\", \"/testing:123\")\n./tests/client/test_client.py:224:    request = client.n\"GET\", \"/testing%2F123\")\n./tests/client/test_client.py:228:    request = client.n\"GET\", \"/testing\")\n./docs/compatibility.md:64:request = client.n\"GET\", ...)\n./tests/client/test_redirects.py:142:    request = client.n\"POST\", \"https://example.org/redirect_303\")\n./tests/client/test_redirects.py:157:        request = client.n\"POST\", \"https://example.org/redirect_303\")\n./httpx/_client.py:340:    def n\n./httpx/_client.py:407:            # \u003e\u003e\u003e client.n\"GET\", \"/path\").url\n./httpx/_client.py:794:        request = client.n...)\n./httpx/_client.py:798:        See `Client.n)`, `Client.send()` and\n./httpx/_client.py:812:        request = self.n\n./httpx/_client.py:855:        request = self.n\n./httpx/_client.py:892:        Typically you'll want to build one with `Client.n)`\n./httpx/_client.py:1508:        request = client.n...)\n./httpx/_client.py:1512:        See `AsyncClient.n)`, `AsyncClient.send()`\n./httpx/_client.py:1527:        request = self.n\n./httpx/_client.py:1570:        request = self.n\n./httpx/_client.py:1607:        Typically you'll want to build one with `AsyncClient.n)`\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "content": [
+        {
+          "type": "text",
+          "text": "The results are truncated/garbled. Let me search more precisely with a fixed string and also look at the actual source files directly."
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_UZq3aL4QPU41lqbnCupbwO",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn",
+              "-F",
+              "build_request("
+            ],
+            "pattern": "build_request("
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_4q4HfdLCwhbuArU5YGkqNu",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn",
+              "-t",
+              "py",
+              "-F",
+              "def build_request"
+            ],
+            "pattern": "def build_request"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 2405,
+      "output_tokens": 186,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn",
+              "-F",
+              "build_request("
+            ],
+            "pattern": "build_request("
+          },
+          "result": "grep error: exit status 2\nrg: build_request(: No such file or directory (os error 2)\n./CHANGELOG.md:322:  `client.n)` does. This required by the signature change of the\n./CHANGELOG.md:1046:- Add `.n)` method to `Client` and `AsyncClient`. (Pull #319)\n./docs/advanced/clients.md:162:If you need to mix client-level and request-level options in a way that is not supported by the default [Merging of parameters](#merging-of-parameters), you can use `.n)` and then make arbitrary modifications to the `Request` instance. For example:\n./docs/advanced/clients.md:168:    request = client.n\"GET\", \"https://api.example.com\")\n./docs/async.md:99:    req = client.n\"GET\", \"https://www.example.com/\")\n./docs/compatibility.md:64:request = client.n\"GET\", ...)\n./tests/client/test_async_client.py:40:async def test_nserver):\n./tests/client/test_async_client.py:44:        request = client.n\"GET\", url)\n./tests/client/test_client.py:47:def test_nserver):\n./tests/client/test_client.py:52:        request = client.n\"GET\", url)\n./tests/client/test_client.py:67:        request = client.n\"POST\", url)\n./tests/client/test_client.py:194:    request = client.n\"GET\", \"http://www.example.com/\")\n./tests/client/test_client.py:200:    request = client.n\"GET\", \"/testing/123\")\n./tests/client/test_client.py:206:    request = client.n\"GET\", \"/testing/123\")\n./tests/client/test_client.py:212:    request = client.n\"GET\", \"../testing/123\")\n./tests/client/test_client.py:218:    request = client.n\"GET\", \"/testing:123\")\n./tests/client/test_client.py:224:    request = client.n\"GET\", \"/testing%2F123\")\n./tests/client/test_client.py:228:    request = client.n\"GET\", \"/testing\")\n./tests/client/test_redirects.py:142:    request = client.n\"POST\", \"https://example.org/redirect_303\")\n./tests/client/test_redirects.py:157:        request = client.n\"POST\", \"https://example.org/redirect_303\")\n./httpx/_client.py:340:    def n\n./httpx/_client.py:407:            # \u003e\u003e\u003e client.n\"GET\", \"/path\").url\n./httpx/_client.py:794:        request = client.n...)\n./httpx/_client.py:798:        See `Client.n)`, `Client.send()` and\n./httpx/_client.py:812:        request = self.n\n./httpx/_client.py:855:        request = self.n\n./httpx/_client.py:892:        Typically you'll want to build one with `Client.n)`\n./httpx/_client.py:1508:        request = client.n...)\n./httpx/_client.py:1512:        See `AsyncClient.n)`, `AsyncClient.send()`\n./httpx/_client.py:1527:        request = self.n\n./httpx/_client.py:1570:        request = self.n\n./httpx/_client.py:1607:        Typically you'll want to build one with `AsyncClient.n)`\n./tests/test_auth.py:123:    request = client.n\"GET\", url)\n",
+          "is_error": true
+        },
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn",
+              "-t",
+              "py",
+              "-F",
+              "def build_request"
+            ],
+            "pattern": "def build_request"
+          },
+          "result": "grep error: exit status 2\nrg: def build_request: No such file or directory (os error 2)\n./httpx/_client.py:340:    n(\n",
+          "is_error": true
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "content": [
+        {
+          "type": "text",
+          "text": "The output is being truncated. Let me read the source files directly."
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_0F8eRggcMdtNhc0hXO7Wmi",
+          "name": "read_file",
+          "input": {
+            "end": 900,
+            "path": "httpx/_client.py",
+            "start": 800
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_AFF68mxVjnFVUvnPJsKEFs",
+          "name": "read_file",
+          "input": {
+            "end": 1620,
+            "path": "httpx/_client.py",
+            "start": 1510
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 3594,
+      "output_tokens": 185,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "end": 900,
+            "path": "httpx/_client.py",
+            "start": 800
+          },
+          "result": "800\t        are merged with client-level configuration.\n801\t\n802\t        [0]: /advanced/clients/#merging-of-configuration\n803\t        \"\"\"\n804\t        if cookies is not None:\n805\t            message = (\n806\t                \"Setting per-request cookies=\u003c...\u003e is being deprecated, because \"\n807\t                \"the expected behaviour on cookie persistence is ambiguous. Set \"\n808\t                \"cookies directly on the client instance instead.\"\n809\t            )\n810\t            warnings.warn(message, DeprecationWarning, stacklevel=2)\n811\t\n812\t        request = self.build_request(\n813\t            method=method,\n814\t            url=url,\n815\t            content=content,\n816\t            data=data,\n817\t            files=files,\n818\t            json=json,\n819\t            params=params,\n820\t            headers=headers,\n821\t            cookies=cookies,\n822\t            timeout=timeout,\n823\t            extensions=extensions,\n824\t        )\n825\t        return self.send(request, auth=auth, follow_redirects=follow_redirects)\n826\t\n827\t    @contextmanager\n828\t    def stream(\n829\t        self,\n830\t        method: str,\n831\t        url: URL | str,\n832\t        *,\n833\t        content: RequestContent | None = None,\n834\t        data: RequestData | None = None,\n835\t        files: RequestFiles | None = None,\n836\t        json: typing.Any | None = None,\n837\t        params: QueryParamTypes | None = None,\n838\t        headers: HeaderTypes | None = None,\n839\t        cookies: CookieTypes | None = None,\n840\t        auth: AuthTypes | UseClientDefault | None = USE_CLIENT_DEFAULT,\n841\t        follow_redirects: bool | UseClientDefault = USE_CLIENT_DEFAULT,\n842\t        timeout: TimeoutTypes | UseClientDefault = USE_CLIENT_DEFAULT,\n843\t        extensions: RequestExtensions | None = None,\n844\t    ) -\u003e typing.Iterator[Response]:\n845\t        \"\"\"\n846\t        Alternative to `httpx.request()` that streams the response body\n847\t        instead of loading it into memory at once.\n848\t\n849\t        **Parameters**: See `httpx.request`.\n850\t\n851\t        See also: [Streaming Responses][0]\n852\t\n853\t        [0]: /quickstart#streaming-responses\n854\t        \"\"\"\n855\t        request = self.build_request(\n856\t            method=method,\n857\t            url=url,\n858\t            content=content,\n859\t            data=data,\n860\t            files=files,\n861\t            json=json,\n862\t            params=params,\n863\t            headers=headers,\n864\t            cookies=cookies,\n865\t            timeout=timeout,\n866\t            extensions=extensions,\n867\t        )\n868\t        response = self.send(\n869\t            request=request,\n870\t            auth=auth,\n871\t            follow_redirects=follow_redirects,\n872\t            stream=True,\n873\t        )\n874\t        try:\n875\t            yield response\n876\t        finally:\n877\t            response.close()\n878\t\n879\t    def send(\n880\t        self,\n881\t        request: Request,\n882\t        *,\n883\t        stream: bool = False,\n884\t        auth: AuthTypes | UseClientDefault | None = USE_CLIENT_DEFAULT,\n885\t        follow_redirects: bool | UseClientDefault = USE_CLIENT_DEFAULT,\n886\t    ) -\u003e Response:\n887\t        \"\"\"\n888\t        Send a request.\n889\t\n890\t        The request is sent as-is, unmodified.\n891\t\n892\t        Typically you'll want to build one with `Client.build_request()`\n893\t        so that any client-level configuration is merged into the request,\n894\t        but passing an explicit `httpx.Request()` is supported as well.\n895\t\n896\t        See also: [Request instances][0]\n897\t\n898\t        [0]: /advanced/clients/#request-instances\n899\t        \"\"\"\n900\t        if self._state == ClientState.CLOSED:\n",
+          "is_error": false
+        },
+        {
+          "name": "read_file",
+          "input": {
+            "end": 1620,
+            "path": "httpx/_client.py",
+            "start": 1510
+          },
+          "result": "1510\t        ```\n1511\t\n1512\t        See `AsyncClient.build_request()`, `AsyncClient.send()`\n1513\t        and [Merging of configuration][0] for how the various parameters\n1514\t        are merged with client-level configuration.\n1515\t\n1516\t        [0]: /advanced/clients/#merging-of-configuration\n1517\t        \"\"\"\n1518\t\n1519\t        if cookies is not None:  # pragma: no cover\n1520\t            message = (\n1521\t                \"Setting per-request cookies=\u003c...\u003e is being deprecated, because \"\n1522\t                \"the expected behaviour on cookie persistence is ambiguous. Set \"\n1523\t                \"cookies directly on the client instance instead.\"\n1524\t            )\n1525\t            warnings.warn(message, DeprecationWarning, stacklevel=2)\n1526\t\n1527\t        request = self.build_request(\n1528\t            method=method,\n1529\t            url=url,\n1530\t            content=content,\n1531\t            data=data,\n1532\t            files=files,\n1533\t            json=json,\n1534\t            params=params,\n1535\t            headers=headers,\n1536\t            cookies=cookies,\n1537\t            timeout=timeout,\n1538\t            extensions=extensions,\n1539\t        )\n1540\t        return await self.send(request, auth=auth, follow_redirects=follow_redirects)\n1541\t\n1542\t    @asynccontextmanager\n1543\t    async def stream(\n1544\t        self,\n1545\t        method: str,\n1546\t        url: URL | str,\n1547\t        *,\n1548\t        content: RequestContent | None = None,\n1549\t        data: RequestData | None = None,\n1550\t        files: RequestFiles | None = None,\n1551\t        json: typing.Any | None = None,\n1552\t        params: QueryParamTypes | None = None,\n1553\t        headers: HeaderTypes | None = None,\n1554\t        cookies: CookieTypes | None = None,\n1555\t        auth: AuthTypes | UseClientDefault | None = USE_CLIENT_DEFAULT,\n1556\t        follow_redirects: bool | UseClientDefault = USE_CLIENT_DEFAULT,\n1557\t        timeout: TimeoutTypes | UseClientDefault = USE_CLIENT_DEFAULT,\n1558\t        extensions: RequestExtensions | None = None,\n1559\t    ) -\u003e typing.AsyncIterator[Response]:\n1560\t        \"\"\"\n1561\t        Alternative to `httpx.request()` that streams the response body\n1562\t        instead of loading it into memory at once.\n1563\t\n1564\t        **Parameters**: See `httpx.request`.\n1565\t\n1566\t        See also: [Streaming Responses][0]\n1567\t\n1568\t        [0]: /quickstart#streaming-responses\n1569\t        \"\"\"\n1570\t        request = self.build_request(\n1571\t            method=method,\n1572\t            url=url,\n1573\t            content=content,\n1574\t            data=data,\n1575\t            files=files,\n1576\t            json=json,\n1577\t            params=params,\n1578\t            headers=headers,\n1579\t            cookies=cookies,\n1580\t            timeout=timeout,\n1581\t            extensions=extensions,\n1582\t        )\n1583\t        response = await self.send(\n1584\t            request=request,\n1585\t            auth=auth,\n1586\t            follow_redirects=follow_redirects,\n1587\t            stream=True,\n1588\t        )\n1589\t        try:\n1590\t            yield response\n1591\t        finally:\n1592\t            await response.aclose()\n1593\t\n1594\t    async def send(\n1595\t        self,\n1596\t        request: Request,\n1597\t        *,\n1598\t        stream: bool = False,\n1599\t        auth: AuthTypes | UseClientDefault | None = USE_CLIENT_DEFAULT,\n1600\t        follow_redirects: bool | UseClientDefault = USE_CLIENT_DEFAULT,\n1601\t    ) -\u003e Response:\n1602\t        \"\"\"\n1603\t        Send a request.\n1604\t\n1605\t        The request is sent as-is, unmodified.\n1606\t\n1607\t        Typically you'll want to build one with `AsyncClient.build_request()`\n1608\t        so that any client-level configuration is merged into the request,\n1609\t        but passing an explicit `httpx.Request()` is supported as well.\n1610\t\n1611\t        See also: [Request instances][0]\n1612\t\n1613\t        [0]: /advanced/clients/#request-instances\n1614\t        \"\"\"\n1615\t        if self._state == ClientState.CLOSED:\n1616\t            raise RuntimeError(\"Cannot send a request, as the client has been closed.\")\n1617\t\n1618\t        self._state = ClientState.OPENED\n1619\t        follow_redirects = (\n1620\t            self.follow_redirects\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "content": [
+        {
+          "type": "text",
+          "text": "Now let me find the enclosing function names for those two `self.build_request` calls in `_client.py`, and also check for any other callers in the file and in tests."
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_OyxiVLsqSs76ZdTqKBgUcY",
+          "name": "read_file",
+          "input": {
+            "end": 815,
+            "path": "httpx/_client.py",
+            "start": 760
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_zDiwP8cljLiSuGJckb8hIk",
+          "name": "read_file",
+          "input": {
+            "end": 1530,
+            "path": "httpx/_client.py",
+            "start": 1460
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 6101,
+      "output_tokens": 213,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "end": 815,
+            "path": "httpx/_client.py",
+            "start": 760
+          },
+          "result": "760\t    def _transport_for_url(self, url: URL) -\u003e BaseTransport:\n761\t        \"\"\"\n762\t        Returns the transport instance that should be used for a given URL.\n763\t        This will either be the standard connection pool, or a proxy.\n764\t        \"\"\"\n765\t        for pattern, transport in self._mounts.items():\n766\t            if pattern.matches(url):\n767\t                return self._transport if transport is None else transport\n768\t\n769\t        return self._transport\n770\t\n771\t    def request(\n772\t        self,\n773\t        method: str,\n774\t        url: URL | str,\n775\t        *,\n776\t        content: RequestContent | None = None,\n777\t        data: RequestData | None = None,\n778\t        files: RequestFiles | None = None,\n779\t        json: typing.Any | None = None,\n780\t        params: QueryParamTypes | None = None,\n781\t        headers: HeaderTypes | None = None,\n782\t        cookies: CookieTypes | None = None,\n783\t        auth: AuthTypes | UseClientDefault | None = USE_CLIENT_DEFAULT,\n784\t        follow_redirects: bool | UseClientDefault = USE_CLIENT_DEFAULT,\n785\t        timeout: TimeoutTypes | UseClientDefault = USE_CLIENT_DEFAULT,\n786\t        extensions: RequestExtensions | None = None,\n787\t    ) -\u003e Response:\n788\t        \"\"\"\n789\t        Build and send a request.\n790\t\n791\t        Equivalent to:\n792\t\n793\t        ```python\n794\t        request = client.build_request(...)\n795\t        response = client.send(request, ...)\n796\t        ```\n797\t\n798\t        See `Client.build_request()`, `Client.send()` and\n799\t        [Merging of configuration][0] for how the various parameters\n800\t        are merged with client-level configuration.\n801\t\n802\t        [0]: /advanced/clients/#merging-of-configuration\n803\t        \"\"\"\n804\t        if cookies is not None:\n805\t            message = (\n806\t                \"Setting per-request cookies=\u003c...\u003e is being deprecated, because \"\n807\t                \"the expected behaviour on cookie persistence is ambiguous. Set \"\n808\t                \"cookies directly on the client instance instead.\"\n809\t            )\n810\t            warnings.warn(message, DeprecationWarning, stacklevel=2)\n811\t\n812\t        request = self.build_request(\n813\t            method=method,\n814\t            url=url,\n815\t            content=content,\n",
+          "is_error": false
+        },
+        {
+          "name": "read_file",
+          "input": {
+            "end": 1530,
+            "path": "httpx/_client.py",
+            "start": 1460
+          },
+          "result": "1460\t        http1: bool = True,\n1461\t        http2: bool = False,\n1462\t        limits: Limits = DEFAULT_LIMITS,\n1463\t    ) -\u003e AsyncBaseTransport:\n1464\t        return AsyncHTTPTransport(\n1465\t            verify=verify,\n1466\t            cert=cert,\n1467\t            trust_env=trust_env,\n1468\t            http1=http1,\n1469\t            http2=http2,\n1470\t            limits=limits,\n1471\t            proxy=proxy,\n1472\t        )\n1473\t\n1474\t    def _transport_for_url(self, url: URL) -\u003e AsyncBaseTransport:\n1475\t        \"\"\"\n1476\t        Returns the transport instance that should be used for a given URL.\n1477\t        This will either be the standard connection pool, or a proxy.\n1478\t        \"\"\"\n1479\t        for pattern, transport in self._mounts.items():\n1480\t            if pattern.matches(url):\n1481\t                return self._transport if transport is None else transport\n1482\t\n1483\t        return self._transport\n1484\t\n1485\t    async def request(\n1486\t        self,\n1487\t        method: str,\n1488\t        url: URL | str,\n1489\t        *,\n1490\t        content: RequestContent | None = None,\n1491\t        data: RequestData | None = None,\n1492\t        files: RequestFiles | None = None,\n1493\t        json: typing.Any | None = None,\n1494\t        params: QueryParamTypes | None = None,\n1495\t        headers: HeaderTypes | None = None,\n1496\t        cookies: CookieTypes | None = None,\n1497\t        auth: AuthTypes | UseClientDefault | None = USE_CLIENT_DEFAULT,\n1498\t        follow_redirects: bool | UseClientDefault = USE_CLIENT_DEFAULT,\n1499\t        timeout: TimeoutTypes | UseClientDefault = USE_CLIENT_DEFAULT,\n1500\t        extensions: RequestExtensions | None = None,\n1501\t    ) -\u003e Response:\n1502\t        \"\"\"\n1503\t        Build and send a request.\n1504\t\n1505\t        Equivalent to:\n1506\t\n1507\t        ```python\n1508\t        request = client.build_request(...)\n1509\t        response = await client.send(request, ...)\n1510\t        ```\n1511\t\n1512\t        See `AsyncClient.build_request()`, `AsyncClient.send()`\n1513\t        and [Merging of configuration][0] for how the various parameters\n1514\t        are merged with client-level configuration.\n1515\t\n1516\t        [0]: /advanced/clients/#merging-of-configuration\n1517\t        \"\"\"\n1518\t\n1519\t        if cookies is not None:  # pragma: no cover\n1520\t            message = (\n1521\t                \"Setting per-request cookies=\u003c...\u003e is being deprecated, because \"\n1522\t                \"the expected behaviour on cookie persistence is ambiguous. Set \"\n1523\t                \"cookies directly on the client instance instead.\"\n1524\t            )\n1525\t            warnings.warn(message, DeprecationWarning, stacklevel=2)\n1526\t\n1527\t        request = self.build_request(\n1528\t            method=method,\n1529\t            url=url,\n1530\t            content=content,\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "content": [
+        {
+          "type": "text",
+          "text": "Now let me check the convenience functions at the module level and the HTTP-verb shortcut methods (get, post, etc.) in both Client and AsyncClient:"
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_Ud29Ep411veVF3Ara7qkLV",
+          "name": "read_file",
+          "input": {
+            "end": 1100,
+            "path": "httpx/_client.py",
+            "start": 900
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_iEnNrE7fbZUHzKZsFHEPAt",
+          "name": "read_file",
+          "input": {
+            "end": 1800,
+            "path": "httpx/_client.py",
+            "start": 1620
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 7830,
+      "output_tokens": 204,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "end": 1100,
+            "path": "httpx/_client.py",
+            "start": 900
+          },
+          "result": "900\t        if self._state == ClientState.CLOSED:\n901\t            raise RuntimeError(\"Cannot send a request, as the client has been closed.\")\n902\t\n903\t        self._state = ClientState.OPENED\n904\t        follow_redirects = (\n905\t            self.follow_redirects\n906\t            if isinstance(follow_redirects, UseClientDefault)\n907\t            else follow_redirects\n908\t        )\n909\t\n910\t        self._set_timeout(request)\n911\t\n912\t        auth = self._build_request_auth(request, auth)\n913\t\n914\t        response = self._send_handling_auth(\n915\t            request,\n916\t            auth=auth,\n917\t            follow_redirects=follow_redirects,\n918\t            history=[],\n919\t        )\n920\t        try:\n921\t            if not stream:\n922\t                response.read()\n923\t\n924\t            return response\n925\t\n926\t        except BaseException as exc:\n927\t            response.close()\n928\t            raise exc\n929\t\n930\t    def _send_handling_auth(\n931\t        self,\n932\t        request: Request,\n933\t        auth: Auth,\n934\t        follow_redirects: bool,\n935\t        history: list[Response],\n936\t    ) -\u003e Response:\n937\t        auth_flow = auth.sync_auth_flow(request)\n938\t        try:\n939\t            request = next(auth_flow)\n940\t\n941\t            while True:\n942\t                response = self._send_handling_redirects(\n943\t                    request,\n944\t                    follow_redirects=follow_redirects,\n945\t                    history=history,\n946\t                )\n947\t                try:\n948\t                    try:\n949\t                        next_request = auth_flow.send(response)\n950\t                    except StopIteration:\n951\t                        return response\n952\t\n953\t                    response.history = list(history)\n954\t                    response.read()\n955\t                    request = next_request\n956\t                    history.append(response)\n957\t\n958\t                except BaseException as exc:\n959\t                    response.close()\n960\t                    raise exc\n961\t        finally:\n962\t            auth_flow.close()\n963\t\n964\t    def _send_handling_redirects(\n965\t        self,\n966\t        request: Request,\n967\t        follow_redirects: bool,\n968\t        history: list[Response],\n969\t    ) -\u003e Response:\n970\t        while True:\n971\t            if len(history) \u003e self.max_redirects:\n972\t                raise TooManyRedirects(\n973\t                    \"Exceeded maximum allowed redirects.\", request=request\n974\t                )\n975\t\n976\t            for hook in self._event_hooks[\"request\"]:\n977\t                hook(request)\n978\t\n979\t            response = self._send_single_request(request)\n980\t            try:\n981\t                for hook in self._event_hooks[\"response\"]:\n982\t                    hook(response)\n983\t                response.history = list(history)\n984\t\n985\t                if not response.has_redirect_location:\n986\t                    return response\n987\t\n988\t                request = self._build_redirect_request(request, response)\n989\t                history = history + [response]\n990\t\n991\t                if follow_redirects:\n992\t                    response.read()\n993\t                else:\n994\t                    response.next_request = request\n995\t                    return response\n996\t\n997\t            except BaseException as exc:\n998\t                response.close()\n999\t                raise exc\n1000\t\n1001\t    def _send_single_request(self, request: Request) -\u003e Response:\n1002\t        \"\"\"\n1003\t        Sends a single request, without handling any redirections.\n1004\t        \"\"\"\n1005\t        transport = self._transport_for_url(request.url)\n1006\t        start = time.perf_counter()\n1007\t\n1008\t        if not isinstance(request.stream, SyncByteStream):\n1009\t            raise RuntimeError(\n1010\t                \"Attempted to send an async request with a sync Client instance.\"\n1011\t            )\n1012\t\n1013\t        with request_context(request=request):\n1014\t            response = transport.handle_request(request)\n1015\t\n1016\t        assert isinstance(response.stream, SyncByteStream)\n1017\t\n1018\t        response.request = request\n1019\t        response.stream = BoundSyncStream(\n1020\t            response.stream, response=response, start=start\n1021\t        )\n1022\t        self.cookies.extract_cookies(response)\n1023\t        response.default_encoding = self._default_encoding\n1024\t\n1025\t        logger.info(\n1026\t            'HTTP Request: %s %s \"%s %d %s\"',\n1027\t            request.method,\n1028\t            request.url,\n1029\t            response.http_version,\n1030\t            response.status_code,\n1031\t            response.reason_phrase,\n1032\t        )\n1033\t\n1034\t        return response\n1035\t\n1036\t    def get(\n1037\t        self,\n1038\t        url: URL | str,\n1039\t        *,\n1040\t        params: QueryParamTypes | None = None,\n1041\t        headers: HeaderTypes | None = None,\n1042\t        cookies: CookieTypes | None = None,\n1043\t        auth: AuthTypes | UseClientDefault | None = USE_CLIENT_DEFAULT,\n1044\t        follow_redirects: bool | UseClientDefault = USE_CLIENT_DEFAULT,\n1045\t        timeout: TimeoutTypes | UseClientDefault = USE_CLIENT_DEFAULT,\n1046\t        extensions: RequestExtensions | None = None,\n1047\t    ) -\u003e Response:\n1048\t        \"\"\"\n1049\t        Send a `GET` request.\n1050\t\n1051\t        **Parameters**: See `httpx.request`.\n1052\t        \"\"\"\n1053\t        return self.request(\n1054\t            \"GET\",\n1055\t            url,\n1056\t            params=params,\n1057\t            headers=headers,\n1058\t            cookies=cookies,\n1059\t            auth=auth,\n1060\t            follow_redirects=follow_redirects,\n1061\t            timeout=timeout,\n1062\t            extensions=extensions,\n1063\t        )\n1064\t\n1065\t    def options(\n1066\t        self,\n1067\t        url: URL | str,\n1068\t        *,\n1069\t        params: QueryParamTypes | None = None,\n1070\t        headers: HeaderTypes | None = None,\n1071\t        cookies: CookieTypes | None = None,\n1072\t        auth: AuthTypes | UseClientDefault = USE_CLIENT_DEFAULT,\n1073\t        follow_redirects: bool | UseClientDefault = USE_CLIENT_DEFAULT,\n1074\t        timeout: TimeoutTypes | UseClientDefault = USE_CLIENT_DEFAULT,\n1075\t        extensions: RequestExtensions | None = None,\n1076\t    ) -\u003e Response:\n1077\t        \"\"\"\n1078\t        Send an `OPTIONS` request.\n1079\t\n1080\t        **Parameters**: See `httpx.request`.\n1081\t        \"\"\"\n1082\t        return self.request(\n1083\t            \"OPTIONS\",\n1084\t            url,\n1085\t            params=params,\n1086\t            headers=headers,\n1087\t            cookies=cookies,\n1088\t            auth=auth,\n1089\t            follow_redirects=follow_redirects,\n1090\t            timeout=timeout,\n1091\t            extensions=extensions,\n1092\t        )\n1093\t\n1094\t    def head(\n1095\t        self,\n1096\t        url: URL | str,\n1097\t        *,\n1098\t        params: QueryParamTypes | None = None,\n1099\t        headers: HeaderTypes | None = None,\n1100\t        cookies: CookieTypes | None = None,\n",
+          "is_error": false
+        },
+        {
+          "name": "read_file",
+          "input": {
+            "end": 1800,
+            "path": "httpx/_client.py",
+            "start": 1620
+          },
+          "result": "1620\t            self.follow_redirects\n1621\t            if isinstance(follow_redirects, UseClientDefault)\n1622\t            else follow_redirects\n1623\t        )\n1624\t\n1625\t        self._set_timeout(request)\n1626\t\n1627\t        auth = self._build_request_auth(request, auth)\n1628\t\n1629\t        response = await self._send_handling_auth(\n1630\t            request,\n1631\t            auth=auth,\n1632\t            follow_redirects=follow_redirects,\n1633\t            history=[],\n1634\t        )\n1635\t        try:\n1636\t            if not stream:\n1637\t                await response.aread()\n1638\t\n1639\t            return response\n1640\t\n1641\t        except BaseException as exc:\n1642\t            await response.aclose()\n1643\t            raise exc\n1644\t\n1645\t    async def _send_handling_auth(\n1646\t        self,\n1647\t        request: Request,\n1648\t        auth: Auth,\n1649\t        follow_redirects: bool,\n1650\t        history: list[Response],\n1651\t    ) -\u003e Response:\n1652\t        auth_flow = auth.async_auth_flow(request)\n1653\t        try:\n1654\t            request = await auth_flow.__anext__()\n1655\t\n1656\t            while True:\n1657\t                response = await self._send_handling_redirects(\n1658\t                    request,\n1659\t                    follow_redirects=follow_redirects,\n1660\t                    history=history,\n1661\t                )\n1662\t                try:\n1663\t                    try:\n1664\t                        next_request = await auth_flow.asend(response)\n1665\t                    except StopAsyncIteration:\n1666\t                        return response\n1667\t\n1668\t                    response.history = list(history)\n1669\t                    await response.aread()\n1670\t                    request = next_request\n1671\t                    history.append(response)\n1672\t\n1673\t                except BaseException as exc:\n1674\t                    await response.aclose()\n1675\t                    raise exc\n1676\t        finally:\n1677\t            await auth_flow.aclose()\n1678\t\n1679\t    async def _send_handling_redirects(\n1680\t        self,\n1681\t        request: Request,\n1682\t        follow_redirects: bool,\n1683\t        history: list[Response],\n1684\t    ) -\u003e Response:\n1685\t        while True:\n1686\t            if len(history) \u003e self.max_redirects:\n1687\t                raise TooManyRedirects(\n1688\t                    \"Exceeded maximum allowed redirects.\", request=request\n1689\t                )\n1690\t\n1691\t            for hook in self._event_hooks[\"request\"]:\n1692\t                await hook(request)\n1693\t\n1694\t            response = await self._send_single_request(request)\n1695\t            try:\n1696\t                for hook in self._event_hooks[\"response\"]:\n1697\t                    await hook(response)\n1698\t\n1699\t                response.history = list(history)\n1700\t\n1701\t                if not response.has_redirect_location:\n1702\t                    return response\n1703\t\n1704\t                request = self._build_redirect_request(request, response)\n1705\t                history = history + [response]\n1706\t\n1707\t                if follow_redirects:\n1708\t                    await response.aread()\n1709\t                else:\n1710\t                    response.next_request = request\n1711\t                    return response\n1712\t\n1713\t            except BaseException as exc:\n1714\t                await response.aclose()\n1715\t                raise exc\n1716\t\n1717\t    async def _send_single_request(self, request: Request) -\u003e Response:\n1718\t        \"\"\"\n1719\t        Sends a single request, without handling any redirections.\n1720\t        \"\"\"\n1721\t        transport = self._transport_for_url(request.url)\n1722\t        start = time.perf_counter()\n1723\t\n1724\t        if not isinstance(request.stream, AsyncByteStream):\n1725\t            raise RuntimeError(\n1726\t                \"Attempted to send a sync request with an AsyncClient instance.\"\n1727\t            )\n1728\t\n1729\t        with request_context(request=request):\n1730\t            response = await transport.handle_async_request(request)\n1731\t\n1732\t        assert isinstance(response.stream, AsyncByteStream)\n1733\t        response.request = request\n1734\t        response.stream = BoundAsyncStream(\n1735\t            response.stream, response=response, start=start\n1736\t        )\n1737\t        self.cookies.extract_cookies(response)\n1738\t        response.default_encoding = self._default_encoding\n1739\t\n1740\t        logger.info(\n1741\t            'HTTP Request: %s %s \"%s %d %s\"',\n1742\t            request.method,\n1743\t            request.url,\n1744\t            response.http_version,\n1745\t            response.status_code,\n1746\t            response.reason_phrase,\n1747\t        )\n1748\t\n1749\t        return response\n1750\t\n1751\t    async def get(\n1752\t        self,\n1753\t        url: URL | str,\n1754\t        *,\n1755\t        params: QueryParamTypes | None = None,\n1756\t        headers: HeaderTypes | None = None,\n1757\t        cookies: CookieTypes | None = None,\n1758\t        auth: AuthTypes | UseClientDefault | None = USE_CLIENT_DEFAULT,\n1759\t        follow_redirects: bool | UseClientDefault = USE_CLIENT_DEFAULT,\n1760\t        timeout: TimeoutTypes | UseClientDefault = USE_CLIENT_DEFAULT,\n1761\t        extensions: RequestExtensions | None = None,\n1762\t    ) -\u003e Response:\n1763\t        \"\"\"\n1764\t        Send a `GET` request.\n1765\t\n1766\t        **Parameters**: See `httpx.request`.\n1767\t        \"\"\"\n1768\t        return await self.request(\n1769\t            \"GET\",\n1770\t            url,\n1771\t            params=params,\n1772\t            headers=headers,\n1773\t            cookies=cookies,\n1774\t            auth=auth,\n1775\t            follow_redirects=follow_redirects,\n1776\t            timeout=timeout,\n1777\t            extensions=extensions,\n1778\t        )\n1779\t\n1780\t    async def options(\n1781\t        self,\n1782\t        url: URL | str,\n1783\t        *,\n1784\t        params: QueryParamTypes | None = None,\n1785\t        headers: HeaderTypes | None = None,\n1786\t        cookies: CookieTypes | None = None,\n1787\t        auth: AuthTypes | UseClientDefault = USE_CLIENT_DEFAULT,\n1788\t        follow_redirects: bool | UseClientDefault = USE_CLIENT_DEFAULT,\n1789\t        timeout: TimeoutTypes | UseClientDefault = USE_CLIENT_DEFAULT,\n1790\t        extensions: RequestExtensions | None = None,\n1791\t    ) -\u003e Response:\n1792\t        \"\"\"\n1793\t        Send an `OPTIONS` request.\n1794\t\n1795\t        **Parameters**: See `httpx.request`.\n1796\t        \"\"\"\n1797\t        return await self.request(\n1798\t            \"OPTIONS\",\n1799\t            url,\n1800\t            params=params,\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "content": [
+        {
+          "type": "text",
+          "text": "Now let me check the `_build_redirect_request` method and the module-level `request` function, plus the test callers:"
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_f5PIGk9uP4gc37HYNMkOlu",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n",
+              "build_request"
+            ],
+            "pattern": "build_request"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 11986,
+      "output_tokens": 109,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n",
+              "build_request"
+            ],
+            "pattern": "build_request"
+          },
+          "result": "grep error: exit status 2\nrg: build_request: No such file or directory (os error 2)\n./CHANGELOG.md:322:  `client.build_request()` does. This required by the signature change of the\n./CHANGELOG.md:1046:- Add `.build_request()` method to `Client` and `AsyncClient`. (Pull #319)\n./docs/advanced/clients.md:162:If you need to mix client-level and request-level options in a way that is not supported by the default [Merging of parameters](#merging-of-parameters), you can use `.build_request()` and then make arbitrary modifications to the `Request` instance. For example:\n./docs/advanced/clients.md:168:    request = client.build_request(\"GET\", \"https://api.example.com\")\n./tests/client/test_async_client.py:40:async def test_build_request(server):\n./tests/client/test_async_client.py:44:        request = client.build_request(\"GET\", url)\n./docs/api.md:42:    :members: headers cookies params auth request get head options post put patch delete stream build_request send close\n./docs/api.md:48:    :members: headers cookies params auth request get head options post put patch delete stream build_request send aclose\n./tests/client/test_client.py:47:def test_build_request(server):\n./tests/client/test_client.py:52:        request = client.build_request(\"GET\", url)\n./tests/client/test_client.py:67:        request = client.build_request(\"POST\", url)\n./tests/client/test_client.py:194:    request = client.build_request(\"GET\", \"http://www.example.com/\")\n./tests/client/test_client.py:200:    request = client.build_request(\"GET\", \"/testing/123\")\n./tests/client/test_client.py:206:    request = client.build_request(\"GET\", \"/testing/123\")\n./tests/client/test_client.py:212:    request = client.build_request(\"GET\", \"../testing/123\")\n./tests/client/test_client.py:218:    request = client.build_request(\"GET\", \"/testing:123\")\n./tests/client/test_client.py:224:    request = client.build_request(\"GET\", \"/testing%2F123\")\n./tests/client/test_client.py:228:    request = client.build_request(\"GET\", \"/testing\")\n./docs/async.md:99:    req = client.build_request(\"GET\", \"https://www.example.com/\")\n./docs/compatibility.md:64:request = client.build_request(\"GET\", ...)\n./tests/test_auth.py:123:    request = client.build_request(\"GET\", url)\n./tests/client/test_redirects.py:142:    request = client.build_request(\"POST\", \"https://example.org/redirect_303\")\n./tests/client/test_redirects.py:157:        request = client.build_request(\"POST\", \"https://example.org/redirect_303\")\n./httpx/_client.py:340:    def build_request(\n./httpx/_client.py:407:            # \u003e\u003e\u003e client.build_request(\"GET\", \"/path\").url\n./httpx/_client.py:457:    def _build_request_auth(\n./httpx/_client.py:794:        request = client.build_request(...)\n./httpx/_client.py:798:        See `Client.build_request()`, `Client.send()` and\n./httpx/_client.py:812:        request = self.build_request(\n./httpx/_client.py:855:        request = self.build_request(\n./httpx/_client.py:892:        Typically you'll want to build one with `Client.build_request()`\n./httpx/_client.py:912:        auth = self._build_request_auth(request, auth)\n./httpx/_client.py:1508:        request = client.build_request(...)\n./httpx/_client.py:1512:        See `AsyncClient.build_request()`, `AsyncClient.send()`\n./httpx/_client.py:1527:        request = self.build_request(\n./httpx/_client.py:1570:        request = self.build_request(\n./httpx/_client.py:1607:        Typically you'll want to build one with `AsyncClient.build_request()`\n./httpx/_client.py:1627:        auth = self._build_request_auth(request, auth)\n",
+          "is_error": true
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "content": [
+        {
+          "type": "text",
+          "text": "Now I have all the call sites. Let me confirm the enclosing function names for lines 855 and 1570 (the `stream` methods):"
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_ybd5ZnD9WXzX2iw1Bfo6d9",
+          "name": "read_file",
+          "input": {
+            "end": 860,
+            "path": "httpx/_client.py",
+            "start": 827
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_KbnECZr7JDalQexzyUqnc6",
+          "name": "read_file",
+          "input": {
+            "end": 1575,
+            "path": "httpx/_client.py",
+            "start": 1542
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 13223,
+      "output_tokens": 204,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "end": 860,
+            "path": "httpx/_client.py",
+            "start": 827
+          },
+          "result": "827\t    @contextmanager\n828\t    def stream(\n829\t        self,\n830\t        method: str,\n831\t        url: URL | str,\n832\t        *,\n833\t        content: RequestContent | None = None,\n834\t        data: RequestData | None = None,\n835\t        files: RequestFiles | None = None,\n836\t        json: typing.Any | None = None,\n837\t        params: QueryParamTypes | None = None,\n838\t        headers: HeaderTypes | None = None,\n839\t        cookies: CookieTypes | None = None,\n840\t        auth: AuthTypes | UseClientDefault | None = USE_CLIENT_DEFAULT,\n841\t        follow_redirects: bool | UseClientDefault = USE_CLIENT_DEFAULT,\n842\t        timeout: TimeoutTypes | UseClientDefault = USE_CLIENT_DEFAULT,\n843\t        extensions: RequestExtensions | None = None,\n844\t    ) -\u003e typing.Iterator[Response]:\n845\t        \"\"\"\n846\t        Alternative to `httpx.request()` that streams the response body\n847\t        instead of loading it into memory at once.\n848\t\n849\t        **Parameters**: See `httpx.request`.\n850\t\n851\t        See also: [Streaming Responses][0]\n852\t\n853\t        [0]: /quickstart#streaming-responses\n854\t        \"\"\"\n855\t        request = self.build_request(\n856\t            method=method,\n857\t            url=url,\n858\t            content=content,\n859\t            data=data,\n860\t            files=files,\n",
+          "is_error": false
+        },
+        {
+          "name": "read_file",
+          "input": {
+            "end": 1575,
+            "path": "httpx/_client.py",
+            "start": 1542
+          },
+          "result": "1542\t    @asynccontextmanager\n1543\t    async def stream(\n1544\t        self,\n1545\t        method: str,\n1546\t        url: URL | str,\n1547\t        *,\n1548\t        content: RequestContent | None = None,\n1549\t        data: RequestData | None = None,\n1550\t        files: RequestFiles | None = None,\n1551\t        json: typing.Any | None = None,\n1552\t        params: QueryParamTypes | None = None,\n1553\t        headers: HeaderTypes | None = None,\n1554\t        cookies: CookieTypes | None = None,\n1555\t        auth: AuthTypes | UseClientDefault | None = USE_CLIENT_DEFAULT,\n1556\t        follow_redirects: bool | UseClientDefault = USE_CLIENT_DEFAULT,\n1557\t        timeout: TimeoutTypes | UseClientDefault = USE_CLIENT_DEFAULT,\n1558\t        extensions: RequestExtensions | None = None,\n1559\t    ) -\u003e typing.AsyncIterator[Response]:\n1560\t        \"\"\"\n1561\t        Alternative to `httpx.request()` that streams the response body\n1562\t        instead of loading it into memory at once.\n1563\t\n1564\t        **Parameters**: See `httpx.request`.\n1565\t\n1566\t        See also: [Streaming Responses][0]\n1567\t\n1568\t        [0]: /quickstart#streaming-responses\n1569\t        \"\"\"\n1570\t        request = self.build_request(\n1571\t            method=method,\n1572\t            url=url,\n1573\t            content=content,\n1574\t            data=data,\n1575\t            files=files,\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "content": [
+        {
+          "type": "text",
+          "text": "Now let me get the test function names for all the test call sites:"
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_DEOAvkwPP71g7ady3zQWbL",
+          "name": "read_file",
+          "input": {
+            "end": 240,
+            "path": "tests/client/test_client.py",
+            "start": 40
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_8YwCNbke48VRVnjaqpgwsI",
+          "name": "read_file",
+          "input": {
+            "end": 170,
+            "path": "tests/client/test_redirects.py",
+            "start": 135
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 14277,
+      "output_tokens": 190,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "end": 240,
+            "path": "tests/client/test_client.py",
+            "start": 40
+          },
+          "result": "40\t)\n41\tdef test_get_invalid_url(server, url):\n42\t    with httpx.Client() as client:\n43\t        with pytest.raises((httpx.UnsupportedProtocol, httpx.LocalProtocolError)):\n44\t            client.get(url)\n45\t\n46\t\n47\tdef test_build_request(server):\n48\t    url = server.url.copy_with(path=\"/echo_headers\")\n49\t    headers = {\"Custom-header\": \"value\"}\n50\t\n51\t    with httpx.Client() as client:\n52\t        request = client.build_request(\"GET\", url)\n53\t        request.headers.update(headers)\n54\t        response = client.send(request)\n55\t\n56\t    assert response.status_code == 200\n57\t    assert response.url == url\n58\t\n59\t    assert response.json()[\"Custom-header\"] == \"value\"\n60\t\n61\t\n62\tdef test_build_post_request(server):\n63\t    url = server.url.copy_with(path=\"/echo_headers\")\n64\t    headers = {\"Custom-header\": \"value\"}\n65\t\n66\t    with httpx.Client() as client:\n67\t        request = client.build_request(\"POST\", url)\n68\t        request.headers.update(headers)\n69\t        response = client.send(request)\n70\t\n71\t    assert response.status_code == 200\n72\t    assert response.url == url\n73\t\n74\t    assert response.json()[\"Content-length\"] == \"0\"\n75\t    assert response.json()[\"Custom-header\"] == \"value\"\n76\t\n77\t\n78\tdef test_post(server):\n79\t    with httpx.Client() as client:\n80\t        response = client.post(server.url, content=b\"Hello, world!\")\n81\t    assert response.status_code == 200\n82\t    assert response.reason_phrase == \"OK\"\n83\t\n84\t\n85\tdef test_post_json(server):\n86\t    with httpx.Client() as client:\n87\t        response = client.post(server.url, json={\"text\": \"Hello, world!\"})\n88\t    assert response.status_code == 200\n89\t    assert response.reason_phrase == \"OK\"\n90\t\n91\t\n92\tdef test_stream_response(server):\n93\t    with httpx.Client() as client:\n94\t        with client.stream(\"GET\", server.url) as response:\n95\t            content = response.read()\n96\t    assert response.status_code == 200\n97\t    assert content == b\"Hello, world!\"\n98\t\n99\t\n100\tdef test_stream_iterator(server):\n101\t    body = b\"\"\n102\t\n103\t    with httpx.Client() as client:\n104\t        with client.stream(\"GET\", server.url) as response:\n105\t            for chunk in response.iter_bytes():\n106\t                body += chunk\n107\t\n108\t    assert response.status_code == 200\n109\t    assert body == b\"Hello, world!\"\n110\t\n111\t\n112\tdef test_raw_iterator(server):\n113\t    body = b\"\"\n114\t\n115\t    with httpx.Client() as client:\n116\t        with client.stream(\"GET\", server.url) as response:\n117\t            for chunk in response.iter_raw():\n118\t                body += chunk\n119\t\n120\t    assert response.status_code == 200\n121\t    assert body == b\"Hello, world!\"\n122\t\n123\t\n124\tdef test_cannot_stream_async_request(server):\n125\t    async def hello_world() -\u003e typing.AsyncIterator[bytes]:  # pragma: no cover\n126\t        yield b\"Hello, \"\n127\t        yield b\"world!\"\n128\t\n129\t    with httpx.Client() as client:\n130\t        with pytest.raises(RuntimeError):\n131\t            client.post(server.url, content=hello_world())\n132\t\n133\t\n134\tdef test_raise_for_status(server):\n135\t    with httpx.Client() as client:\n136\t        for status_code in (200, 400, 404, 500, 505):\n137\t            response = client.request(\n138\t                \"GET\", server.url.copy_with(path=f\"/status/{status_code}\")\n139\t            )\n140\t            if 400 \u003c= status_code \u003c 600:\n141\t                with pytest.raises(httpx.HTTPStatusError) as exc_info:\n142\t                    response.raise_for_status()\n143\t                assert exc_info.value.response == response\n144\t                assert exc_info.value.request.url.path == f\"/status/{status_code}\"\n145\t            else:\n146\t                assert response.raise_for_status() is response\n147\t\n148\t\n149\tdef test_options(server):\n150\t    with httpx.Client() as client:\n151\t        response = client.options(server.url)\n152\t    assert response.status_code == 200\n153\t    assert response.reason_phrase == \"OK\"\n154\t\n155\t\n156\tdef test_head(server):\n157\t    with httpx.Client() as client:\n158\t        response = client.head(server.url)\n159\t    assert response.status_code == 200\n160\t    assert response.reason_phrase == \"OK\"\n161\t\n162\t\n163\tdef test_put(server):\n164\t    with httpx.Client() as client:\n165\t        response = client.put(server.url, content=b\"Hello, world!\")\n166\t    assert response.status_code == 200\n167\t    assert response.reason_phrase == \"OK\"\n168\t\n169\t\n170\tdef test_patch(server):\n171\t    with httpx.Client() as client:\n172\t        response = client.patch(server.url, content=b\"Hello, world!\")\n173\t    assert response.status_code == 200\n174\t    assert response.reason_phrase == \"OK\"\n175\t\n176\t\n177\tdef test_delete(server):\n178\t    with httpx.Client() as client:\n179\t        response = client.delete(server.url)\n180\t    assert response.status_code == 200\n181\t    assert response.reason_phrase == \"OK\"\n182\t\n183\t\n184\tdef test_base_url(server):\n185\t    base_url = server.url\n186\t    with httpx.Client(base_url=base_url) as client:\n187\t        response = client.get(\"/\")\n188\t    assert response.status_code == 200\n189\t    assert response.url == base_url\n190\t\n191\t\n192\tdef test_merge_absolute_url():\n193\t    client = httpx.Client(base_url=\"https://www.example.com/\")\n194\t    request = client.build_request(\"GET\", \"http://www.example.com/\")\n195\t    assert request.url == \"http://www.example.com/\"\n196\t\n197\t\n198\tdef test_merge_relative_url():\n199\t    client = httpx.Client(base_url=\"https://www.example.com/\")\n200\t    request = client.build_request(\"GET\", \"/testing/123\")\n201\t    assert request.url == \"https://www.example.com/testing/123\"\n202\t\n203\t\n204\tdef test_merge_relative_url_with_path():\n205\t    client = httpx.Client(base_url=\"https://www.example.com/some/path\")\n206\t    request = client.build_request(\"GET\", \"/testing/123\")\n207\t    assert request.url == \"https://www.example.com/some/path/testing/123\"\n208\t\n209\t\n210\tdef test_merge_relative_url_with_dotted_path():\n211\t    client = httpx.Client(base_url=\"https://www.example.com/some/path\")\n212\t    request = client.build_request(\"GET\", \"../testing/123\")\n213\t    assert request.url == \"https://www.example.com/some/testing/123\"\n214\t\n215\t\n216\tdef test_merge_relative_url_with_path_including_colon():\n217\t    client = httpx.Client(base_url=\"https://www.example.com/some/path\")\n218\t    request = client.build_request(\"GET\", \"/testing:123\")\n219\t    assert request.url == \"https://www.example.com/some/path/testing:123\"\n220\t\n221\t\n222\tdef test_merge_relative_url_with_encoded_slashes():\n223\t    client = httpx.Client(base_url=\"https://www.example.com/\")\n224\t    request = client.build_request(\"GET\", \"/testing%2F123\")\n225\t    assert request.url == \"https://www.example.com/testing%2F123\"\n226\t\n227\t    client = httpx.Client(base_url=\"https://www.example.com/base%2Fpath\")\n228\t    request = client.build_request(\"GET\", \"/testing\")\n229\t    assert request.url == \"https://www.example.com/base%2Fpath/testing\"\n230\t\n231\t\n232\tdef test_context_managed_transport():\n233\t    class Transport(httpx.BaseTransport):\n234\t        def __init__(self) -\u003e None:\n235\t            self.events: list[str] = []\n236\t\n237\t        def close(self):\n238\t            # The base implementation of httpx.BaseTransport just\n239\t            # calls into `.close`, so simple transport cases can just override\n240\t            # this method for any cleanup, where more complex cases\n",
+          "is_error": false
+        },
+        {
+          "name": "read_file",
+          "input": {
+            "end": 170,
+            "path": "tests/client/test_redirects.py",
+            "start": 135
+          },
+          "result": "135\t    assert response.status_code == httpx.codes.OK\n136\t    assert response.url == \"https://example.org/\"\n137\t    assert len(response.history) == 1\n138\t\n139\t\n140\tdef test_next_request():\n141\t    client = httpx.Client(transport=httpx.MockTransport(redirects))\n142\t    request = client.build_request(\"POST\", \"https://example.org/redirect_303\")\n143\t    response = client.send(request, follow_redirects=False)\n144\t    assert response.status_code == httpx.codes.SEE_OTHER\n145\t    assert response.url == \"https://example.org/redirect_303\"\n146\t    assert response.next_request is not None\n147\t\n148\t    response = client.send(response.next_request, follow_redirects=False)\n149\t    assert response.status_code == httpx.codes.OK\n150\t    assert response.url == \"https://example.org/\"\n151\t    assert response.next_request is None\n152\t\n153\t\n154\t@pytest.mark.anyio\n155\tasync def test_async_next_request():\n156\t    async with httpx.AsyncClient(transport=httpx.MockTransport(redirects)) as client:\n157\t        request = client.build_request(\"POST\", \"https://example.org/redirect_303\")\n158\t        response = await client.send(request, follow_redirects=False)\n159\t        assert response.status_code == httpx.codes.SEE_OTHER\n160\t        assert response.url == \"https://example.org/redirect_303\"\n161\t        assert response.next_request is not None\n162\t\n163\t        response = await client.send(response.next_request, follow_redirects=False)\n164\t        assert response.status_code == httpx.codes.OK\n165\t        assert response.url == \"https://example.org/\"\n166\t        assert response.next_request is None\n167\t\n168\t\n169\tdef test_head_redirect():\n170\t    \"\"\"\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_YbitIVOsOpMxXJ1zCnaLmy",
+          "name": "read_file",
+          "input": {
+            "end": 135,
+            "path": "tests/test_auth.py",
+            "start": 115
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_8sf7itAWQSv6guO6h7cNcx",
+          "name": "read_file",
+          "input": {
+            "end": 55,
+            "path": "tests/client/test_async_client.py",
+            "start": 35
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 17412,
+      "output_tokens": 173,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "end": 135,
+            "path": "tests/test_auth.py",
+            "start": 115
+          },
+          "result": "115\t        )\n116\t    else:\n117\t        raise NotImplementedError()  # pragma: no cover\n118\t\n119\t\n120\tdef test_digest_auth_setting_cookie_in_request():\n121\t    url = \"https://www.example.com/auth\"\n122\t    client = httpx.Client(transport=httpx.MockTransport(set_cookies))\n123\t    request = client.build_request(\"GET\", url)\n124\t\n125\t    auth = httpx.DigestAuth(username=\"user\", password=\"pass\")\n126\t    flow = auth.sync_auth_flow(request)\n127\t    request = next(flow)\n128\t    assert \"Authorization\" not in request.headers\n129\t\n130\t    response = client.get(url)\n131\t    assert len(response.cookies) \u003e 0\n132\t    assert response.cookies[\"session\"] == \".session_value...\"\n133\t\n134\t    request = flow.send(response)\n135\t    assert request.headers[\"Authorization\"].startswith(\"Digest\")\n",
+          "is_error": false
+        },
+        {
+          "name": "read_file",
+          "input": {
+            "end": 55,
+            "path": "tests/client/test_async_client.py",
+            "start": 35
+          },
+          "result": "35\t        with pytest.raises((httpx.UnsupportedProtocol, httpx.LocalProtocolError)):\n36\t            await client.get(url)\n37\t\n38\t\n39\t@pytest.mark.anyio\n40\tasync def test_build_request(server):\n41\t    url = server.url.copy_with(path=\"/echo_headers\")\n42\t    headers = {\"Custom-header\": \"value\"}\n43\t    async with httpx.AsyncClient() as client:\n44\t        request = client.build_request(\"GET\", url)\n45\t        request.headers.update(headers)\n46\t        response = await client.send(request)\n47\t\n48\t    assert response.status_code == 200\n49\t    assert response.url == url\n50\t\n51\t    assert response.json()[\"Custom-header\"] == \"value\"\n52\t\n53\t\n54\t@pytest.mark.anyio\n55\tasync def test_post(server):\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "content": [
+        {
+          "type": "text",
+          "text": "I now have the complete picture. Here is the full set of every function/method that calls `build_request`, all located in `httpx/_client.py` (production code) and the test files:\n\n---\n\n## Production code — `httpx/_client.py`\n\nThese are the only two places in the library source where `self.build_request(...)` is actually invoked (lines 812, 855, 1527, 1570):\n\n| Class | Method | Line(s) |\n|---|---|---|\n| `Client` | `request` | 812 |\n| `Client` | `stream` | 855 |\n| `AsyncClient` | `request` | 1527 |\n| `AsyncClient` | `stream` | 1570 |\n\nBoth `Client.request` and `AsyncClient.request` build the request and immediately pass it to `send`. Both `Client.stream` and `AsyncClient.stream` do the same for streaming responses.\n\n---\n\n## Test code\n\n| File | Function | Notes |\n|---|---|---|\n| `tests/client/test_client.py` | `test_build_request` | calls `client.build_request(\"GET\", ...)` |\n| `tests/client/test_client.py` | `test_build_post_request` | calls `client.build_request(\"POST\", ...)` |\n| `tests/client/test_client.py` | `test_merge_absolute_url` | calls `client.build_request(\"GET\", ...)` |\n| `tests/client/test_client.py` | `test_merge_relative_url` | calls `client.build_request(\"GET\", ...)` |\n| `tests/client/test_client.py` | `test_merge_relative_url_with_path` | calls `client.build_request(\"GET\", ...)` |\n| `tests/client/test_client.py` | `test_merge_relative_url_with_dotted_path` | calls `client.build_request(\"GET\", ...)` |\n| `tests/client/test_client.py` | `test_merge_relative_url_with_path_including_colon` | calls `client.build_request(\"GET\", ...)` |\n| `tests/client/test_client.py` | `test_merge_relative_url_with_encoded_slashes` | calls `client.build_request(\"GET\", ...)` (twice) |\n| `tests/client/test_async_client.py` | `test_build_request` | calls `client.build_request(\"GET\", ...)` |\n| `tests/client/test_redirects.py` | `test_next_request` | calls `client.build_request(\"POST\", ...)` |\n| `tests/client/test_redirects.py` | `test_async_next_request` | calls `client.build_request(\"POST\", ...)` |\n| `tests/test_auth.py` | `test_digest_auth_setting_cookie_in_request` | calls `client.build_request(\"GET\", ...)` |\n\n---\n\n### Summary\n\n**In production source**, `build_request` is called by exactly **4 methods**:\n1. `Client.request` (`httpx/_client.py`)\n2. `Client.stream` (`httpx/_client.py`)\n3. `AsyncClient.request` (`httpx/_client.py`)\n4. `AsyncClient.stream` (`httpx/_client.py`)\n\n**In tests**, it is called by **12 test functions** across `tests/client/test_client.py`, `tests/client/test_async_client.py`, `tests/client/test_redirects.py`, and `tests/test_auth.py`."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "input_tokens": 18129,
+      "output_tokens": 885
+    }
+  ],
+  "total_input_tokens": 96379,
+  "total_output_tokens": 2446,
+  "tool_call_count": 16,
+  "turns_to_answer": 10,
+  "wall_clock_ms": 52341,
+  "retries": 0
+}

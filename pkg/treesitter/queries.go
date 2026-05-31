@@ -16,8 +16,23 @@ var (
 	queryCacheMu sync.Mutex
 )
 
-// CaptureGroup is one pattern match: capture name -> content text.
-type CaptureGroup map[string]string
+// NodePos is the start position of a captured node, 0-based (row, column) as
+// reported by tree-sitter. Used to compute accurate source line numbers without
+// re-scanning file content.
+type NodePos struct {
+	Row uint32
+	Col uint32
+}
+
+// CaptureGroup is one pattern match. Text maps each capture name to the captured
+// node's source text; Pos maps each capture name to that node's start position.
+// Keeping positions here lets callers derive exact line numbers from the parse
+// tree instead of searching file content (which is ambiguous for repeated text
+// like a receiver identifier).
+type CaptureGroup struct {
+	Text map[string]string
+	Pos  map[string]NodePos
+}
 
 // RunQuery runs the language's query file on the tree and returns all capture groups.
 // content is the source bytes for extracting node text. Caller owns tree.
@@ -48,12 +63,17 @@ func RunQuery(tree *sitter.Tree, content []byte, lang Lang) ([]CaptureGroup, err
 			break
 		}
 		m = qc.FilterPredicates(m, content)
-		group := make(CaptureGroup)
+		group := CaptureGroup{
+			Text: make(map[string]string),
+			Pos:  make(map[string]NodePos),
+		}
 		for _, c := range m.Captures {
 			name := q.CaptureNameForId(c.Index)
-			group[name] = c.Node.Content(content)
+			group.Text[name] = c.Node.Content(content)
+			sp := c.Node.StartPoint()
+			group.Pos[name] = NodePos{Row: sp.Row, Col: sp.Column}
 		}
-		if len(group) > 0 {
+		if len(group.Text) > 0 {
 			out = append(out, group)
 		}
 	}

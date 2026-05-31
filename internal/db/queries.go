@@ -7,22 +7,22 @@ import (
 
 // Queries holds prepared statements for the lifetime of the process.
 type Queries struct {
-	SearchFunctions   *sql.Stmt
-	SearchTypes       *sql.Stmt
-	GetCallersOf      *sql.Stmt
-	GetCalleesOf      *sql.Stmt
-	InsertFunction    *sql.Stmt
-	InsertCall        *sql.Stmt
-	InsertType        *sql.Stmt
-	InsertImport      *sql.Stmt
-	InsertFileSummary *sql.Stmt
-	InsertChange      *sql.Stmt
+	SearchFunctions       *sql.Stmt
+	SearchTypes           *sql.Stmt
+	GetCallersOf          *sql.Stmt
+	GetCalleesOf          *sql.Stmt
+	InsertFunction        *sql.Stmt
+	InsertCall            *sql.Stmt
+	InsertType            *sql.Stmt
+	InsertImport          *sql.Stmt
+	InsertFileSummary     *sql.Stmt
+	InsertChange          *sql.Stmt
 	DeleteFunctionsByFile *sql.Stmt
 	DeleteCallsByFile     *sql.Stmt
 	DeleteTypesByFile     *sql.Stmt
 	DeleteImportsByFile   *sql.Stmt
 	DeleteFileSummary     *sql.Stmt
-	GetStats          *sql.Stmt
+	GetStats              *sql.Stmt
 }
 
 // PrepareQueries creates and caches all prepared statements. Call after Open and Migrate.
@@ -31,7 +31,7 @@ func PrepareQueries(db *sql.DB) (*Queries, error) {
 	var err error
 
 	q.SearchFunctions, err = db.Prepare(`
-		SELECT f.id, f.name, f.file_path, f.start_line, f.end_line, f.language, f.exported, f.code, f.docstring, f.signature,
+		SELECT f.id, f.name, f.file_path, f.start_line, f.end_line, f.language, f.kind, f.exported, f.code, f.docstring, f.signature,
 		       snippet(functions_fts, 2, '»', '«', '...', 30) AS snippet,
 		       bm25(functions_fts, 10.0, 5.0, 1.0, 2.0) AS rank
 		FROM functions_fts
@@ -184,6 +184,29 @@ type Symbol struct {
 // signature — for example the Store interface introduced in a later task.
 type Querier interface {
 	Query(query string, args ...interface{}) (*sql.Rows, error)
+}
+
+// ResolutionHistogram returns a count of call edges grouped by their
+// resolution confidence marker (the calls.resolution column). Used by the
+// benchmark/regression tooling to track how many edges are precisely resolved
+// versus left as 'name-global' guesses. Keys are the resolution vocabulary
+// values; the map is empty when there are no edges.
+func ResolutionHistogram(db Querier) (map[string]int, error) {
+	rows, err := db.Query(`SELECT resolution, COUNT(*) FROM calls GROUP BY resolution`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]int{}
+	for rows.Next() {
+		var marker string
+		var n int
+		if err := rows.Scan(&marker, &n); err != nil {
+			return nil, err
+		}
+		out[marker] = n
+	}
+	return out, rows.Err()
 }
 
 // SymbolsInFile returns every function-row that lives in the given

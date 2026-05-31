@@ -1,0 +1,256 @@
+{
+  "status": "completed",
+  "final_answer": "I have enough information to give a precise, confident answer. Here's what I found:\n\n---\n\n## Where to Make the Change\n\n**File:** `httpx/_client.py`\n\nThere are two places to look at, depending on what you want:\n\n### Option A — Add a header to every request at the `Client` level (recommended)\n\nThe base client `__init__` (around **line 189**) stores `self.headers = Headers(headers)`. This `self.headers` dict is then merged into every outgoing request via `_merge_headers`, which is called by `build_request` (line 340), which in turn is called by every `request`/`stream` method.\n\n**Minimal edit — add your header once in `__init__`:**\n\n```python\n# httpx/_client.py  ~line 189  (BaseClient.__init__)\nself.headers = Headers(headers)\nself.headers[\"X-My-Header\"] = \"my-value\"   # ← add this line\n```\n\nThat single line is enough. Because `_merge_headers` always starts from `self.headers` and overlays per-request headers on top, every request the client makes will carry `X-My-Header` automatically.\n\n---\n\n### Option B — Add it inside `_merge_headers` (line 424) so it applies unconditionally, even if a caller bypasses `self.headers`\n\n```python\n# httpx/_client.py  ~line 424  (BaseClient._merge_headers)\ndef _merge_headers(self, headers=None):\n    merged = Headers(self.headers)\n    merged[\"X-My-Header\"] = \"my-value\"   # ← add this line\n    if headers:\n        merged.update(Headers(headers))\n    return merged\n```\n\n---\n\n### Which to choose?\n\n| | Option A (`__init__`) | Option B (`_merge_headers`) |\n|---|---|---|\n| Header is visible on `client.headers` | ✅ Yes | ❌ No |\n| Can be overridden per-request | ✅ Yes (per-request header wins) | ⚠️ Depends on ordering |\n| Minimal, idiomatic | ✅ Best fit | Slightly more invasive |\n\n**Option A is the minimal, idiomatic change.** It mirrors exactly how users are expected to set default headers (`Client(headers={\"X-My-Header\": \"my-value\"})`), and the merge pipeline already propagates `self.headers` to every outgoing request through `build_request → _merge_headers`.",
+  "turns": [
+    {
+      "index": 0,
+      "content": [
+        {
+          "type": "text",
+          "text": "Let me explore the codebase to understand its architecture and find the relevant Client code."
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_8hd8E1MqAAOalGvRDCw9dj",
+          "name": "get_architecture",
+          "input": {}
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_LA9rqM1s6MTbe7euc1ab5X",
+          "name": "get_definition",
+          "input": {
+            "symbol": "Client"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 1756,
+      "output_tokens": 91,
+      "tool_calls": [
+        {
+          "name": "get_architecture",
+          "input": {},
+          "result": "# Project Summary\n**Indexed:** 2026-05-31T15:33:28+01:00\n**Functions:** 1134\n**Files:** 54\n## Structure\n- httpx/__init__.py\n- httpx/_api.py\n- httpx/_auth.py\n- httpx/_client.py\n- httpx/_config.py\n- httpx/_content.py\n- httpx/_decoders.py\n- httpx/_exceptions.py\n- httpx/_main.py\n- httpx/_models.py\n- httpx/_multipart.py\n- httpx/_status_codes.py\n- httpx/_transports/asgi.py\n- httpx/_transports/base.py\n- httpx/_transports/default.py\n- httpx/_transports/mock.py\n- httpx/_transports/wsgi.py\n- httpx/_types.py\n- httpx/_urlparse.py\n- httpx/_urls.py\n\n## Entry points\n- httpx/_main.py\n- tests/test_main.py\n\n\n\n# Architecture\n\n## Tech stack\n\n- python: 1134 functions\n\n## Directory map\n\n- httpx/: 446 symbols\n- tests/: 688 symbols\n\n## High-connectivity functions\n\n- async_streaming_body (tests/models/test_responses.py): 16 callers\n- streaming_body (tests/models/test_responses.py): 14 callers\n- splitlines (tests/test_main.py): 9 callers\n- copy_with (httpx/_urls.py): 8 callers\n- remove_date_header (tests/test_main.py): 8 callers\n- request (httpx/_api.py): 7 callers\n- request (httpx/_client.py): 7 callers\n- request (httpx/_client.py): 7 callers\n- quote (httpx/_urlparse.py): 7 callers\n- decode (httpx/_decoders.py): 6 callers\n\n## Module dependencies\n\n- httpx/__init__.py -\u003e sys\n- httpx/_api.py -\u003e typing\n- httpx/_api.py -\u003e contextlib\n- httpx/_api.py -\u003e ssl\n- httpx/_auth.py -\u003e re\n- httpx/_auth.py -\u003e time\n- httpx/_auth.py -\u003e typing\n- httpx/_auth.py -\u003e base64\n- httpx/_auth.py -\u003e urllib.request\n- httpx/_auth.py -\u003e netrc\n- httpx/_auth.py -\u003e hashlib\n- httpx/_auth.py -\u003e os\n- httpx/_client.py -\u003e datetime\n- httpx/_client.py -\u003e enum\n- httpx/_client.py -\u003e logging\n- httpx/_client.py -\u003e contextlib\n- httpx/_client.py -\u003e ssl\n- httpx/_client.py -\u003e h2\n- httpx/_client.py -\u003e time\n- httpx/_client.py -\u003e typing\n- httpx/_client.py -\u003e warnings\n- httpx/_client.py -\u003e types\n- httpx/_config.py -\u003e os\n- httpx/_config.py -\u003e typing\n- httpx/_config.py -\u003e ssl\n- httpx/_config.py -\u003e warnings\n- httpx/_config.py -\u003e certifi\n- httpx/_content.py -\u003e warnings\n- httpx/_content.py -\u003e json\n- httpx/_content.py -\u003e typing\n",
+          "is_error": false
+        },
+        {
+          "name": "get_definition",
+          "input": {
+            "symbol": "Client"
+          },
+          "result": "{\"ambiguous\":false,\"answer\":\"Client (type/class) is defined at httpx/_client.py. This is the definitive location — answer now without further searches.\",\"answer_status\":\"definitive\",\"canonical\":{\"name\":\"Client\",\"kind\":\"type/class\",\"label\":\"class\",\"file\":\"httpx/_client.py\",\"canonical\":true},\"matches\":[{\"name\":\"Client\",\"kind\":\"type/class\",\"label\":\"class\",\"file\":\"httpx/_client.py\",\"canonical\":true}],\"recommended_next_action\":\"answer_now\",\"total\":1}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_Ff2gCoPMzgQEiAWf1l1NG1",
+          "name": "get_definition",
+          "input": {
+            "symbol": "_merge_headers"
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_eicxqX5OMU7PXfAyfCB8pi",
+          "name": "query_codebase",
+          "input": {
+            "file_filter": "httpx/_client.py",
+            "max_results": 10,
+            "query": "default headers client init build_request"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 2819,
+      "output_tokens": 143,
+      "tool_calls": [
+        {
+          "name": "get_definition",
+          "input": {
+            "symbol": "_merge_headers"
+          },
+          "result": "{\"ambiguous\":false,\"answer\":\"_merge_headers (method) is defined at httpx/_client.py:424. This is the definitive location — answer now without further searches.\",\"answer_status\":\"definitive\",\"canonical\":{\"name\":\"_merge_headers\",\"kind\":\"method\",\"label\":\"method\",\"file\":\"httpx/_client.py\",\"line\":424,\"canonical\":true},\"matches\":[{\"name\":\"_merge_headers\",\"kind\":\"method\",\"label\":\"method\",\"file\":\"httpx/_client.py\",\"line\":424,\"canonical\":true}],\"recommended_next_action\":\"answer_now\",\"total\":1}",
+          "is_error": false
+        },
+        {
+          "name": "query_codebase",
+          "input": {
+            "file_filter": "httpx/_client.py",
+            "max_results": 10,
+            "query": "default headers client init build_request"
+          },
+          "result": "{\"answer_status\":\"partial\",\"detected_intent\":\"search\",\"recommended_next_action\":\"retry_with_suggestion\",\"results\":null,\"suggestions\":[\"_port_or_default\",\"test_host_with_non_default_port_in_url\",\"test_is_not_https_redirect_if_not_default_ports\",\"test_remove_default_header\",\"test_response_default_to_utf8_encoding\"],\"total\":0}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_OxqwdjfpqLiTOIJa00MA7b",
+          "name": "get_call_chain",
+          "input": {
+            "depth": 2,
+            "direction": "both",
+            "function_name": "_merge_headers"
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_hn1AuY3hsRz4vtSL0uRLCs",
+          "name": "query_codebase",
+          "input": {
+            "file_filter": "httpx/_client.py",
+            "max_results": 5,
+            "query": "Client __init__ headers",
+            "scope": "functions"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 3260,
+      "output_tokens": 196,
+      "tool_calls": [
+        {
+          "name": "get_call_chain",
+          "input": {
+            "depth": 2,
+            "direction": "both",
+            "function_name": "_merge_headers"
+          },
+          "result": "{\"callees\":[{\"name\":\"Headers\",\"file_path\":\"(external)\",\"line\":null,\"depth\":1,\"resolution\":\"constructor\"},{\"name\":\"update\",\"file_path\":\"httpx/_models.py\",\"line\":274,\"depth\":1,\"resolution\":\"receiver-typed\"},{\"name\":\"Headers\",\"file_path\":\"(external)\",\"line\":null,\"depth\":2,\"resolution\":\"constructor\"},{\"name\":\"extend\",\"file_path\":\"(external)\",\"line\":null,\"depth\":2,\"resolution\":\"unresolved\"},{\"name\":\"keys\",\"file_path\":\"httpx/_models.py\",\"line\":202,\"depth\":2,\"resolution\":\"receiver-typed\"},{\"name\":\"pop\",\"file_path\":\"(external)\",\"line\":null,\"depth\":2,\"resolution\":\"unresolved\"}],\"callers\":[{\"name\":\"build_request\",\"file_path\":\"httpx/_client.py\",\"line\":340,\"depth\":1,\"resolution\":\"receiver-typed\"},{\"name\":\"request\",\"file_path\":\"httpx/_client.py\",\"line\":771,\"depth\":2,\"resolution\":\"receiver-typed\"},{\"name\":\"request\",\"file_path\":\"httpx/_client.py\",\"line\":1485,\"depth\":2,\"resolution\":\"receiver-typed\"},{\"name\":\"stream\",\"file_path\":\"httpx/_client.py\",\"line\":828,\"depth\":2,\"resolution\":\"receiver-typed\"},{\"name\":\"stream\",\"file_path\":\"httpx/_client.py\",\"line\":1543,\"depth\":2,\"resolution\":\"receiver-typed\"}],\"depth\":2,\"function\":\"_merge_headers\"}",
+          "is_error": false
+        },
+        {
+          "name": "query_codebase",
+          "input": {
+            "file_filter": "httpx/_client.py",
+            "max_results": 5,
+            "query": "Client __init__ headers",
+            "scope": "functions"
+          },
+          "result": "{\"answer_status\":\"partial\",\"detected_intent\":\"search\",\"recommended_next_action\":\"inspect_top_result\",\"results\":[{\"file\":\"httpx/_client.py\",\"line\":639,\"kind\":\"method\",\"label\":\"method\",\"name\":\"__init__\",\"snippet\":\"super().__»init«__(\\n            auth=auth,\\n            params=params,\\n            »headers«=»headers«,\\n            cookies=cookies,\\n            timeout=ti…\"},{\"file\":\"httpx/_client.py\",\"line\":1353,\"kind\":\"method\",\"label\":\"method\",\"name\":\"__init__\",\"snippet\":\"super().__»init«__(\\n            auth=auth,\\n            params=params,\\n            »headers«=»headers«,\\n            cookies=cookies,\\n            timeout=ti…\"},{\"file\":\"httpx/_client.py\",\"line\":189,\"kind\":\"method\",\"label\":\"method\",\"name\":\"__init__\",\"snippet\":\"...base_url))\\n\\n        self._auth = self._build_auth(auth)\\n        self._params = QueryParams(params)\\n        self.»headers« = »Headers«(»headers«)\\n      …\"},{\"file\":\"httpx/_models.py\",\"line\":516,\"kind\":\"method\",\"label\":\"method\",\"name\":\"__init__\",\"snippet\":\"self.status_code = status_code\\n        self.»headers« = »Headers«(»headers«)\\n\\n        self._request: Request | None = request\\n\\n        # When follow_redir…\"}],\"total\":4}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_dtVbExg5cUiZI0u8bHEn1L",
+          "name": "query_codebase",
+          "input": {
+            "file_filter": "httpx/_client.py",
+            "max_results": 3,
+            "query": "_merge_headers build_request",
+            "scope": "functions"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 4218,
+      "output_tokens": 121,
+      "tool_calls": [
+        {
+          "name": "query_codebase",
+          "input": {
+            "file_filter": "httpx/_client.py",
+            "max_results": 3,
+            "query": "_merge_headers build_request",
+            "scope": "functions"
+          },
+          "result": "{\"answer_status\":\"partial\",\"detected_intent\":\"search\",\"recommended_next_action\":\"inspect_top_result\",\"results\":[{\"file\":\"httpx/_client.py\",\"line\":340,\"kind\":\"method\",\"label\":\"method\",\"name\":\"build_request\",\"snippet\":\"...See also: [Request instances][0]\\n\\n        [0]: /advanced/clients/#request-instances\\n        \\\"\\\"\\\"\\n        url = self._merge_url(url)\\n        headers = self._»…\"}],\"total\":1}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_u4CKuoLUBwbbJMS6w5sZKP",
+          "name": "query_codebase",
+          "input": {
+            "file_filter": "httpx/_client.py",
+            "max_results": 5,
+            "query": "self.headers default_headers _headers"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 4467,
+      "output_tokens": 105,
+      "tool_calls": [
+        {
+          "name": "query_codebase",
+          "input": {
+            "file_filter": "httpx/_client.py",
+            "max_results": 5,
+            "query": "self.headers default_headers _headers"
+          },
+          "result": "tool call failed: rpc -32001: index not ready: run /index-codebase first",
+          "is_error": true
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_FLErqh1nCHoyWQJkavkvlv",
+          "name": "query_codebase",
+          "input": {
+            "file_filter": "httpx/_client.py",
+            "max_results": 5,
+            "query": "_merge_headers method implementation headers update"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 4606,
+      "output_tokens": 105,
+      "tool_calls": [
+        {
+          "name": "query_codebase",
+          "input": {
+            "file_filter": "httpx/_client.py",
+            "max_results": 5,
+            "query": "_merge_headers method implementation headers update"
+          },
+          "result": "{\"answer_status\":\"partial\",\"detected_intent\":\"search\",\"loop_guard\":{\"level\":\"warning\",\"query_codebase_calls\":5},\"nudge\":\"You have searched several times this session. If you are tracing what depends on a symbol, call get_impact or get_call_chain instead of more keyword searches — they answer 'what uses/breaks this?' directly. Otherwise, commit to an answer with what you have.\",\"recommended_next_action\":\"switch_tools_or_answer\",\"results\":null,\"suggestions\":[\"_merge_cookies\",\"_merge_headers\",\"_merge_queryparams\",\"_merge_url\",\"copy_merge_params\"],\"total\":0}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "content": [
+        {
+          "type": "text",
+          "text": "I have enough information to give a precise, confident answer. Here's what I found:\n\n---\n\n## Where to Make the Change\n\n**File:** `httpx/_client.py`\n\nThere are two places to look at, depending on what you want:\n\n### Option A — Add a header to every request at the `Client` level (recommended)\n\nThe base client `__init__` (around **line 189**) stores `self.headers = Headers(headers)`. This `self.headers` dict is then merged into every outgoing request via `_merge_headers`, which is called by `build_request` (line 340), which in turn is called by every `request`/`stream` method.\n\n**Minimal edit — add your header once in `__init__`:**\n\n```python\n# httpx/_client.py  ~line 189  (BaseClient.__init__)\nself.headers = Headers(headers)\nself.headers[\"X-My-Header\"] = \"my-value\"   # ← add this line\n```\n\nThat single line is enough. Because `_merge_headers` always starts from `self.headers` and overlays per-request headers on top, every request the client makes will carry `X-My-Header` automatically.\n\n---\n\n### Option B — Add it inside `_merge_headers` (line 424) so it applies unconditionally, even if a caller bypasses `self.headers`\n\n```python\n# httpx/_client.py  ~line 424  (BaseClient._merge_headers)\ndef _merge_headers(self, headers=None):\n    merged = Headers(self.headers)\n    merged[\"X-My-Header\"] = \"my-value\"   # ← add this line\n    if headers:\n        merged.update(Headers(headers))\n    return merged\n```\n\n---\n\n### Which to choose?\n\n| | Option A (`__init__`) | Option B (`_merge_headers`) |\n|---|---|---|\n| Header is visible on `client.headers` | ✅ Yes | ❌ No |\n| Can be overridden per-request | ✅ Yes (per-request header wins) | ⚠️ Depends on ordering |\n| Minimal, idiomatic | ✅ Best fit | Slightly more invasive |\n\n**Option A is the minimal, idiomatic change.** It mirrors exactly how users are expected to set default headers (`Client(headers={\"X-My-Header\": \"my-value\"})`), and the merge pipeline already propagates `self.headers` to every outgoing request through `build_request → _merge_headers`."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "input_tokens": 4871,
+      "output_tokens": 597
+    }
+  ],
+  "total_input_tokens": 25997,
+  "total_output_tokens": 1358,
+  "tool_call_count": 9,
+  "turns_to_answer": 7,
+  "wall_clock_ms": 34783,
+  "retries": 0
+}

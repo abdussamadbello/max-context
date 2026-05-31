@@ -1,0 +1,50 @@
+{
+  "status": "completed",
+  "final_answer": "The `Response` class is defined in **`httpx/_models.py`**.",
+  "turns": [
+    {
+      "index": 0,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_IMxMBrOsI2sesHKGTGCSAZ",
+          "name": "get_definition",
+          "input": {
+            "symbol": "Response"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 1754,
+      "output_tokens": 54,
+      "tool_calls": [
+        {
+          "name": "get_definition",
+          "input": {
+            "symbol": "Response"
+          },
+          "result": "{\"ambiguous\":false,\"answer\":\"Response (type/class) is defined at httpx/_models.py. This is the definitive location — answer now without further searches.\",\"answer_status\":\"definitive\",\"canonical\":{\"name\":\"Response\",\"kind\":\"type/class\",\"label\":\"class\",\"file\":\"httpx/_models.py\",\"canonical\":true},\"matches\":[{\"name\":\"Response\",\"kind\":\"type/class\",\"label\":\"class\",\"file\":\"httpx/_models.py\",\"canonical\":true}],\"recommended_next_action\":\"answer_now\",\"total\":1}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "content": [
+        {
+          "type": "text",
+          "text": "The `Response` class is defined in **`httpx/_models.py`**."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "input_tokens": 1942,
+      "output_tokens": 21
+    }
+  ],
+  "total_input_tokens": 3696,
+  "total_output_tokens": 75,
+  "tool_call_count": 1,
+  "turns_to_answer": 2,
+  "wall_clock_ms": 6075,
+  "retries": 0
+}

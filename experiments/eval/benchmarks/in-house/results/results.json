@@ -1,0 +1,26 @@
+{
+  "manifest": {
+    "protocol_hash": "249ecc5e394932bf2a79302d2f8851e87141e0fba030b30b8529390b2355ed9e",
+    "protocol_file": "protocol/alias-v4.json",
+    "task_model": "claude-sonnet-4-6",
+    "judge_model": "claude-haiku-4-5",
+    "temperature": 0,
+    "max_turns": 15,
+    "token_budget": 600000,
+    "replicates": 1,
+    "repo_shas": {
+      "celery": "90e2a13cbe2d3a40b93fe31ec9f09b64b33e0f64",
+      "payments": "bc194b5a9ecf62a8d40117de8444898f472cc9c8"
+    },
+    "index_shas": {
+      "celery": "90e2a13cbe2d3a40b93fe31ec9f09b64b33e0f64",
+      "payments": "bc194b5a9ecf62a8d40117de8444898f472cc9c8"
+    },
+    "max_context_bin": "/tmp/max-context",
+    "rg_version": "ripgrep 14.1.1 (rev 4649aa9700)",
+    "started_at": "2026-05-31T16:06:19Z",
+    "grep_playbook": "\nYou have three tools for exploring the repository: grep, read_file, list_files.\n\nWork like a skilled engineer at a terminal:\n- Start by SEARCHING for the most specific term in the task. Prefer definition-anchored\n  patterns: for a symbol Foo, try patterns like \"class Foo\", \"def Foo\", \"function Foo\",\n  \"Foo =\", or \"interface Foo\" depending on the language.\n- Use ripgrep flags via \"args\": -w for whole-word, -i for case-insensitive, -F for a\n  literal (non-regex) string, -t py / -t ts to restrict by language, -g to include/exclude\n  by glob, -l to list only matching files, -A/-B/-C for surrounding context.\n- If a search is too noisy, make the pattern more specific or add a type/glob filter.\n  If it returns nothing, broaden it or try a synonym.\n- Use list_files to understand layout when a search alone is ambiguous.\n- read_file with a line range to confirm a definition or read just the relevant region;\n  read the whole file only when you truly need it.\n- To trace who CALLS a function (and transitively, what reaches it): search for the\n  function's name to find its direct callers, identify the enclosing function of each call\n  site, then search for THOSE functions' names to find their callers, and repeat outward\n  until no new callers appear. For a complete transitive set you must follow every level.\n- Stop as soon as you can answer confidently. Always cite exact repo-relative file paths.\n",
+    "mc_playbook": "\nYou have max-context's tools for exploring the repository (see each tool's description\nfor its exact arguments). They query a pre-built index of the codebase.\n\nWork efficiently:\n- To FIND where a function, type, or file lives, search the index by keyword or name; it\n  returns ranked results with file paths, line numbers, and snippets.\n- To understand how code connects, trace the call graph in either direction (who calls a\n  function, and what it calls), to a chosen depth. For a COMPLETE transitive caller set,\n  trace to a sufficient depth so every indirect caller up the chain is included.\n- To assess what a change affects, ask for the impact/blast-radius of the relevant files\n  or symbols.\n- To get oriented in an unfamiliar repo, request the architecture summary.\n- Prefer a targeted query over reading whole files. Stop as soon as you can answer\n  confidently. Always cite exact repo-relative file paths.\n"
+  },
+  "runs": null
+}

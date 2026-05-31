@@ -129,6 +129,73 @@ func TestGetImpact_FromHEAD_DefaultCallers(t *testing.T) {
 	}
 }
 
+// TestGetImpact_ResolutionFieldsAndFilter verifies via_resolution, the stats
+// resolution_breakdown, and that min_confidence prunes low-confidence edges.
+func TestGetImpact_ResolutionFieldsAndFilter(t *testing.T) {
+	root, store, cleanup := setupRepoWithIndex(t)
+	defer cleanup()
+
+	// Tag the seeded edges with distinct resolutions:
+	//   Bar->Foo : receiver-typed (high confidence)
+	//   Baz->Foo : name-global    (low confidence)
+	db := store.DB()
+	if _, err := db.Exec(`UPDATE calls SET resolution='receiver-typed' WHERE callee_name='Foo' AND file_path='b.go' AND line=3`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE calls SET resolution='name-global' WHERE callee_name='Foo' AND file_path='b.go' AND line=12`); err != nil {
+		t.Fatal(err)
+	}
+
+	type impactOut struct {
+		Impacted []struct {
+			Symbol        string `json:"symbol"`
+			ViaResolution string `json:"via_resolution"`
+		} `json:"impacted"`
+		Stats struct {
+			ResolutionBreakdown map[string]int `json:"resolution_breakdown"`
+		} `json:"stats"`
+	}
+	run := func(args string) impactOut {
+		h := GetImpactHandler(store, root)
+		resp, err := h(json.RawMessage(args))
+		if err != nil {
+			t.Fatalf("handler(%s): %v", args, err)
+		}
+		var out impactOut
+		if err := json.Unmarshal([]byte(resp.([]mcp.ContentItem)[0].Text), &out); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		return out
+	}
+
+	// Depth 1 only, so the two direct callers of Foo are the population.
+	all := run(`{"depth":1}`)
+	byName := map[string]string{}
+	for _, im := range all.Impacted {
+		byName[im.Symbol] = im.ViaResolution
+	}
+	if byName["Bar"] != "receiver-typed" {
+		t.Errorf("Bar via_resolution = %q, want receiver-typed", byName["Bar"])
+	}
+	if byName["Baz"] != "name-global" {
+		t.Errorf("Baz via_resolution = %q, want name-global", byName["Baz"])
+	}
+	if all.Stats.ResolutionBreakdown["receiver-typed"] != 1 || all.Stats.ResolutionBreakdown["name-global"] != 1 {
+		t.Errorf("breakdown = %+v, want one each", all.Stats.ResolutionBreakdown)
+	}
+
+	// min_confidence=receiver-typed prunes the name-global Baz edge.
+	filtered := run(`{"depth":1,"min_confidence":"receiver-typed"}`)
+	for _, im := range filtered.Impacted {
+		if im.Symbol == "Baz" {
+			t.Errorf("Baz should be pruned by min_confidence=receiver-typed")
+		}
+	}
+	if len(filtered.Impacted) != 1 || filtered.Impacted[0].Symbol != "Bar" {
+		t.Errorf("filtered impacted = %+v, want only Bar", filtered.Impacted)
+	}
+}
+
 func TestGetImpact_NoChanges_EmptyResult(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")

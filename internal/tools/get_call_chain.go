@@ -15,10 +15,11 @@ type getCallChainArgs struct {
 }
 
 type callChainNode struct {
-	Name     string `json:"name"`
-	FilePath string `json:"file_path"`
-	Line     *int   `json:"line"`
-	Depth    int    `json:"depth"`
+	Name       string `json:"name"`
+	FilePath   string `json:"file_path"`
+	Line       *int   `json:"line"`
+	Depth      int    `json:"depth"`
+	Resolution string `json:"resolution"`
 }
 
 // GetCallChainHandler returns an MCP tool handler that traverses the call graph
@@ -79,36 +80,37 @@ func GetCallChainHandler(database *sql.DB) mcp.ToolHandler {
 func queryCallChain(database *sql.DB, functionName string, depth int, direction string) ([]callChainNode, error) {
 	var query string
 	if direction == "callers" {
-		// Who calls this function? (upstream)
+		// Who calls this function? (upstream). resolution is the confidence of
+		// the edge connecting each caller to the chain; the seed row has none.
 		query = `
-			WITH RECURSIVE chain(id, name, file_path, line, depth) AS (
-				SELECT f.id, f.name, f.file_path, f.start_line, 0
+			WITH RECURSIVE chain(id, name, file_path, line, depth, resolution) AS (
+				SELECT f.id, f.name, f.file_path, f.start_line, 0, ''
 				FROM functions f WHERE f.name = ?
 				UNION ALL
-				SELECT f.id, f.name, f.file_path, f.start_line, c.depth + 1
+				SELECT f.id, f.name, f.file_path, f.start_line, c.depth + 1, e.resolution
 				FROM chain c
 				JOIN calls e ON e.callee_id = c.id
 				JOIN functions f ON f.id = e.caller_id
 				WHERE c.depth < ?
 			)
-			SELECT DISTINCT name, file_path, line, depth FROM chain
+			SELECT DISTINCT name, file_path, line, depth, resolution FROM chain
 			WHERE depth > 0
 			ORDER BY depth, name
 		`
 	} else {
 		// What does this function call? (downstream)
 		query = `
-			WITH RECURSIVE chain(id, name, file_path, line, depth) AS (
-				SELECT f.id, f.name, f.file_path, f.start_line, 0
+			WITH RECURSIVE chain(id, name, file_path, line, depth, resolution) AS (
+				SELECT f.id, f.name, f.file_path, f.start_line, 0, ''
 				FROM functions f WHERE f.name = ?
 				UNION ALL
-				SELECT COALESCE(f.id, 0), COALESCE(f.name, e.callee_name), COALESCE(f.file_path, '(external)'), f.start_line, c.depth + 1
+				SELECT COALESCE(f.id, 0), COALESCE(f.name, e.callee_name), COALESCE(f.file_path, '(external)'), f.start_line, c.depth + 1, e.resolution
 				FROM chain c
 				JOIN calls e ON e.caller_id = c.id
 				LEFT JOIN functions f ON f.id = e.callee_id
 				WHERE c.depth < ?
 			)
-			SELECT DISTINCT name, file_path, line, depth FROM chain
+			SELECT DISTINCT name, file_path, line, depth, resolution FROM chain
 			WHERE depth > 0
 			ORDER BY depth, name
 		`
@@ -124,7 +126,7 @@ func queryCallChain(database *sql.DB, functionName string, depth int, direction 
 	for rows.Next() {
 		var n callChainNode
 		var line sql.NullInt64
-		if err := rows.Scan(&n.Name, &n.FilePath, &line, &n.Depth); err != nil {
+		if err := rows.Scan(&n.Name, &n.FilePath, &line, &n.Depth, &n.Resolution); err != nil {
 			continue
 		}
 		if line.Valid {

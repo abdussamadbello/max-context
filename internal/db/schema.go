@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const schemaVersion = 1
+const schemaVersion = 6
 
 // Migrate ensures the database schema is at the current version, running
 // migrations if needed. Call after Open.
@@ -72,6 +72,11 @@ func runMigration(db *sql.DB, version int) error {
 
 var migrations = map[int]func(*sql.Tx) error{
 	1: migrationV1,
+	2: migrationV2,
+	3: migrationV3,
+	4: migrationV4,
+	5: migrationV5,
+	6: migrationV6,
 }
 
 func migrationV1(tx *sql.Tx) error {
@@ -217,4 +222,166 @@ func migrationV1(tx *sql.Tx) error {
 	}
 
 	return nil
+}
+
+// migrationV2 adds call-edge resolution confidence and the definition-side
+// metadata (kind, receiver type, package) needed by the scope resolver.
+//
+// Backward compatible: calls.resolution defaults to 'name-global' (the prior
+// semantics), and the new functions columns default safely, so rows written by
+// v1 and by languages without a scope resolver read back unchanged. A full
+// reindex is recommended after upgrade so the new columns populate and edges
+// pick up precise resolution.
+func migrationV2(tx *sql.Tx) error {
+	// calls: per-edge resolution confidence marker + the call-site receiver.
+	// resolution vocabulary (high->low confidence): same-file, same-package,
+	// receiver-typed, import-qualified, name-global; builtin/unresolved = no link.
+	_, err := tx.Exec(`
+		ALTER TABLE calls ADD COLUMN resolution TEXT NOT NULL DEFAULT 'name-global';
+		ALTER TABLE calls ADD COLUMN receiver_name TEXT;
+		CREATE INDEX IF NOT EXISTS idx_calls_resolution ON calls(resolution);
+	`)
+	if err != nil {
+		return err
+	}
+
+	// functions: definition-side metadata for resolution.
+	//   kind: 'func' | 'method'
+	//   receiver_type: e.g. 'Flags' for func (f *Flags) X(); NULL for plain funcs
+	//   package: the file's package name, for same-package lookups
+	_, err = tx.Exec(`
+		ALTER TABLE functions ADD COLUMN kind TEXT NOT NULL DEFAULT 'func';
+		ALTER TABLE functions ADD COLUMN receiver_type TEXT;
+		ALTER TABLE functions ADD COLUMN package TEXT;
+		CREATE INDEX IF NOT EXISTS idx_functions_pkg_name ON functions(package, name);
+		CREATE INDEX IF NOT EXISTS idx_functions_recv ON functions(receiver_type, name);
+	`)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// migrationV3 (Phase 9a) records each function's single-value return type, so
+// the resolver can type locals bound by `x := someCall()` and resolve method
+// calls on them. NULL for multi-return, tuple, interface, or otherwise
+// non-receiver-usable returns.
+func migrationV3(tx *sql.Tx) error {
+	_, err := tx.Exec(`ALTER TABLE functions ADD COLUMN return_type TEXT;`)
+	return err
+}
+
+// migrationV4 (Phase 9b) adds struct-field and package-level var type maps so
+// the resolver can type field receivers (s.db.Query()) and package-global
+// receivers (globalCfg.Method()). Both are pure metadata tables, repopulated on
+// reindex; defaults keep non-Go and pre-existing data unaffected.
+func migrationV4(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		CREATE TABLE IF NOT EXISTS struct_fields (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			struct_type TEXT NOT NULL,
+			field_name  TEXT NOT NULL,
+			field_type  TEXT NOT NULL,
+			package     TEXT,
+			file_path   TEXT NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_struct_fields_lookup ON struct_fields(struct_type, field_name);
+		CREATE INDEX IF NOT EXISTS idx_struct_fields_file ON struct_fields(file_path);
+	`)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(`
+		CREATE TABLE IF NOT EXISTS package_vars (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name      TEXT NOT NULL,
+			var_type  TEXT NOT NULL,
+			package   TEXT,
+			file_path TEXT NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_package_vars_lookup ON package_vars(package, name);
+		CREATE INDEX IF NOT EXISTS idx_package_vars_file ON package_vars(file_path);
+	`)
+	return err
+}
+
+// migrationV5 adds class inheritance edges so the resolver can resolve calls to
+// INHERITED methods — e.g. Client(BaseClient) calling self.build_request() where
+// build_request is defined on BaseClient. Without this, self.<inherited>() calls
+// go unresolved, blinding the call graph on real OOP codebases (the dominant
+// Python/TS pattern). Repopulated on reindex; empty for languages/files w/o classes.
+func migrationV5(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		CREATE TABLE IF NOT EXISTS class_bases (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			class_name TEXT NOT NULL,
+			base_name  TEXT NOT NULL,
+			package    TEXT,
+			file_path  TEXT NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_class_bases_lookup ON class_bases(class_name);
+		CREATE INDEX IF NOT EXISTS idx_class_bases_file ON class_bases(file_path);
+	`)
+	return err
+}
+
+// migrationV6 makes the FTS5 indexes self-maintaining via sync triggers, instead
+// of a post-commit full `'rebuild'`. The old flow committed the data transaction,
+// then rebuilt the entire external-content FTS as a separate step — leaving a
+// window where a concurrent query_codebase saw an empty/locked FTS table (the
+// background reindex worker racing reader queries; this was the true cause of the
+// E01 over-exploration). With AFTER INSERT/UPDATE/DELETE triggers, every data
+// mutation updates the FTS index INSIDE the same transaction, so in WAL mode a
+// reader sees the old committed state until a single atomic flip to the new one —
+// no empty window — and incremental edits cost O(changed rows), not O(repo).
+//
+// For an FTS5 external-content table, deletes/updates must push the OLD row values
+// through the special 'delete' command to keep the index consistent; inserts/the
+// new side of an update push the new values.
+func migrationV6(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		-- functions_fts (content='functions', columns: name, file_path, code, docstring)
+		CREATE TRIGGER IF NOT EXISTS functions_ai AFTER INSERT ON functions BEGIN
+			INSERT INTO functions_fts(rowid, name, file_path, code, docstring)
+			VALUES (new.id, new.name, new.file_path, new.code, new.docstring);
+		END;
+		CREATE TRIGGER IF NOT EXISTS functions_ad AFTER DELETE ON functions BEGIN
+			INSERT INTO functions_fts(functions_fts, rowid, name, file_path, code, docstring)
+			VALUES ('delete', old.id, old.name, old.file_path, old.code, old.docstring);
+		END;
+		CREATE TRIGGER IF NOT EXISTS functions_au AFTER UPDATE ON functions BEGIN
+			INSERT INTO functions_fts(functions_fts, rowid, name, file_path, code, docstring)
+			VALUES ('delete', old.id, old.name, old.file_path, old.code, old.docstring);
+			INSERT INTO functions_fts(rowid, name, file_path, code, docstring)
+			VALUES (new.id, new.name, new.file_path, new.code, new.docstring);
+		END;
+
+		-- types_fts (content='types', columns: name, file_path, definition)
+		CREATE TRIGGER IF NOT EXISTS types_ai AFTER INSERT ON types BEGIN
+			INSERT INTO types_fts(rowid, name, file_path, definition)
+			VALUES (new.id, new.name, new.file_path, new.definition);
+		END;
+		CREATE TRIGGER IF NOT EXISTS types_ad AFTER DELETE ON types BEGIN
+			INSERT INTO types_fts(types_fts, rowid, name, file_path, definition)
+			VALUES ('delete', old.id, old.name, old.file_path, old.definition);
+		END;
+		CREATE TRIGGER IF NOT EXISTS types_au AFTER UPDATE ON types BEGIN
+			INSERT INTO types_fts(types_fts, rowid, name, file_path, definition)
+			VALUES ('delete', old.id, old.name, old.file_path, old.definition);
+			INSERT INTO types_fts(rowid, name, file_path, definition)
+			VALUES (new.id, new.name, new.file_path, new.definition);
+		END;
+	`)
+	if err != nil {
+		return err
+	}
+	// Bring the FTS content current with whatever rows already exist (one final
+	// full rebuild at migration time; triggers maintain it incrementally after).
+	if _, err := tx.Exec("INSERT INTO functions_fts(functions_fts) VALUES('rebuild')"); err != nil {
+		return err
+	}
+	_, err = tx.Exec("INSERT INTO types_fts(types_fts) VALUES('rebuild')")
+	return err
 }

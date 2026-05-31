@@ -1,0 +1,84 @@
+{
+  "status": "completed",
+  "final_answer": "Here is the **complete blast radius** of `_send_single_request` — every method that can eventually reach it, organized by call-chain depth. Both the **sync** (`Client`, lines ~1001) and **async** (`AsyncClient`, lines ~1717) versions share the same call-chain shape, so they are listed together per layer.\n\n---\n\n## Full Caller Chain for `_send_single_request` (`httpx/_client.py`)\n\nAll callers live in **`httpx/_client.py`**.\n\n---\n\n### Depth 1 — Direct Callers\n| Method | Line | Client |\n|---|---|---|\n| `_send_handling_redirects` | 964 | `Client` (sync) |\n| `_send_handling_redirects` | 1679 | `AsyncClient` (async) |\n\n---\n\n### Depth 2 — Calls `_send_handling_redirects`\n| Method | Line | Client |\n|---|---|---|\n| `_send_handling_auth` | 930 | `Client` (sync) |\n| `_send_handling_auth` | 1645 | `AsyncClient` (async) |\n\n---\n\n### Depth 3 — Calls `_send_handling_auth`\n| Method | Line | Client |\n|---|---|---|\n| `send` | 879 | `Client` (sync) |\n| `send` | 1594 | `AsyncClient` (async) |\n\n---\n\n### Depth 4 — Calls `send`\n| Method | Line | Client |\n|---|---|---|\n| `request` | 771 | `Client` (sync) |\n| `request` | 1485 | `AsyncClient` (async) |\n| `stream` | 828 | `Client` (sync) |\n| `stream` | 1543 | `AsyncClient` (async) |\n\n---\n\n### Depth 5 — Calls `request` or `stream` (public HTTP verb shortcuts)\n| Method | Line | Client |\n|---|---|---|\n| `get` | 1036 | `Client` (sync) |\n| `get` | 1751 | `AsyncClient` (async) |\n| `options` | 1065 | `Client` (sync) |\n| `options` | 1780 | `AsyncClient` (async) |\n| `head` | 1094 | `Client` (sync) |\n| `head` | 1809 | `AsyncClient` (async) |\n| `post` | 1123 | `Client` (sync) |\n| `post` | 1838 | `AsyncClient` (async) |\n| `put` | 1160 | `Client` (sync) |\n| `put` | 1875 | `AsyncClient` (async) |\n| `patch` | 1197 | `Client` (sync) |\n| `patch` | 1912 | `AsyncClient` (async) |\n| `delete` | 1234 | `Client` (sync) |\n| `delete` | 1949 | `AsyncClient` (async) |\n\n---\n\n## Summary\n\nThe full transitive caller set is **24 methods** across 5 layers, all in `httpx/_client.py`:\n\n```\nget / options / head / post / put / patch / delete  (×2 sync+async)\n  └─► request / stream  (×2)\n        └─► send  (×2)\n              └─► _send_handling_auth  (×2)\n                    └─► _send_handling_redirects  (×2)\n                          └─► _send_single_request  ← your refactor target\n```\n\nAny behavioral or signature change to `_send_single_request` can ripple all the way up to every public HTTP convenience method on both `Client` and `AsyncClient`.",
+  "turns": [
+    {
+      "index": 0,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_1EDhmngQX4y9Eo7hrZKMP9",
+          "name": "get_definition",
+          "input": {
+            "symbol": "_send_single_request"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 1799,
+      "output_tokens": 59,
+      "tool_calls": [
+        {
+          "name": "get_definition",
+          "input": {
+            "symbol": "_send_single_request"
+          },
+          "result": "{\"ambiguity_reason\":\"2 exact matches have equal priority; use the relevant module/file from matches.\",\"ambiguous\":true,\"answer\":\"\\\"_send_single_request\\\" is defined in 2 places (listed in matches). Pick the one in the relevant module; no further keyword search needed.\",\"answer_status\":\"ambiguous\",\"matches\":[{\"name\":\"_send_single_request\",\"kind\":\"method\",\"label\":\"method\",\"file\":\"httpx/_client.py\",\"line\":1001},{\"name\":\"_send_single_request\",\"kind\":\"method\",\"label\":\"method\",\"file\":\"httpx/_client.py\",\"line\":1717}],\"recommended_next_action\":\"inspect_relevant_file\",\"total\":2}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "content": [
+        {
+          "type": "text",
+          "text": "There are two definitions — one in the sync client (line 1001) and one in the async client (line 1717). Let me trace the full caller chain for both simultaneously."
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_eSmPB5LuQs0YGTX5X0m5Wd",
+          "name": "get_call_chain",
+          "input": {
+            "depth": 5,
+            "direction": "callers",
+            "function_name": "_send_single_request"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 2028,
+      "output_tokens": 137,
+      "tool_calls": [
+        {
+          "name": "get_call_chain",
+          "input": {
+            "depth": 5,
+            "direction": "callers",
+            "function_name": "_send_single_request"
+          },
+          "result": "{\"callers\":[{\"name\":\"_send_handling_redirects\",\"file_path\":\"httpx/_client.py\",\"line\":964,\"depth\":1,\"resolution\":\"receiver-typed\"},{\"name\":\"_send_handling_redirects\",\"file_path\":\"httpx/_client.py\",\"line\":1679,\"depth\":1,\"resolution\":\"receiver-typed\"},{\"name\":\"_send_handling_auth\",\"file_path\":\"httpx/_client.py\",\"line\":930,\"depth\":2,\"resolution\":\"receiver-typed\"},{\"name\":\"_send_handling_auth\",\"file_path\":\"httpx/_client.py\",\"line\":1645,\"depth\":2,\"resolution\":\"receiver-typed\"},{\"name\":\"send\",\"file_path\":\"httpx/_client.py\",\"line\":879,\"depth\":3,\"resolution\":\"receiver-typed\"},{\"name\":\"send\",\"file_path\":\"httpx/_client.py\",\"line\":1594,\"depth\":3,\"resolution\":\"receiver-typed\"},{\"name\":\"request\",\"file_path\":\"httpx/_client.py\",\"line\":771,\"depth\":4,\"resolution\":\"receiver-typed\"},{\"name\":\"request\",\"file_path\":\"httpx/_client.py\",\"line\":1485,\"depth\":4,\"resolution\":\"receiver-typed\"},{\"name\":\"stream\",\"file_path\":\"httpx/_client.py\",\"line\":828,\"depth\":4,\"resolution\":\"receiver-typed\"},{\"name\":\"stream\",\"file_path\":\"httpx/_client.py\",\"line\":1543,\"depth\":4,\"resolution\":\"receiver-typed\"},{\"name\":\"delete\",\"file_path\":\"httpx/_client.py\",\"line\":1234,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"delete\",\"file_path\":\"httpx/_client.py\",\"line\":1949,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"get\",\"file_path\":\"httpx/_client.py\",\"line\":1036,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"get\",\"file_path\":\"httpx/_client.py\",\"line\":1751,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"head\",\"file_path\":\"httpx/_client.py\",\"line\":1094,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"head\",\"file_path\":\"httpx/_client.py\",\"line\":1809,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"options\",\"file_path\":\"httpx/_client.py\",\"line\":1065,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"options\",\"file_path\":\"httpx/_client.py\",\"line\":1780,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"patch\",\"file_path\":\"httpx/_client.py\",\"line\":1197,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"patch\",\"file_path\":\"httpx/_client.py\",\"line\":1912,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"post\",\"file_path\":\"httpx/_client.py\",\"line\":1123,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"post\",\"file_path\":\"httpx/_client.py\",\"line\":1838,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"put\",\"file_path\":\"httpx/_client.py\",\"line\":1160,\"depth\":5,\"resolution\":\"receiver-typed\"},{\"name\":\"put\",\"file_path\":\"httpx/_client.py\",\"line\":1875,\"depth\":5,\"resolution\":\"receiver-typed\"}],\"depth\":5,\"function\":\"_send_single_request\"}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "content": [
+        {
+          "type": "text",
+          "text": "Here is the **complete blast radius** of `_send_single_request` — every method that can eventually reach it, organized by call-chain depth. Both the **sync** (`Client`, lines ~1001) and **async** (`AsyncClient`, lines ~1717) versions share the same call-chain shape, so they are listed together per layer.\n\n---\n\n## Full Caller Chain for `_send_single_request` (`httpx/_client.py`)\n\nAll callers live in **`httpx/_client.py`**.\n\n---\n\n### Depth 1 — Direct Callers\n| Method | Line | Client |\n|---|---|---|\n| `_send_handling_redirects` | 964 | `Client` (sync) |\n| `_send_handling_redirects` | 1679 | `AsyncClient` (async) |\n\n---\n\n### Depth 2 — Calls `_send_handling_redirects`\n| Method | Line | Client |\n|---|---|---|\n| `_send_handling_auth` | 930 | `Client` (sync) |\n| `_send_handling_auth` | 1645 | `AsyncClient` (async) |\n\n---\n\n### Depth 3 — Calls `_send_handling_auth`\n| Method | Line | Client |\n|---|---|---|\n| `send` | 879 | `Client` (sync) |\n| `send` | 1594 | `AsyncClient` (async) |\n\n---\n\n### Depth 4 — Calls `send`\n| Method | Line | Client |\n|---|---|---|\n| `request` | 771 | `Client` (sync) |\n| `request` | 1485 | `AsyncClient` (async) |\n| `stream` | 828 | `Client` (sync) |\n| `stream` | 1543 | `AsyncClient` (async) |\n\n---\n\n### Depth 5 — Calls `request` or `stream` (public HTTP verb shortcuts)\n| Method | Line | Client |\n|---|---|---|\n| `get` | 1036 | `Client` (sync) |\n| `get` | 1751 | `AsyncClient` (async) |\n| `options` | 1065 | `Client` (sync) |\n| `options` | 1780 | `AsyncClient` (async) |\n| `head` | 1094 | `Client` (sync) |\n| `head` | 1809 | `AsyncClient` (async) |\n| `post` | 1123 | `Client` (sync) |\n| `post` | 1838 | `AsyncClient` (async) |\n| `put` | 1160 | `Client` (sync) |\n| `put` | 1875 | `AsyncClient` (async) |\n| `patch` | 1197 | `Client` (sync) |\n| `patch` | 1912 | `AsyncClient` (async) |\n| `delete` | 1234 | `Client` (sync) |\n| `delete` | 1949 | `AsyncClient` (async) |\n\n---\n\n## Summary\n\nThe full transitive caller set is **24 methods** across 5 layers, all in `httpx/_client.py`:\n\n```\nget / options / head / post / put / patch / delete  (×2 sync+async)\n  └─► request / stream  (×2)\n        └─► send  (×2)\n              └─► _send_handling_auth  (×2)\n                    └─► _send_handling_redirects  (×2)\n                          └─► _send_single_request  ← your refactor target\n```\n\nAny behavioral or signature change to `_send_single_request` can ripple all the way up to every public HTTP convenience method on both `Client` and `AsyncClient`."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "input_tokens": 2958,
+      "output_tokens": 917
+    }
+  ],
+  "total_input_tokens": 6785,
+  "total_output_tokens": 1113,
+  "tool_call_count": 2,
+  "turns_to_answer": 3,
+  "wall_clock_ms": 25640,
+  "retries": 0
+}

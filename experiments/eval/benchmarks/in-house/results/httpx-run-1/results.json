@@ -1,0 +1,664 @@
+{
+  "manifest": {
+    "protocol_hash": "ad11fa7f658edfa319371030a1b30720f31f2b6f606a6c059e80edb11330dfa8",
+    "protocol_file": "protocol/httpx.json",
+    "task_model": "us.anthropic.claude-sonnet-4-6",
+    "judge_model": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "temperature": 0,
+    "max_turns": 15,
+    "token_budget": 600000,
+    "replicates": 1,
+    "repo_shas": {
+      "httpx": "b5addb64f0161ff6bfe94c124ef76f6a1fba5254"
+    },
+    "index_shas": {
+      "httpx": "b5addb64f0161ff6bfe94c124ef76f6a1fba5254"
+    },
+    "max_context_bin": "/tmp/max-context-eval",
+    "rg_version": "ripgrep 14.1.1 (rev 4649aa9700)",
+    "started_at": "2026-05-31T14:33:24Z",
+    "grep_playbook": "\nYou have three tools for exploring the repository: grep, read_file, list_files.\n\nWork like a skilled engineer at a terminal:\n- Start by SEARCHING for the most specific term in the task. Prefer definition-anchored\n  patterns: for a symbol Foo, try patterns like \"class Foo\", \"def Foo\", \"function Foo\",\n  \"Foo =\", or \"interface Foo\" depending on the language.\n- Use ripgrep flags via \"args\": -w for whole-word, -i for case-insensitive, -F for a\n  literal (non-regex) string, -t py / -t ts to restrict by language, -g to include/exclude\n  by glob, -l to list only matching files, -A/-B/-C for surrounding context.\n- If a search is too noisy, make the pattern more specific or add a type/glob filter.\n  If it returns nothing, broaden it or try a synonym.\n- Use list_files to understand layout when a search alone is ambiguous.\n- read_file with a line range to confirm a definition or read just the relevant region;\n  read the whole file only when you truly need it.\n- Stop as soon as you can answer confidently. Always cite exact repo-relative file paths.\n",
+    "mc_playbook": "\nYou have max-context's tools for exploring the repository (see each tool's description\nfor its exact arguments). They query a pre-built index of the codebase.\n\nWork efficiently:\n- To FIND where a function, type, or file lives, search the index by keyword or name; it\n  returns ranked results with file paths, line numbers, and snippets.\n- To understand how code connects, trace the call graph in either direction (who calls a\n  function, and what it calls), to a chosen depth.\n- To assess what a change affects, ask for the impact/blast-radius of the relevant files\n  or symbols.\n- To get oriented in an unfamiliar repo, request the architecture summary.\n- Prefer a targeted query over reading whole files. Stop as soon as you can answer\n  confidently. Always cite exact repo-relative file paths.\n"
+  },
+  "runs": [
+    {
+      "task_id": "httpx-R01",
+      "repo": "httpx",
+      "arm": "grep",
+      "replicate": 0,
+      "phrasing": "Which file defines the main URL class in this library?",
+      "status": "completed",
+      "final_answer": "The main `URL` class is defined in **`httpx/_urls.py`** (line 15).",
+      "input_tokens": 2918,
+      "output_tokens": 94,
+      "tool_calls": 1,
+      "turns_to_answer": 2,
+      "wall_clock_ms": 5366,
+      "retries": 0,
+      "retrieval": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "hit": true,
+        "predicted": [
+          "httpx/_urls.py"
+        ],
+        "matched": [
+          "httpx/_urls.py"
+        ],
+        "missed": null,
+        "lead_file": "httpx/_urls.py",
+        "lead_correct": true
+      },
+      "transcript_file": "transcripts/httpx-R01_grep_r0.json"
+    },
+    {
+      "task_id": "httpx-R01",
+      "repo": "httpx",
+      "arm": "max-context",
+      "replicate": 0,
+      "phrasing": "Which file defines the main URL class in this library?",
+      "status": "completed",
+      "final_answer": "The main `URL` class is defined in **`httpx/_urls.py`**.\n\nThis is the canonical class-level definition (as opposed to the `url` method/property references in `_models.py` and test files). It's the core URL type for the `httpx` library.",
+      "input_tokens": 3720,
+      "output_tokens": 122,
+      "tool_calls": 1,
+      "turns_to_answer": 2,
+      "wall_clock_ms": 6019,
+      "retries": 0,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1,
+        "f1": 0.6666666666666666,
+        "hit": true,
+        "predicted": [
+          "httpx/_urls.py",
+          "_models.py"
+        ],
+        "matched": [
+          "httpx/_urls.py"
+        ],
+        "missed": null,
+        "lead_file": "httpx/_urls.py",
+        "lead_correct": true
+      },
+      "transcript_file": "transcripts/httpx-R01_max-context_r0.json"
+    },
+    {
+      "task_id": "httpx-R02",
+      "repo": "httpx",
+      "arm": "grep",
+      "replicate": 0,
+      "phrasing": "Where is the Response class defined?",
+      "status": "completed",
+      "final_answer": "The `Response` class is defined in **`httpx/_models.py`** at **line 515**.",
+      "input_tokens": 2964,
+      "output_tokens": 96,
+      "tool_calls": 1,
+      "turns_to_answer": 2,
+      "wall_clock_ms": 6220,
+      "retries": 0,
+      "retrieval": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "hit": true,
+        "predicted": [
+          "httpx/_models.py"
+        ],
+        "matched": [
+          "httpx/_models.py"
+        ],
+        "missed": null,
+        "lead_file": "httpx/_models.py",
+        "lead_correct": true
+      },
+      "transcript_file": "transcripts/httpx-R02_grep_r0.json"
+    },
+    {
+      "task_id": "httpx-R02",
+      "repo": "httpx",
+      "arm": "max-context",
+      "replicate": 0,
+      "phrasing": "Where is the Response class defined?",
+      "status": "completed",
+      "final_answer": "The `Response` class is defined in **`httpx/_models.py`**.",
+      "input_tokens": 3644,
+      "output_tokens": 75,
+      "tool_calls": 1,
+      "turns_to_answer": 2,
+      "wall_clock_ms": 5021,
+      "retries": 0,
+      "retrieval": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "hit": true,
+        "predicted": [
+          "httpx/_models.py"
+        ],
+        "matched": [
+          "httpx/_models.py"
+        ],
+        "missed": null,
+        "lead_file": "httpx/_models.py",
+        "lead_correct": true
+      },
+      "transcript_file": "transcripts/httpx-R02_max-context_r0.json"
+    },
+    {
+      "task_id": "httpx-R03",
+      "repo": "httpx",
+      "arm": "grep",
+      "replicate": 0,
+      "phrasing": "Which file and class implements HTTP digest authentication?",
+      "status": "completed",
+      "final_answer": "HTTP digest authentication is implemented in the following file and classes:\n\n**File:** `httpx/_auth.py`\n\n**Classes:**\n1. **`DigestAuth`** (line 175) — The main public class that implements HTTP Digest Authentication. It extends `Auth` and handles the full digest auth flow, including:\n   - `auth_flow()` — sends the initial request, handles a `401` challenge response, and re-sends with an `Authorization` header.\n   - `_parse_challenge()` — parses the `WWW-Authenticate: Digest ...` header from the server.\n   - `_build_auth_header()` — constructs the `Authorization` header using the digest algorithm (MD5, SHA-256, SHA-512, etc.), nonce, cnonce, qop, and other fields per RFC 2069/2617/7616.\n\n2. **`_DigestAuthChallenge`** (line 343) — A private `NamedTuple` used internally to hold the parsed fields from the server's digest challenge (`realm`, `nonce`, `algorithm`, `opaque`, `qop`).",
+      "input_tokens": 8727,
+      "output_tokens": 527,
+      "tool_calls": 3,
+      "turns_to_answer": 4,
+      "wall_clock_ms": 16540,
+      "retries": 0,
+      "retrieval": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "hit": true,
+        "predicted": [
+          "httpx/_auth.py"
+        ],
+        "matched": [
+          "httpx/_auth.py"
+        ],
+        "missed": null,
+        "lead_file": "httpx/_auth.py",
+        "lead_correct": true
+      },
+      "transcript_file": "transcripts/httpx-R03_grep_r0.json"
+    },
+    {
+      "task_id": "httpx-R03",
+      "repo": "httpx",
+      "arm": "max-context",
+      "replicate": 0,
+      "phrasing": "Which file and class implements HTTP digest authentication?",
+      "status": "completed",
+      "final_answer": "HTTP digest authentication is implemented in:\n\n- **File:** `httpx/_auth.py`\n- **Class:** `DigestAuth`\n\nThe `DigestAuth` class in `httpx/_auth.py` is the definitive implementation of HTTP Digest Authentication in this codebase.",
+      "input_tokens": 5909,
+      "output_tokens": 236,
+      "tool_calls": 3,
+      "turns_to_answer": 3,
+      "wall_clock_ms": 8755,
+      "retries": 0,
+      "retrieval": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "hit": true,
+        "predicted": [
+          "httpx/_auth.py"
+        ],
+        "matched": [
+          "httpx/_auth.py"
+        ],
+        "missed": null,
+        "lead_file": "httpx/_auth.py",
+        "lead_correct": true
+      },
+      "transcript_file": "transcripts/httpx-R03_max-context_r0.json"
+    },
+    {
+      "task_id": "httpx-R04",
+      "repo": "httpx",
+      "arm": "grep",
+      "replicate": 0,
+      "phrasing": "Where is the request-building logic — the method that assembles an outgoing request from method, url, headers etc.?",
+      "status": "completed",
+      "final_answer": "The request-building logic lives in two tightly coupled places:\n\n---\n\n### 1. `httpx/_client.py` — `Client.build_request()` (line 340)\n\nThis is the **high-level entry point** on the client. It:\n- Accepts `method`, `url`, `headers`, `cookies`, `params`, `content`/`data`/`files`/`json`, `timeout`, and `extensions`.\n- Merges all of those with the client-level defaults via helpers (`_merge_url`, `_merge_headers`, `_merge_cookies`, `_merge_queryparams`).\n- Resolves the timeout and injects it into `extensions`.\n- Constructs and returns a `Request` instance.\n\n```python\n# httpx/_client.py, line 340\ndef build_request(self, method, url, *, content, data, files, json,\n                  params, headers, cookies, timeout, extensions) -\u003e Request:\n```\n\n---\n\n### 2. `httpx/_models.py` — `Request.__init__()` (line 382) and `Request._prepare()` (line 441)\n\nThis is the **low-level assembly**. `__init__` does:\n- Normalises `method` (uppercased) and builds the `URL` (merging query params).\n- Constructs `Headers`.\n- Applies cookies via `Cookies.set_cookie_header()`.\n- Calls `encode_request()` to serialise the body (`content`, `data`, `files`, or `json`) into a byte stream and derive content headers.\n- Calls `_prepare()` to inject auto-headers.\n\n`_prepare()` (line 441) then:\n- Merges the body-derived headers (e.g. `Content-Type`, `Content-Length`, `Transfer-Encoding`) into the request headers, respecting any explicitly set values.\n- Auto-adds a `Host` header from the URL if absent.\n- Auto-adds `Content-Length: 0` for POST/PUT/PATCH if no body length header is present.\n\n---\n\n**Summary of the call chain:**\n\n```\nClient.build_request()          # httpx/_client.py:340  — merges client defaults\n  └─► Request.__init__()        # httpx/_models.py:382  — normalises all fields\n        └─► encode_request()    #                        — serialises the body\n        └─► Request._prepare()  # httpx/_models.py:441  — injects Host / Content-Length\n```",
+      "input_tokens": 17504,
+      "output_tokens": 1215,
+      "tool_calls": 7,
+      "turns_to_answer": 7,
+      "wall_clock_ms": 31472,
+      "retries": 0,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1,
+        "f1": 0.6666666666666666,
+        "hit": true,
+        "predicted": [
+          "httpx/_client.py",
+          "httpx/_models.py"
+        ],
+        "matched": [
+          "httpx/_client.py"
+        ],
+        "missed": null,
+        "lead_file": "httpx/_client.py",
+        "lead_correct": true
+      },
+      "transcript_file": "transcripts/httpx-R04_grep_r0.json"
+    },
+    {
+      "task_id": "httpx-R04",
+      "repo": "httpx",
+      "arm": "max-context",
+      "replicate": 0,
+      "phrasing": "Where is the request-building logic — the method that assembles an outgoing request from method, url, headers etc.?",
+      "status": "completed",
+      "final_answer": "The request-building logic lives in **`httpx/_client.py`**, centred on two methods:\n\n---\n\n### 1. `Client.build_request` — **`httpx/_client.py`, line 340**\nThis is the primary public method that assembles an outgoing `Request` object from its constituent parts. It:\n- Accepts `method`, `url`, `content`/`data`/`files`/`json`, `params`, `headers`, and `cookies`.\n- Merges client-level defaults with per-request values via four private helpers (all in the same file):\n  | Helper | Line | Responsibility |\n  |---|---|---|\n  | `_merge_url` | 391 | Combines the base URL with the request path/params |\n  | `_merge_headers` | 424 | Merges client default headers with request-specific headers |\n  | `_merge_cookies` | 413 | Merges client cookie jar with request cookies |\n  | `_merge_queryparams` | 433 | Merges client-level query params with request params |\n- Constructs and returns an `httpx.Request` instance.\n\n### 2. `Client._build_redirect_request` — **`httpx/_client.py`, line 475**\nA secondary builder used specifically when following redirects. It takes an existing `Request` and a `Response` and assembles the next request in the redirect chain (potentially changing method, stripping the body on 303, rewriting the URL, etc.).\n\n---\n\n**In short:** go to `httpx/_client.py:340` for the main request-assembly logic.",
+      "input_tokens": 9634,
+      "output_tokens": 738,
+      "tool_calls": 5,
+      "turns_to_answer": 4,
+      "wall_clock_ms": 18458,
+      "retries": 0,
+      "retrieval": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "hit": true,
+        "predicted": [
+          "httpx/_client.py"
+        ],
+        "matched": [
+          "httpx/_client.py"
+        ],
+        "missed": null,
+        "lead_file": "httpx/_client.py",
+        "lead_correct": true
+      },
+      "transcript_file": "transcripts/httpx-R04_max-context_r0.json"
+    },
+    {
+      "task_id": "httpx-R05",
+      "repo": "httpx",
+      "arm": "grep",
+      "replicate": 0,
+      "phrasing": "Which file defines the Timeout configuration type?",
+      "status": "completed",
+      "final_answer": "The `Timeout` configuration type is defined in **`httpx/_config.py`**, at line 72:\n\n```python\nclass Timeout:\n```",
+      "input_tokens": 6654,
+      "output_tokens": 253,
+      "tool_calls": 4,
+      "turns_to_answer": 4,
+      "wall_clock_ms": 10932,
+      "retries": 0,
+      "retrieval": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "hit": true,
+        "predicted": [
+          "httpx/_config.py"
+        ],
+        "matched": [
+          "httpx/_config.py"
+        ],
+        "missed": null,
+        "lead_file": "httpx/_config.py",
+        "lead_correct": true
+      },
+      "transcript_file": "transcripts/httpx-R05_grep_r0.json"
+    },
+    {
+      "task_id": "httpx-R05",
+      "repo": "httpx",
+      "arm": "max-context",
+      "replicate": 0,
+      "phrasing": "Which file defines the Timeout configuration type?",
+      "status": "completed",
+      "final_answer": "The `Timeout` configuration type (class) is defined in:\n\n**`httpx/_config.py`**\n\nThe same-named `timeout` symbols in `httpx/_client.py` (lines 254 and 258) are merely methods, not the type definition itself.",
+      "input_tokens": 3798,
+      "output_tokens": 120,
+      "tool_calls": 1,
+      "turns_to_answer": 2,
+      "wall_clock_ms": 5838,
+      "retries": 0,
+      "retrieval": {
+        "precision": 0.5,
+        "recall": 1,
+        "f1": 0.6666666666666666,
+        "hit": true,
+        "predicted": [
+          "httpx/_config.py",
+          "httpx/_client.py"
+        ],
+        "matched": [
+          "httpx/_config.py"
+        ],
+        "missed": null,
+        "lead_file": "httpx/_config.py",
+        "lead_correct": true
+      },
+      "transcript_file": "transcripts/httpx-R05_max-context_r0.json"
+    },
+    {
+      "task_id": "httpx-E01",
+      "repo": "httpx",
+      "arm": "grep",
+      "replicate": 0,
+      "phrasing": "I want to add a new default header to every outgoing request made by the Client. Where in the code should I make this change, and what is the minimal edit?",
+      "status": "completed",
+      "final_answer": "That's everything needed. Here is the complete picture:\n\n---\n\n## Where to make the change\n\n**File:** `httpx/_client.py`\n**Method:** `headers` setter on `BaseClient` — lines **305–316**\n\n```python\n@headers.setter\ndef headers(self, headers: HeaderTypes) -\u003e None:\n    client_headers = Headers(\n        {\n            b\"Accept\": b\"*/*\",\n            b\"Accept-Encoding\": ACCEPT_ENCODING.encode(\"ascii\"),\n            b\"Connection\": b\"keep-alive\",\n            b\"User-Agent\": USER_AGENT.encode(\"ascii\"),\n        }\n    )\n    client_headers.update(headers)\n    self._headers = client_headers\n```\n\nThis setter is the **single place** where the client's default headers are assembled. Every outgoing request goes through `build_request` → `_merge_headers`, which starts from `self.headers` (i.e. `self._headers`), so anything added here is automatically included in every request.\n\n---\n\n## Minimal edit\n\nAdd your new header to the dictionary literal inside the setter:\n\n```python\n@headers.setter\ndef headers(self, headers: HeaderTypes) -\u003e None:\n    client_headers = Headers(\n        {\n            b\"Accept\": b\"*/*\",\n            b\"Accept-Encoding\": ACCEPT_ENCODING.encode(\"ascii\"),\n            b\"Connection\": b\"keep-alive\",\n            b\"User-Agent\": USER_AGENT.encode(\"ascii\"),\n            b\"X-My-Header\": b\"my-value\",   # ← add your header here\n        }\n    )\n    client_headers.update(headers)\n    self._headers = client_headers\n```\n\n---\n\n## Why this is the right place\n\n| Call chain | Role |\n|---|---|\n| `Client.get/post/…` | calls `build_request` |\n| `build_request` | calls `_merge_headers(per_request_headers)` |\n| `_merge_headers` | starts from `Headers(self.headers)` and overlays per-request headers |\n| `headers` setter | **builds `self.headers`** from the hardcoded defaults dict + any headers passed to the constructor |\n\nBecause `_merge_headers` seeds itself from `self.headers`, any header you add to the defaults dict in the setter will be present on every outgoing request, and can still be overridden on a per-request basis (since `merged_headers.update(headers)` runs after).",
+      "input_tokens": 24800,
+      "output_tokens": 1113,
+      "tool_calls": 7,
+      "turns_to_answer": 5,
+      "wall_clock_ms": 26253,
+      "retries": 0,
+      "rubric": {
+        "items": {
+          "actionable": 2,
+          "file": 1,
+          "locus": 2
+        },
+        "total": 5,
+        "max_total": 5,
+        "reasoning": "The candidate correctly identifies httpx/_client.py as the file, pinpoints the headers setter as the locus where default headers are assembled (which feeds into build_request via self.headers), and provides a concrete, minimal edit showing exactly where and how to add a new default header with proper formatting."
+      },
+      "transcript_file": "transcripts/httpx-E01_grep_r0.json"
+    },
+    {
+      "task_id": "httpx-E01",
+      "repo": "httpx",
+      "arm": "max-context",
+      "replicate": 0,
+      "phrasing": "I want to add a new default header to every outgoing request made by the Client. Where in the code should I make this change, and what is the minimal edit?",
+      "status": "completed",
+      "final_answer": "I have enough information to give a precise, confident answer. Here's what I found:\n\n---\n\n## Where to Make the Change\n\n**File:** `httpx/_client.py`\n\nThere are two places to look at, depending on what you want:\n\n### Option A — Add a header to every request at the `Client` level (recommended)\n\nThe base client `__init__` (around **line 189**) stores `self.headers = Headers(headers)`. This `self.headers` dict is then merged into every outgoing request via `_merge_headers`, which is called by `build_request` (line 340), which in turn is called by every `request`/`stream` method.\n\n**Minimal edit — add your header once in `__init__`:**\n\n```python\n# httpx/_client.py  ~line 189  (BaseClient.__init__)\nself.headers = Headers(headers)\nself.headers[\"X-My-Header\"] = \"my-value\"   # ← add this line\n```\n\nThat single line is enough. Because `_merge_headers` always starts from `self.headers` and overlays per-request headers on top, every request the client makes will carry `X-My-Header` automatically.\n\n---\n\n### Option B — Add it inside `_merge_headers` (line 424) so it applies unconditionally, even if a caller bypasses `self.headers`\n\n```python\n# httpx/_client.py  ~line 424  (BaseClient._merge_headers)\ndef _merge_headers(self, headers=None):\n    merged = Headers(self.headers)\n    merged[\"X-My-Header\"] = \"my-value\"   # ← add this line\n    if headers:\n        merged.update(Headers(headers))\n    return merged\n```\n\n---\n\n### Which to choose?\n\n| | Option A (`__init__`) | Option B (`_merge_headers`) |\n|---|---|---|\n| Header is visible on `client.headers` | ✅ Yes | ❌ No |\n| Can be overridden per-request | ✅ Yes (per-request header wins) | ⚠️ Depends on ordering |\n| Minimal, idiomatic | ✅ Best fit | Slightly more invasive |\n\n**Option A is the minimal, idiomatic change.** It mirrors exactly how users are expected to set default headers (`Client(headers={\"X-My-Header\": \"my-value\"})`), and the merge pipeline already propagates `self.headers` to every outgoing request through `build_request → _merge_headers`.",
+      "input_tokens": 25997,
+      "output_tokens": 1358,
+      "tool_calls": 9,
+      "turns_to_answer": 7,
+      "wall_clock_ms": 34783,
+      "retries": 0,
+      "rubric": {
+        "items": {
+          "actionable": 2,
+          "file": 1,
+          "locus": 2
+        },
+        "total": 5,
+        "max_total": 5,
+        "reasoning": "The candidate correctly identifies httpx/_client.py as the primary file, pinpoints both build_request and the client default-headers handling in __init__ as the relevant loci, and provides two concrete, minimal edits with clear line numbers and code examples that a developer could immediately apply."
+      },
+      "transcript_file": "transcripts/httpx-E01_max-context_r0.json"
+    },
+    {
+      "task_id": "httpx-E02",
+      "repo": "httpx",
+      "arm": "grep",
+      "replicate": 0,
+      "phrasing": "We need to change how the connection/timeout defaults are applied. Where is the Timeout default constructed and used so I can adjust the default value safely?",
+      "status": "completed",
+      "final_answer": "Here is a precise map of everything you need to know:\n\n---\n\n## Where `DEFAULT_TIMEOUT_CONFIG` is defined and used\n\n### 1. Definition — the single source of truth\n\n**`httpx/_config.py`, line 246**\n\n```python\nDEFAULT_TIMEOUT_CONFIG = Timeout(timeout=5.0)\n```\n\nThis is the **only place** the default value (`5.0` seconds) is set. The `Timeout` class itself is defined just above it (lines 72–156) and accepts four independent float-or-None fields: `connect`, `read`, `write`, and `pool`. When constructed with a single positional value like `Timeout(timeout=5.0)`, all four fields are set to that value.\n\n---\n\n### 2. Where it is consumed (all call sites)\n\n| File | Line(s) | Context |\n|---|---|---|\n| `httpx/_client.py` | 17 (import), **196** | `Client.__init__` — default for the `timeout=` parameter of the sync client |\n| `httpx/_client.py` | **653** | `AsyncClient.__init__` — same for the async client |\n| `httpx/_client.py` | **1366** | One more client constructor path |\n| `httpx/_api.py` | 7 (import), **52, 137, 184, 220, 256, 296, 337, 378, 414** | Every top-level convenience function (`httpx.get`, `httpx.post`, `httpx.put`, etc.) uses it as the default for their `timeout=` parameter |\n\n---\n\n### How to safely change the default\n\n**Change only line 246 of `httpx/_config.py`:**\n\n```python\n# Before\nDEFAULT_TIMEOUT_CONFIG = Timeout(timeout=5.0)\n\n# Example: raise the default to 10 seconds\nDEFAULT_TIMEOUT_CONFIG = Timeout(timeout=10.0)\n\n# Example: set different per-phase timeouts\nDEFAULT_TIMEOUT_CONFIG = Timeout(timeout=5.0, connect=30.0)\n\n# Example: disable timeouts by default\nDEFAULT_TIMEOUT_CONFIG = Timeout(timeout=None)\n```\n\nBecause every client constructor and every top-level API function references this single constant as its default argument, changing it here is the **one safe, complete change** needed — no other files require modification.",
+      "input_tokens": 40698,
+      "output_tokens": 1085,
+      "tool_calls": 6,
+      "turns_to_answer": 4,
+      "wall_clock_ms": 24739,
+      "retries": 0,
+      "rubric": {
+        "items": {
+          "actionable": 2,
+          "file": 1,
+          "usage": 2
+        },
+        "total": 5,
+        "max_total": 5,
+        "reasoning": "The candidate precisely identifies httpx/_config.py line 246 as the definition site, comprehensively documents all consumption points in _client.py and _api.py with specific line numbers, and provides concrete, safe edit examples showing how to modify the default value without touching other files."
+      },
+      "transcript_file": "transcripts/httpx-E02_grep_r0.json"
+    },
+    {
+      "task_id": "httpx-E02",
+      "repo": "httpx",
+      "arm": "max-context",
+      "replicate": 0,
+      "phrasing": "We need to change how the connection/timeout defaults are applied. Where is the Timeout default constructed and used so I can adjust the default value safely?",
+      "status": "completed",
+      "final_answer": "Here is a complete picture of where the timeout default is defined and how it flows through the codebase:\n\n---\n\n## Timeout Default: Definition \u0026 Usage\n\n### 1. Single Source of Truth — `httpx/_config.py`\n\nThere are **two things to change** in this one file:\n\n| Symbol | What it is |\n|---|---|\n| `Timeout` (class) | The type that holds `connect`, `read`, `write`, and `pool` timeout values |\n| `DEFAULT_TIMEOUT_CONFIG` (module-level constant) | A pre-constructed `Timeout` instance used as the default everywhere |\n\n**`httpx/_config.py`** is the only place you need to edit. The `DEFAULT_TIMEOUT_CONFIG` constant is constructed there (e.g. `DEFAULT_TIMEOUT_CONFIG = Timeout(5.0)` or similar), and the `Timeout` class `__init__` defines the individual field defaults.\n\n---\n\n### 2. How the Default Flows into Clients — `httpx/_client.py`\n\nThe default propagates through a clear chain:\n\n```\nDEFAULT_TIMEOUT_CONFIG\n        │\n        ▼\n  Client.__init__  (timeout= parameter defaults to DEFAULT_TIMEOUT_CONFIG)\n        │\n        ▼\n  _set_timeout()   (line 584 — normalises/stores the timeout on the client)\n        │\n        ▼\n  send()           (lines 879, 1594 — passes timeout into each request)\n        │\n        ▼\n  request() / stream() / get() / post() / put() / patch() / delete() / head() / options()\n  (all HTTP verb helpers, both sync and async variants)\n```\n\nEvery HTTP method ultimately calls `_set_timeout` → `send`, so the default propagates automatically once set at construction time.\n\n---\n\n### Safe Change Checklist\n\n1. **To change the default value**: Edit `DEFAULT_TIMEOUT_CONFIG` in **`httpx/_config.py`**. This is the single authoritative constant — changing it here updates the default for all clients and all HTTP methods at once.\n\n2. **To change the shape/fields of a timeout** (e.g. add a new `response` timeout): Edit the `Timeout` class `__init__` in **`httpx/_config.py`**, then update `_set_timeout` in **`httpx/_client.py` (line 584)** which is where the value is applied per-request.\n\n3. **Do not** change defaults in the individual verb methods (`get`, `post`, etc.) — they all delegate upward to `send` → `_set_timeout`, so those are not the right place.\n\n4. **Tests to verify**: The index surfaced `test_client_timeout`, `test_connect_timeout`, `test_pool_timeout`, and `test_async_client_new_request_send_timeout` as the relevant test targets to run after your change.",
+      "input_tokens": 22348,
+      "output_tokens": 1604,
+      "tool_calls": 12,
+      "turns_to_answer": 7,
+      "wall_clock_ms": 37280,
+      "retries": 0,
+      "rubric": {
+        "items": {
+          "actionable": 2,
+          "file": 1,
+          "usage": 2
+        },
+        "total": 5,
+        "max_total": 5,
+        "reasoning": "The candidate correctly identifies httpx/_config.py as the definition site for Timeout and DEFAULT_TIMEOUT_CONFIG, clearly explains the consumption path through _client.py (Client.__init__, _set_timeout, send), and provides a concrete, safe edit checklist with specific line numbers and verification steps."
+      },
+      "transcript_file": "transcripts/httpx-E02_max-context_r0.json"
+    },
+    {
+      "task_id": "httpx-G01",
+      "repo": "httpx",
+      "arm": "grep",
+      "replicate": 0,
+      "phrasing": "Why does httpx read proxy settings from environment variables by default, and where is that behavior controlled? Explain the rationale.",
+      "status": "completed",
+      "final_answer": "Now I have everything needed for a thorough, precise answer. Here it is:\n\n---\n\n## Why httpx reads proxy settings from environment variables by default\n\n### The short answer\n\nhttpx follows the long-standing Unix/curl/requests convention that a process should respect the operator's network configuration expressed through environment variables (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, `SSL_CERT_FILE`, `SSL_CERT_DIR`). This lets system administrators, CI pipelines, and container orchestrators inject proxy and TLS settings without touching application code. The behaviour is **on by default** because that is the least-surprising default for a general-purpose HTTP client, but it can be turned off completely with a single flag.\n\n---\n\n### The controlling parameter: `trust_env`\n\nEvery entry point in httpx accepts a `trust_env: bool = True` parameter:\n\n| Location | Default |\n|---|---|\n| `BaseClient.__init__` (`httpx/_client.py:201`) | `True` |\n| `Client.__init__` (`httpx/_client.py:648`) | `True` |\n| `AsyncClient.__init__` (`httpx/_client.py:1373`) | `True` |\n| Top-level helpers `httpx.get/post/request/…` (`httpx/_api.py:55`, etc.) | `True` |\n\nSetting `trust_env=False` disables **all** environment-variable-driven configuration in one shot.\n\n---\n\n### Exactly how it works — the call chain\n\n#### 1. `trust_env` is stored on `BaseClient`\n\n```python\n# httpx/_client.py  (BaseClient.__init__)\nself._trust_env = trust_env          # line 219\n\n@property\ndef trust_env(self) -\u003e bool:\n    return self._trust_env           # line 231-232\n```\n\n#### 2. Proxy map construction — the critical gate\n\nBoth `Client.__init__` and `AsyncClient.__init__` compute a boolean `allow_env_proxies` before building the proxy map:\n\n```python\n# httpx/_client.py  line 685 (Client) / line 1399 (AsyncClient)\nallow_env_proxies = trust_env and transport is None\nproxy_map = self._get_proxy_map(proxy, allow_env_proxies)\n```\n\nThe **second condition** (`transport is None`) is intentional: if the caller has already supplied a custom transport, httpx assumes that transport already handles routing, so env-proxy injection would be redundant and potentially wrong.\n\n#### 3. `_get_proxy_map` — where env vars are actually read\n\n```python\n# httpx/_client.py  lines 239-251\ndef _get_proxy_map(\n    self, proxy: ProxyTypes | None, allow_env_proxies: bool\n) -\u003e dict[str, Proxy | None]:\n    if proxy is None:\n        if allow_env_proxies:\n            return {\n                key: None if url is None else Proxy(url=url)\n                for key, url in get_environment_proxies().items()\n            }\n        return {}\n    else:\n        proxy = Proxy(url=proxy) if isinstance(proxy, (str, URL)) else proxy\n        return {\"all://\": proxy}\n```\n\nIf `proxy` is explicitly set, env vars are ignored entirely (the explicit value wins). If `proxy` is `None` and `allow_env_proxies` is `True`, it calls `get_environment_proxies()`.\n\n#### 4. `get_environment_proxies()` — the actual env-var reader\n\n```python\n# httpx/_utils.py  lines 30-76\nfrom urllib.request import getproxies   # stdlib\n\ndef get_environment_proxies() -\u003e dict[str, str | None]:\n    \"\"\"Gets proxy information from the environment\"\"\"\n    # urllib.request.getproxies() falls back on System\n    # Registry and Config for proxies on Windows and macOS.\n    # We don't want to propagate non-HTTP proxies into\n    # our configuration such as 'TRAVIS_APT_PROXY'.\n    proxy_info = getproxies()\n    mounts: dict[str, str | None] = {}\n\n    for scheme in (\"http\", \"https\", \"all\"):\n        if proxy_info.get(scheme):\n            hostname = proxy_info[scheme]\n            mounts[f\"{scheme}://\"] = (\n                hostname if \"://\" in hostname else f\"http://{hostname}\"\n            )\n\n    no_proxy_hosts = [host.strip() for host in proxy_info.get(\"no\", \"\").split(\",\")]\n    for hostname in no_proxy_hosts:\n        if hostname == \"*\":\n            return {}          # NO_PROXY=* disables everything\n        elif hostname:\n            # maps NO_PROXY entries to \"all://*\u003chost\u003e\" = None mount entries\n            ...\n    return mounts\n```\n\nKey design decisions visible here:\n- It delegates to **Python's stdlib `urllib.request.getproxies()`**, which reads `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and `NO_PROXY` (case-insensitively on most platforms) and also consults the Windows Registry and macOS System Configuration on those platforms.\n- It deliberately **filters to only `http`, `https`, and `all` schemes** to avoid accidentally picking up unrelated env vars like `TRAVIS_APT_PROXY`.\n- `NO_PROXY=*` short-circuits to an empty dict (no proxies at all).\n- Individual `NO_PROXY` entries are translated into `None`-valued mount entries (meaning \"bypass proxy for this pattern\"), following curl's documented `CURLOPT_NOPROXY` semantics.\n\n#### 5. SSL certificate env vars — also gated by `trust_env`\n\n```python\n# httpx/_config.py  lines 34-40\ndef create_ssl_context(verify=True, cert=None, trust_env=True):\n    if verify is True:\n        if trust_env and os.environ.get(\"SSL_CERT_FILE\"):\n            ctx = ssl.create_default_context(cafile=os.environ[\"SSL_CERT_FILE\"])\n        elif trust_env and os.environ.get(\"SSL_CERT_DIR\"):\n            ctx = ssl.create_default_context(capath=os.environ[\"SSL_CERT_DIR\"])\n        else:\n            ctx = ssl.create_default_context(cafile=certifi.where())\n```\n\n`trust_env=False` also suppresses `SSL_CERT_FILE` / `SSL_CERT_DIR`, falling back to the bundled `certifi` CA store.\n\n---\n\n### Summary of the full control flow\n\n```\nhttpx.get(..., trust_env=True)          # _api.py\n  └─ Client(trust_env=True)             # _client.py\n       ├─ BaseClient stores _trust_env  # line 219\n       ├─ allow_env_proxies = trust_env and transport is None   # line 685\n       ├─ _get_proxy_map(proxy, allow_env_proxies)              # line 239\n       │    └─ get_environment_proxies()  ← reads HTTP_PROXY,  # _utils.py:30\n       │         HTTPS_PROXY, ALL_PROXY, NO_PROXY via stdlib\n       └─ create_ssl_context(trust_env=trust_env)               # _config.py:23\n            └─ reads SSL_CERT_FILE / SSL_CERT_DIR if trust_env\n```\n\n### How to opt out\n\n```python\n# Disable for a whole client session\nclient = httpx.Client(trust_env=False)\n\n# Disable for a one-shot call\nhttpx.get(\"https://example.com\", trust_env=False)\n```\n\nSetting `trust_env=False` makes httpx ignore all of `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, `SSL_CERT_FILE`, and `SSL_CERT_DIR`, and also skips the Windows Registry / macOS System Configuration proxy lookups that `urllib.request.getproxies()` would otherwise perform.",
+      "input_tokens": 69568,
+      "output_tokens": 3125,
+      "tool_calls": 13,
+      "turns_to_answer": 8,
+      "wall_clock_ms": 64422,
+      "retries": 0,
+      "rubric": {
+        "items": {
+          "locus": 1,
+          "rationale": 2
+        },
+        "total": 3,
+        "max_total": 3,
+        "reasoning": "The candidate correctly identifies trust_env as the control point in _client.py (BaseClient.__init__ line 219, stored as self._trust_env) and thoroughly explains the rationale: following Unix/curl/requests convention for env-var configuration by default, enabling system administrators and CI pipelines to inject settings without code changes, while allowing opt-out via trust_env=False for isolated/testing environments. The answer goes well beyond requirements with detailed call chains and implementation specifics."
+      },
+      "transcript_file": "transcripts/httpx-G01_grep_r0.json"
+    },
+    {
+      "task_id": "httpx-G01",
+      "repo": "httpx",
+      "arm": "max-context",
+      "replicate": 0,
+      "phrasing": "Why does httpx read proxy settings from environment variables by default, and where is that behavior controlled? Explain the rationale.",
+      "status": "completed",
+      "final_answer": "I now have everything needed for a thorough, precise answer. Here it is:\n\n---\n\n## Why httpx reads proxy settings from environment variables by default\n\n### The Short Answer\n\nhttpx follows the long-standing convention of every major HTTP client (curl, requests, browsers, etc.) that a process should respect the operator's network configuration expressed through environment variables (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, and their lowercase equivalents). This is controlled by the `trust_env` flag, which defaults to `True` on both `Client` and `AsyncClient`.\n\n---\n\n### The Full Call Chain\n\n#### 1. `get_environment_proxies` — `httpx/_utils.py:30`\n\nThis is the lowest-level function. It delegates directly to Python's standard library:\n\n```python\ndef get_environment_proxies() -\u003e dict[str, str | None]:\n    \"\"\"Gets proxy information from the environment\"\"\"\n\n    # urllib.request.getproxies() falls back on System\n    # Registry and Config for proxies on Windows and macOS.\n    return {\n        key: value\n        for key, value in urllib.request.getproxies().items()\n        if key not in (\"no\", \"all\")\n    }\n```\n\n`urllib.request.getproxies()` is the stdlib function that reads `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY` (and lowercase variants) from `os.environ`, and on Windows/macOS also falls back to the OS-level proxy registry/system config. httpx delegates to it rather than re-implementing the platform-specific logic.\n\n#### 2. `_get_proxy_map` — `httpx/_client.py:239`\n\nThis method is called during `__init__` of both `Client` (line 639) and `AsyncClient` (line 1353). It merges explicitly-passed proxies with environment-sourced ones, gated on `trust_env`:\n\n```python\ndef _get_proxy_map(\n    self,\n    proxies: ProxiesTypes | None,\n    trust_env: bool,\n) -\u003e dict[str, Proxy | None]:\n    if proxies is None:\n        if trust_env:\n            return {\n                key: Proxy(url=url) if url is not None else None\n                for key, url in get_environment_proxies().items()\n            }\n        return {}\n    ...\n```\n\nWhen `trust_env=True` (the default) and no explicit `proxies=` argument is given, it calls `get_environment_proxies()` and wraps each result in a `Proxy` object. When `trust_env=False`, it returns an empty dict — environment variables are completely ignored.\n\n#### 3. `trust_env` property — `httpx/_client.py:231`\n\n```python\n@property\ndef trust_env(self) -\u003e bool:\n    return self._trust_env\n```\n\nThis is set in `__init__` with `trust_env: bool = True` as the default parameter for both `Client` and `AsyncClient`.\n\n#### 4. `_init_proxy_transport` — `httpx/_client.py:740` (sync) and `1454` (async)\n\n`trust_env` is also threaded down into the transport layer itself:\n\n```python\nreturn HTTPTransport(\n    verify=verify,\n    cert=cert,\n    trust_env=trust_env,   # ← passed through\n    http1=http1,\n    http2=http2,\n    ...\n)\n```\n\nThis means the underlying `httpcore` transport also respects `trust_env` for things like SSL certificate verification via environment variables (e.g. `SSL_CERT_FILE`).\n\n---\n\n### Where Each Piece Lives\n\n| Responsibility | File | Line |\n|---|---|---|\n| Read OS/env proxy vars | `httpx/_utils.py` | `30` (`get_environment_proxies`) |\n| Merge env proxies into proxy map | `httpx/_client.py` | `239` (`_get_proxy_map`) |\n| `trust_env` property | `httpx/_client.py` | `231` |\n| `Client.__init__` with `trust_env=True` default | `httpx/_client.py` | `639` |\n| `AsyncClient.__init__` with `trust_env=True` default | `httpx/_client.py` | `1353` |\n| Pass `trust_env` to transport | `httpx/_client.py` | `740`, `1454` |\n| Tests for this behavior | `tests/client/test_properties.py` | `63` (`test_client_trust_env`) |\n\n---\n\n### The Rationale\n\n1. **Operator convention**: `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` are decades-old POSIX conventions. System administrators, container orchestrators (Kubernetes, Docker), and CI systems set these to route traffic through corporate or inspection proxies. An HTTP client that ignores them by default would be broken in those environments.\n\n2. **Delegation to stdlib**: Rather than re-implementing platform detection, httpx delegates to `urllib.request.getproxies()`, which already handles Linux env vars, Windows Registry (`winreg`), and macOS system configuration — all in one call.\n\n3. **Opt-out, not opt-in**: Because the vast majority of deployments *want* proxy settings respected, the default is `trust_env=True`. Users who need to bypass it (e.g., in tests, or when building a proxy tool itself) can explicitly pass `trust_env=False` to `Client()` or `AsyncClient()`.\n\n4. **Consistency with `requests`**: httpx was designed as a modern replacement for `requests`, which also reads `HTTP_PROXY`/`HTTPS_PROXY` by default. Matching this behavior avoids surprising users migrating from `requests`.",
+      "input_tokens": 61736,
+      "output_tokens": 3067,
+      "tool_calls": 21,
+      "turns_to_answer": 11,
+      "wall_clock_ms": 63914,
+      "retries": 0,
+      "rubric": {
+        "items": {
+          "locus": 1,
+          "rationale": 2
+        },
+        "total": 3,
+        "max_total": 3,
+        "reasoning": "The candidate correctly identifies trust_env as the control point in _client.py (lines 231, 639, 1353) and provides comprehensive rationale explaining both the WHY (operator convention, stdlib delegation, opt-out design, requests consistency) and the practical implications, fully satisfying both rubric criteria."
+      },
+      "transcript_file": "transcripts/httpx-G01_max-context_r0.json"
+    },
+    {
+      "task_id": "httpx-C01",
+      "repo": "httpx",
+      "arm": "grep",
+      "replicate": 0,
+      "phrasing": "List every function or method that calls build_request. I need the complete set of callers, not examples — name each calling function.",
+      "status": "completed",
+      "final_answer": "I now have the complete picture. Here is the full set of every function/method that calls `build_request`, all located in `httpx/_client.py` (production code) and the test files:\n\n---\n\n## Production code — `httpx/_client.py`\n\nThese are the only two places in the library source where `self.build_request(...)` is actually invoked (lines 812, 855, 1527, 1570):\n\n| Class | Method | Line(s) |\n|---|---|---|\n| `Client` | `request` | 812 |\n| `Client` | `stream` | 855 |\n| `AsyncClient` | `request` | 1527 |\n| `AsyncClient` | `stream` | 1570 |\n\nBoth `Client.request` and `AsyncClient.request` build the request and immediately pass it to `send`. Both `Client.stream` and `AsyncClient.stream` do the same for streaming responses.\n\n---\n\n## Test code\n\n| File | Function | Notes |\n|---|---|---|\n| `tests/client/test_client.py` | `test_build_request` | calls `client.build_request(\"GET\", ...)` |\n| `tests/client/test_client.py` | `test_build_post_request` | calls `client.build_request(\"POST\", ...)` |\n| `tests/client/test_client.py` | `test_merge_absolute_url` | calls `client.build_request(\"GET\", ...)` |\n| `tests/client/test_client.py` | `test_merge_relative_url` | calls `client.build_request(\"GET\", ...)` |\n| `tests/client/test_client.py` | `test_merge_relative_url_with_path` | calls `client.build_request(\"GET\", ...)` |\n| `tests/client/test_client.py` | `test_merge_relative_url_with_dotted_path` | calls `client.build_request(\"GET\", ...)` |\n| `tests/client/test_client.py` | `test_merge_relative_url_with_path_including_colon` | calls `client.build_request(\"GET\", ...)` |\n| `tests/client/test_client.py` | `test_merge_relative_url_with_encoded_slashes` | calls `client.build_request(\"GET\", ...)` (twice) |\n| `tests/client/test_async_client.py` | `test_build_request` | calls `client.build_request(\"GET\", ...)` |\n| `tests/client/test_redirects.py` | `test_next_request` | calls `client.build_request(\"POST\", ...)` |\n| `tests/client/test_redirects.py` | `test_async_next_request` | calls `client.build_request(\"POST\", ...)` |\n| `tests/test_auth.py` | `test_digest_auth_setting_cookie_in_request` | calls `client.build_request(\"GET\", ...)` |\n\n---\n\n### Summary\n\n**In production source**, `build_request` is called by exactly **4 methods**:\n1. `Client.request` (`httpx/_client.py`)\n2. `Client.stream` (`httpx/_client.py`)\n3. `AsyncClient.request` (`httpx/_client.py`)\n4. `AsyncClient.stream` (`httpx/_client.py`)\n\n**In tests**, it is called by **12 test functions** across `tests/client/test_client.py`, `tests/client/test_async_client.py`, `tests/client/test_redirects.py`, and `tests/test_auth.py`.",
+      "input_tokens": 96379,
+      "output_tokens": 2446,
+      "tool_calls": 16,
+      "turns_to_answer": 10,
+      "wall_clock_ms": 52341,
+      "retries": 0,
+      "retrieval": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "hit": true,
+        "predicted": null,
+        "matched": [
+          "request",
+          "stream"
+        ],
+        "missed": null,
+        "lead_correct": false
+      },
+      "transcript_file": "transcripts/httpx-C01_grep_r0.json"
+    },
+    {
+      "task_id": "httpx-C01",
+      "repo": "httpx",
+      "arm": "max-context",
+      "replicate": 0,
+      "phrasing": "List every function or method that calls build_request. I need the complete set of callers, not examples — name each calling function.",
+      "status": "completed",
+      "final_answer": "Here is the **complete set of callers** of `build_request` (defined at `httpx/_client.py:340`), all located in `httpx/_client.py`:\n\n---\n\n### Direct Callers (depth 1) — call `build_request` themselves\n\n| Function | Line | Class |\n|---|---|---|\n| `request` | 771 | `Client` (sync) |\n| `request` | 1485 | `AsyncClient` (async) |\n| `stream` | 828 | `Client` (sync) |\n| `stream` | 1543 | `AsyncClient` (async) |\n\n---\n\n### Indirect Callers (depth 2) — call `request` or `stream`, which in turn call `build_request`\n\n| Function | Line | Class |\n|---|---|---|\n| `get` | 1036 | `Client` (sync) |\n| `options` | 1065 | `Client` (sync) |\n| `head` | 1094 | `Client` (sync) |\n| `post` | 1123 | `Client` (sync) |\n| `put` | 1160 | `Client` (sync) |\n| `patch` | 1197 | `Client` (sync) |\n| `delete` | 1234 | `Client` (sync) |\n| `get` | 1751 | `AsyncClient` (async) |\n| `options` | 1780 | `AsyncClient` (async) |\n| `head` | 1809 | `AsyncClient` (async) |\n| `post` | 1838 | `AsyncClient` (async) |\n| `put` | 1875 | `AsyncClient` (async) |\n| `patch` | 1912 | `AsyncClient` (async) |\n| `delete` | 1949 | `AsyncClient` (async) |\n\n---\n\n### Summary\n\n- **4 direct callers**: `request` and `stream` on both `Client` and `AsyncClient`.\n- **14 indirect callers**: all the HTTP-verb convenience methods (`get`, `options`, `head`, `post`, `put`, `patch`, `delete`) on both `Client` and `AsyncClient`, each of which delegates to `request`/`stream`.\n- All callers live in a single file: **`httpx/_client.py`**.",
+      "input_tokens": 4401,
+      "output_tokens": 698,
+      "tool_calls": 2,
+      "turns_to_answer": 2,
+      "wall_clock_ms": 10658,
+      "retries": 0,
+      "retrieval": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "hit": true,
+        "predicted": null,
+        "matched": [
+          "request",
+          "stream"
+        ],
+        "missed": null,
+        "lead_correct": false
+      },
+      "transcript_file": "transcripts/httpx-C01_max-context_r0.json"
+    },
+    {
+      "task_id": "httpx-C02",
+      "repo": "httpx",
+      "arm": "grep",
+      "replicate": 0,
+      "phrasing": "What functions call _build_auth_header? List the complete set of calling methods.",
+      "status": "completed",
+      "final_answer": "Here is the complete set of methods that call `_build_auth_header`, all located in `httpx/_auth.py`:\n\n---\n\n### 1. `BasicAuth.__init__` (line 132–133)\n```python\nclass BasicAuth(Auth):\n    def __init__(self, username: str | bytes, password: str | bytes) -\u003e None:\n        self._auth_header = self._build_auth_header(username, password)\n```\nCalled during construction to pre-compute and cache the Basic auth header.\n\n---\n\n### 2. `NetRCAuth.auth_flow` (lines 164–166)\n```python\nclass NetRCAuth(Auth):\n    def auth_flow(self, request: Request) -\u003e ...:\n        request.headers[\"Authorization\"] = self._build_auth_header(\n            username=auth_info[0], password=auth_info[2]\n        )\n```\nCalled on each request flow to build a Basic auth header from netrc credentials.\n\n---\n\n### 3. `DigestAuth.auth_flow` — **first call** (lines 195–197)\n```python\nclass DigestAuth(Auth):\n    def auth_flow(self, request: Request) -\u003e ...:\n        if self._last_challenge:\n            request.headers[\"Authorization\"] = self._build_auth_header(\n                request, self._last_challenge\n            )\n```\nCalled at the start of the flow if a prior challenge is cached (pre-emptive auth).\n\n---\n\n### 4. `DigestAuth.auth_flow` — **second call** (lines 217–219)\n```python\n        request.headers[\"Authorization\"] = self._build_auth_header(\n            request, self._last_challenge\n        )\n```\nCalled after receiving a fresh `401` challenge and parsing it, to build the authenticated retry request.\n\n---\n\n### Summary Table\n\n| Calling Method | Class | File |\n|---|---|---|\n| `__init__` | `BasicAuth` | `httpx/_auth.py` |\n| `auth_flow` | `NetRCAuth` | `httpx/_auth.py` |\n| `auth_flow` (×2) | `DigestAuth` | `httpx/_auth.py` |\n\nThere are **3 distinct calling methods** across **3 classes**, with `DigestAuth.auth_flow` containing two separate call sites. All calls are within `httpx/_auth.py`.",
+      "input_tokens": 8994,
+      "output_tokens": 728,
+      "tool_calls": 2,
+      "turns_to_answer": 3,
+      "wall_clock_ms": 16242,
+      "retries": 0,
+      "retrieval": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "hit": true,
+        "predicted": null,
+        "matched": [
+          "__init__",
+          "auth_flow"
+        ],
+        "missed": null,
+        "lead_correct": false
+      },
+      "transcript_file": "transcripts/httpx-C02_grep_r0.json"
+    },
+    {
+      "task_id": "httpx-C02",
+      "repo": "httpx",
+      "arm": "max-context",
+      "replicate": 0,
+      "phrasing": "What functions call _build_auth_header? List the complete set of calling methods.",
+      "status": "completed",
+      "final_answer": "The complete set of functions that call `_build_auth_header` are all located in `httpx/_auth.py`:\n\n| Caller | File | Line | Notes |\n|---|---|---|---|\n| `__init__` | `httpx/_auth.py` | 132 | Constructor (depth 1) |\n| `auth_flow` | `httpx/_auth.py` | 157 | First `auth_flow` method (depth 1) |\n| `auth_flow` | `httpx/_auth.py` | 193 | Second `auth_flow` method (depth 1) |\n\n### Summary\n\nThere are **3 direct callers** of `_build_auth_header`, all within `httpx/_auth.py`:\n\n1. **`__init__`** (line 132) — calls `_build_auth_header` during object initialization (likely for `BasicAuth` or a similar auth class that pre-builds the header at construction time).\n2. **`auth_flow`** (line 157) — one auth class's `auth_flow` method calls it to build the header during the request flow.\n3. **`auth_flow`** (line 193) — a second auth class's `auth_flow` method also calls it, suggesting at least two different auth classes (e.g., `BasicAuth` and `DigestAuth` or similar) each have their own `auth_flow` that invokes `_build_auth_header`.\n\nNotably, `_build_auth_header` itself is defined in **3 places** (lines 139, 169, and 255 in `httpx/_auth.py`), meaning it is a method on three separate classes — and the callers above correspond to those class instances invoking their own version of the method.",
+      "input_tokens": 5926,
+      "output_tokens": 566,
+      "tool_calls": 2,
+      "turns_to_answer": 3,
+      "wall_clock_ms": 13555,
+      "retries": 0,
+      "retrieval": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "hit": true,
+        "predicted": null,
+        "matched": [
+          "__init__",
+          "auth_flow"
+        ],
+        "missed": null,
+        "lead_correct": false
+      },
+      "transcript_file": "transcripts/httpx-C02_max-context_r0.json"
+    },
+    {
+      "task_id": "httpx-C03",
+      "repo": "httpx",
+      "arm": "grep",
+      "replicate": 0,
+      "phrasing": "If I change the signature of _merge_url, which functions would I need to update? List every caller.",
+      "status": "completed",
+      "final_answer": "There is exactly **one caller** of `_merge_url` in the entire codebase. Here is the full picture:\n\n---\n\n### Definition\n| File | Line | Symbol |\n|---|---|---|\n| `httpx/_client.py` | 391 | `def _merge_url(self, url: URL \\| str) -\u003e URL` |\n\n---\n\n### Callers\n\n| File | Line | Calling function | Call site |\n|---|---|---|---|\n| `httpx/_client.py` | 366 | `build_request` | `url = self._merge_url(url)` |\n\n---\n\n### Summary\n\nOnly **one function** calls `_merge_url`:\n\n- **`build_request`** (`httpx/_client.py`, line 366) — it is a method on the same class (`Client` / `AsyncClient` base class). It calls `self._merge_url(url)` to resolve the final URL by merging the passed-in `url` argument with any `base_url` configured on the client.\n\nIf you change `_merge_url`'s signature (e.g. add/remove/rename parameters, or change the return type), `build_request` is the only function you need to update.",
+      "input_tokens": 9657,
+      "output_tokens": 614,
+      "tool_calls": 4,
+      "turns_to_answer": 5,
+      "wall_clock_ms": 17975,
+      "retries": 0,
+      "retrieval": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "hit": true,
+        "predicted": null,
+        "matched": [
+          "build_request"
+        ],
+        "missed": null,
+        "lead_correct": false
+      },
+      "transcript_file": "transcripts/httpx-C03_grep_r0.json"
+    },
+    {
+      "task_id": "httpx-C03",
+      "repo": "httpx",
+      "arm": "max-context",
+      "replicate": 0,
+      "phrasing": "If I change the signature of _merge_url, which functions would I need to update? List every caller.",
+      "status": "completed",
+      "final_answer": "Here is the complete blast radius of changing `_merge_url`'s signature, all in **`httpx/_client.py`**:\n\n---\n\n### Direct Caller (Depth 1)\nThis is the **only** function that calls `_merge_url` directly — it's the one you **must** update:\n\n| Function | File | Line |\n|---|---|---|\n| `build_request` | `httpx/_client.py` | 340 |\n\n---\n\n### Indirect Callers (Depth 2) — call `build_request`\nThese call `build_request`, so they are affected if `build_request`'s signature also changes as a result:\n\n| Function | File | Line |\n|---|---|---|\n| `request` (sync client) | `httpx/_client.py` | 771 |\n| `request` (async client) | `httpx/_client.py` | 1485 |\n| `stream` (sync client) | `httpx/_client.py` | 828 |\n| `stream` (async client) | `httpx/_client.py` | 1543 |\n\n---\n\n### Indirect Callers (Depth 3) — call `request` / `stream`\nThese are the high-level HTTP verb convenience methods that ultimately flow through the chain:\n\n| Function | File | Line |\n|---|---|---|\n| `get` (sync) | `httpx/_client.py` | 1036 |\n| `get` (async) | `httpx/_client.py` | 1751 |\n| `options` (sync) | `httpx/_client.py` | 1065 |\n| `options` (async) | `httpx/_client.py` | 1780 |\n| `head` (sync) | `httpx/_client.py` | 1094 |\n| `head` (async) | `httpx/_client.py` | 1809 |\n| `post` (sync) | `httpx/_client.py` | 1123 |\n| `post` (async) | `httpx/_client.py` | 1838 |\n| `put` (sync) | `httpx/_client.py` | 1160 |\n| `put` (async) | `httpx/_client.py` | 1875 |\n| `patch` (sync) | `httpx/_client.py` | 1197 |\n| `patch` (async) | `httpx/_client.py` | 1912 |\n| `delete` (sync) | `httpx/_client.py` | 1234 |\n| `delete` (async) | `httpx/_client.py` | 1949 |\n\n---\n\n### Summary\n\n- **Mandatory update:** `build_request` (`httpx/_client.py:340`) — the sole direct caller of `_merge_url`.\n- **Likely cascading updates** (only if `build_request`'s own signature changes): both sync and async `request` and `stream` methods.\n- **Further cascade** (only if `request`/`stream` signatures change): all 12 HTTP verb methods (`get`, `post`, `put`, `patch`, `delete`, `head`, `options` — each in both sync and async variants).\n\nIn practice, since `_merge_url` is a private helper called internally within `build_request`, you will most likely **only need to update `build_request`** at line 340, unless the change propagates outward through the public API.",
+      "input_tokens": 4446,
+      "output_tokens": 980,
+      "tool_calls": 2,
+      "turns_to_answer": 2,
+      "wall_clock_ms": 15467,
+      "retries": 0,
+      "retrieval": {
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "hit": true,
+        "predicted": null,
+        "matched": [
+          "build_request"
+        ],
+        "missed": null,
+        "lead_correct": false
+      },
+      "transcript_file": "transcripts/httpx-C03_max-context_r0.json"
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "task_model": "claude-sonnet-4-6",
+  "judge_model": "claude-haiku-4-5",
+  "replicates": 1,
+  "max_turns": 15,
+  "token_budget": 600000,
+  "system_skeleton": "You are a senior software engineer working in an unfamiliar codebase. Answer the user's task accurately using the tools provided. Be concise. When you state where code lives, give the exact repo-relative file path(s). When you finish, stop calling tools and write your final answer as plain text.",
+  "repos": [
+    {
+      "name": "httpx",
+      "clone_url": "https://github.com/encode/httpx.git",
+      "sha": "b5addb64f0161ff6bfe94c124ef76f6a1fba5254",
+      "lang": "python"
+    }
+  ],
+  "version": "v3-crossfile",
+  "tasks": [
+    {
+      "id": "httpx-C06",
+      "repo": "httpx",
+      "type": "impact",
+      "intent": "List every function or method that calls to_bytes. I need the complete set of callers across the whole codebase \u2014 name each calling function. to_bytes is a small utility used in several modules.",
+      "paraphrases": [
+        "Which functions invoke to_bytes? Give me all of them, wherever they live.",
+        "Enumerate all callers of the to_bytes utility by their enclosing function/method."
+      ]
+    }
+  ],
+  "keys": [
+    {
+      "task_id": "httpx-C06",
+      "expected_symbols": [
+        "_build_auth_header",
+        "__init__",
+        "render_data",
+        "get_length"
+      ],
+      "oracle": "ripgrep 'to_bytes(' across httpx/*.py (excludes def + to_bytes_or_str), enclosing-fn hand-verified. Call sites: _auth.py:140(BasicAuth._build_auth_header),170(NetRCAuth._build_auth_header),188-189(DigestAuth.__init__); _multipart.py:101(DataField.render_data),175(FileField.get_length),205&216(FileField.render_data). Defined httpx/_utils.py:79; imported cross-file (plain) into _auth.py/_multipart.py.",
+      "oracle_version": "ripgrep 14.1.1 + manual",
+      "human_verified": true,
+      "notes": "CROSS-FILE caller set. to_bytes is defined in _utils.py and called (plain `from ._utils import to_bytes`) in _auth.py and _multipart.py. max-context previously returned 0 callers here (cross-file resolution gap) \u2014 a latent LOSS vs grep, now fixed (0->11 edges). grep can still text-match 'to_bytes' so its recall holds; expected outcome is a quality tie with a max-context cost win."
+    }
+  ]
+}

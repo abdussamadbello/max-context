@@ -19,6 +19,35 @@ type getImpactArgs struct {
 	Depth        *int     `json:"depth"`
 	Direction    string   `json:"direction"`
 	IncludeTests *bool    `json:"include_tests"`
+	// MinConfidence, when set, restricts the walk to edges at or above the given
+	// resolution confidence (e.g. "receiver-typed" excludes name-global guesses).
+	MinConfidence string `json:"min_confidence"`
+}
+
+// resolutionRank orders resolution markers by confidence (higher = stronger).
+// Linking markers only; classify-only/miss markers never produce a traversable
+// edge so they are absent here.
+var resolutionRank = map[string]int{
+	"same-file":      5,
+	"same-package":   4,
+	"receiver-typed": 3,
+	"name-global":    1,
+}
+
+// edgeMarkersAtOrAbove returns the resolution markers with confidence >= the
+// named level. Returns nil (no filtering) when level is empty or unknown.
+func edgeMarkersAtOrAbove(level string) []string {
+	min, ok := resolutionRank[level]
+	if !ok {
+		return nil
+	}
+	var out []string
+	for m, r := range resolutionRank {
+		if r >= min {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 type changedFile struct {
@@ -27,20 +56,22 @@ type changedFile struct {
 }
 
 type impactedNode struct {
-	File   string `json:"file"`
-	Symbol string `json:"symbol"`
-	Line   int    `json:"line"`
-	Depth  int    `json:"depth"`
-	Via    string `json:"via"`
-	Kind   string `json:"kind"`
+	File          string `json:"file"`
+	Symbol        string `json:"symbol"`
+	Line          int    `json:"line"`
+	Depth         int    `json:"depth"`
+	Via           string `json:"via"`
+	Kind          string `json:"kind"`
+	ViaResolution string `json:"via_resolution"`
 }
 
 type impactStats struct {
-	ChangedFiles    int  `json:"changed_files"`
-	ChangedSymbols  int  `json:"changed_symbols"`
-	ImpactedSymbols int  `json:"impacted_symbols"`
-	MaxDepthReached int  `json:"max_depth_reached"`
-	Truncated       bool `json:"truncated"`
+	ChangedFiles        int            `json:"changed_files"`
+	ChangedSymbols      int            `json:"changed_symbols"`
+	ImpactedSymbols     int            `json:"impacted_symbols"`
+	MaxDepthReached     int            `json:"max_depth_reached"`
+	Truncated           bool           `json:"truncated"`
+	ResolutionBreakdown map[string]int `json:"resolution_breakdown"`
 }
 
 type impactResponse struct {
@@ -121,9 +152,14 @@ func GetImpactHandler(store db.Store, projectRoot string) mcp.ToolHandler {
 			changed = []changedFile{}
 		}
 
-		impacted, truncated, maxDepth, err := queryImpact(store.DB(), seedIDs, depth, direction, includeTests)
+		impacted, truncated, maxDepth, err := queryImpact(store.DB(), seedIDs, depth, direction, includeTests, a.MinConfidence)
 		if err != nil {
 			return nil, &mcp.RPCError{Code: mcp.CodeInternalError, Message: fmt.Sprintf("impact query: %v", err)}
+		}
+
+		breakdown := map[string]int{}
+		for _, n := range impacted {
+			breakdown[n.ViaResolution]++
 		}
 
 		resp := impactResponse{
@@ -131,11 +167,12 @@ func GetImpactHandler(store db.Store, projectRoot string) mcp.ToolHandler {
 			Impacted:        impacted,
 			UnresolvedFiles: unresolved,
 			Stats: impactStats{
-				ChangedFiles:    len(changed),
-				ChangedSymbols:  len(seedSymbols),
-				ImpactedSymbols: len(impacted),
-				MaxDepthReached: maxDepth,
-				Truncated:       truncated,
+				ChangedFiles:        len(changed),
+				ChangedSymbols:      len(seedSymbols),
+				ImpactedSymbols:     len(impacted),
+				MaxDepthReached:     maxDepth,
+				Truncated:           truncated,
+				ResolutionBreakdown: breakdown,
 			},
 		}
 		b, _ := json.Marshal(resp)
@@ -143,7 +180,7 @@ func GetImpactHandler(store db.Store, projectRoot string) mcp.ToolHandler {
 	}
 }
 
-func queryImpact(database *sql.DB, seedIDs map[int64]string, depth int, direction string, includeTests bool) ([]impactedNode, bool, int, error) {
+func queryImpact(database *sql.DB, seedIDs map[int64]string, depth int, direction string, includeTests bool, minConfidence string) ([]impactedNode, bool, int, error) {
 	if len(seedIDs) == 0 {
 		return []impactedNode{}, false, 0, nil
 	}
@@ -155,24 +192,42 @@ func queryImpact(database *sql.DB, seedIDs map[int64]string, depth int, directio
 		placeholders = append(placeholders, "?")
 	}
 
+	// edgeFilter restricts which edges the walk may traverse, by resolution
+	// confidence. Empty when no min_confidence was requested.
+	edgeFilter := ""
+	var filterArgs []interface{}
+	if markers := edgeMarkersAtOrAbove(minConfidence); markers != nil {
+		ph := make([]string, len(markers))
+		for i, m := range markers {
+			ph[i] = "?"
+			filterArgs = append(filterArgs, m)
+		}
+		edgeFilter = " AND e.resolution IN (" + strings.Join(ph, ",") + ")"
+	}
+
 	collect := func(walkSQL string) ([]impactedNode, int, error) {
 		query := fmt.Sprintf(`
-			WITH RECURSIVE chain(id, name, file_path, line, depth, via_id) AS (
-				SELECT f.id, f.name, f.file_path, f.start_line, 0, f.id
+			WITH RECURSIVE chain(id, name, file_path, line, depth, via_id, via_res) AS (
+				SELECT f.id, f.name, f.file_path, f.start_line, 0, f.id, ''
 				FROM functions f WHERE f.id IN (%s)
 				UNION ALL
 				%s
 			)
 			SELECT chain.id, chain.name, chain.file_path, chain.line, chain.depth,
-			       seed.name AS via_name
+			       seed.name AS via_name, chain.via_res
 			FROM chain
 			JOIN functions seed ON seed.id = chain.via_id
 			WHERE chain.depth > 0
 			ORDER BY chain.depth, chain.name
 			LIMIT ?
 		`, strings.Join(placeholders, ","), walkSQL)
+		// Arg order: seed ids, then (depth + edge-filter markers) per walk
+		// reference, then the LIMIT. The walk SQL references ? for depth first,
+		// then the edge-filter placeholders.
 		args := append([]interface{}{}, ids...)
-		args = append(args, depth, maxImpactNodes+1)
+		args = append(args, depth)
+		args = append(args, filterArgs...)
+		args = append(args, maxImpactNodes+1)
 		rows, err := database.Query(query, args...)
 		if err != nil {
 			return nil, 0, err
@@ -185,7 +240,7 @@ func queryImpact(database *sql.DB, seedIDs map[int64]string, depth int, directio
 			var id int64
 			var n impactedNode
 			var via string
-			if err := rows.Scan(&id, &n.Symbol, &n.File, &n.Line, &n.Depth, &via); err != nil {
+			if err := rows.Scan(&id, &n.Symbol, &n.File, &n.Line, &n.Depth, &via, &n.ViaResolution); err != nil {
 				return nil, 0, err
 			}
 			n.Via = via
@@ -209,18 +264,18 @@ func queryImpact(database *sql.DB, seedIDs map[int64]string, depth int, directio
 	}
 
 	callersWalk := `
-		SELECT f.id, f.name, f.file_path, f.start_line, chain.depth + 1, chain.via_id
+		SELECT f.id, f.name, f.file_path, f.start_line, chain.depth + 1, chain.via_id, e.resolution
 		FROM chain
 		JOIN calls e ON e.callee_id = chain.id
 		JOIN functions f ON f.id = e.caller_id
-		WHERE chain.depth < ? AND f.id != chain.id
+		WHERE chain.depth < ?` + edgeFilter + ` AND f.id != chain.id
 	`
 	calleesWalk := `
-		SELECT f.id, f.name, f.file_path, f.start_line, chain.depth + 1, chain.via_id
+		SELECT f.id, f.name, f.file_path, f.start_line, chain.depth + 1, chain.via_id, e.resolution
 		FROM chain
 		JOIN calls e ON e.caller_id = chain.id
 		JOIN functions f ON f.id = e.callee_id
-		WHERE chain.depth < ? AND f.id != chain.id
+		WHERE chain.depth < ?` + edgeFilter + ` AND f.id != chain.id
 	`
 
 	var combined []impactedNode

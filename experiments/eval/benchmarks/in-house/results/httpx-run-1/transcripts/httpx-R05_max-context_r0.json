@@ -1,0 +1,50 @@
+{
+  "status": "completed",
+  "final_answer": "The `Timeout` configuration type (class) is defined in:\n\n**`httpx/_config.py`**\n\nThe same-named `timeout` symbols in `httpx/_client.py` (lines 254 and 258) are merely methods, not the type definition itself.",
+  "turns": [
+    {
+      "index": 0,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_MVwBAFI01Q9BS86uSg287R",
+          "name": "get_definition",
+          "input": {
+            "symbol": "Timeout"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 1730,
+      "output_tokens": 55,
+      "tool_calls": [
+        {
+          "name": "get_definition",
+          "input": {
+            "symbol": "Timeout"
+          },
+          "result": "{\"ambiguous\":false,\"answer\":\"Timeout (type/class) is canonically defined at httpx/_config.py. Same-named secondary matches are listed separately; answer with the canonical file.\",\"answer_status\":\"definitive\",\"canonical\":{\"name\":\"Timeout\",\"kind\":\"type/class\",\"label\":\"class\",\"file\":\"httpx/_config.py\",\"canonical\":true},\"disambiguation_reason\":\"3 exact matches found; class definitions outrank same-named methods/properties for definition questions.\",\"matches\":[{\"name\":\"Timeout\",\"kind\":\"type/class\",\"label\":\"class\",\"file\":\"httpx/_config.py\",\"canonical\":true},{\"name\":\"timeout\",\"kind\":\"method\",\"label\":\"method\",\"file\":\"httpx/_client.py\",\"line\":254},{\"name\":\"timeout\",\"kind\":\"method\",\"label\":\"method\",\"file\":\"httpx/_client.py\",\"line\":258}],\"overloaded\":true,\"recommended_next_action\":\"answer_now\",\"secondary_matches\":[{\"name\":\"timeout\",\"kind\":\"method\",\"label\":\"method\",\"file\":\"httpx/_client.py\",\"line\":254},{\"name\":\"timeout\",\"kind\":\"method\",\"label\":\"method\",\"file\":\"httpx/_client.py\",\"line\":258}],\"total\":3}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "content": [
+        {
+          "type": "text",
+          "text": "The `Timeout` configuration type (class) is defined in:\n\n**`httpx/_config.py`**\n\nThe same-named `timeout` symbols in `httpx/_client.py` (lines 254 and 258) are merely methods, not the type definition itself."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "input_tokens": 2068,
+      "output_tokens": 65
+    }
+  ],
+  "total_input_tokens": 3798,
+  "total_output_tokens": 120,
+  "tool_call_count": 1,
+  "turns_to_answer": 2,
+  "wall_clock_ms": 5838,
+  "retries": 0
+}

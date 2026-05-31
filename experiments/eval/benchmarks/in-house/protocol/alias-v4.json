@@ -1,0 +1,71 @@
+{
+  "task_model": "claude-sonnet-4-6",
+  "judge_model": "claude-haiku-4-5",
+  "replicates": 1,
+  "max_turns": 15,
+  "token_budget": 600000,
+  "system_skeleton": "You are a senior software engineer working in an unfamiliar codebase. Answer the user's task accurately using the tools provided. Be concise. When you state where code lives, give the exact repo-relative file path(s). When you finish, stop calling tools and write your final answer as plain text.",
+  "version": "v4-alias",
+  "repos": [
+    {
+      "name": "payments",
+      "clone_url": "file:///tmp/alias-bench/payments",
+      "sha": "bc194b5a9ecf62a8d40117de8444898f472cc9c8",
+      "lang": "python"
+    },
+    {
+      "name": "celery",
+      "clone_url": "https://github.com/celery/celery.git",
+      "sha": "90e2a13cbe2d3a40b93fe31ec9f09b64b33e0f64",
+      "lang": "python"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "A01",
+      "repo": "payments",
+      "type": "impact",
+      "intent": "List every function that calls post_transaction. I need the complete set of callers across the whole codebase \u2014 name each calling function.",
+      "paraphrases": [
+        "Which functions invoke post_transaction? Give me all of them, wherever they are.",
+        "Enumerate all callers of post_transaction by their enclosing function."
+      ]
+    },
+    {
+      "id": "A02",
+      "repo": "celery",
+      "type": "impact",
+      "intent": "List every function or method that calls resolve_all (the task-annotation resolver defined in celery/app/annotations.py). Name each caller.",
+      "paraphrases": [
+        "Which functions invoke the resolve_all annotation resolver? Give me all callers.",
+        "Find every caller of resolve_all from celery/app/annotations.py."
+      ]
+    }
+  ],
+  "keys": [
+    {
+      "task_id": "A01",
+      "expected_symbols": [
+        "charge_subscription",
+        "issue_refund",
+        "apply_late_fee",
+        "pay_salary",
+        "pay_bonus"
+      ],
+      "oracle": "hand-authored controlled repo. post_transaction defined ledger.py:4; imported aliased in billing.py (as apply_entry) and payroll.py (as record_payment). Call sites: billing.py:6(charge_subscription),10(issue_refund),14(apply_late_fee); payroll.py:7(pay_salary),11(pay_bonus). grep 'post_transaction(' finds ONLY the def \u2014 0 of 5 callers (they call apply_entry/record_payment).",
+      "oracle_version": "manual (controlled)",
+      "human_verified": true,
+      "notes": "ALIAS RECALL test. The 5 true callers use two different alias names; grep searching the original name misses all 5. max-context resolves via import-symbol."
+    },
+    {
+      "task_id": "A02",
+      "expected_symbols": [
+        "annotate"
+      ],
+      "oracle": "ripgrep on celery@90e2a13: resolve_all defined celery/app/annotations.py:50; imported `from .annotations import resolve_all as resolve_all_annotations` in celery/app/task.py; sole non-test caller is Task.annotate (task.py) via resolve_all_annotations(...). grep 'resolve_all(' misses this call site (it reads resolve_all_annotations).",
+      "oracle_version": "ripgrep 14.1.1 + manual",
+      "human_verified": true,
+      "notes": "Real-repo alias case. Single caller, but a genuine internal aliased hot function. grep searching resolve_all finds def+import, not the aliased call site."
+    }
+  ]
+}

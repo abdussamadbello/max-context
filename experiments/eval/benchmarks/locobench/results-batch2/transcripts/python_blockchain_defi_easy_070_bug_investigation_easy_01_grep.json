@@ -1,0 +1,1286 @@
+{
+  "status": "truncated_turns",
+  "final_answer": "",
+  "turns": [
+    {
+      "index": 0,
+      "content": [
+        {
+          "type": "text",
+          "text": "I'll systematically investigate the staking reward calculation code in this repository."
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_DDBRjJwnhuTYHHKAHt9oo5",
+          "name": "list_files",
+          "input": {}
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_iNcabyGh1siX9Gu88Qb3mV",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-r",
+              "-l",
+              "-i"
+            ],
+            "pattern": "staking|stake|reward"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 1701,
+      "output_tokens": 117,
+      "tool_calls": [
+        {
+          "name": "list_files",
+          "input": {},
+          "result": "requirements.txt\ndocs/api.md\nconfig.py\nmain.py\nREADME.md\nunivault/storage/database.py\nunivault/__init__.py\nunivault/contracts/strategies.py\nunivault/core/models.py\nunivault/api/server.py\nunivault/core/event_bus.py\nunivault/crypto/toolbox.py\n",
+          "is_error": false
+        },
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-r",
+              "-l",
+              "-i"
+            ],
+            "pattern": "staking|stake|reward"
+          },
+          "result": "./README.md:5:\u003e **Mint**, **-l**, **swap** and **automate**—all from one lightweight Python service.\n./README.md:18:* Pluggable **Strategy** objects for -l yield algorithms  \n./README.md:33:| Micro--l Pools                      | Lock tokens, earn yield—swap the APR algorithm via the Strategy pattern.              |\n./README.md:35:| Event-Driven Architecture (Observer)     | Built-in bus broadcasts `WalletEvent`, `-lEvent`, etc., to WebSocket subscribers.  |\n./README.md:74: │ Toolbox │     │ (contracts)    │     │ (-l yield)  │\n./README.md:85:* **Strategy Pattern** – Swap -l/APR formulas at runtime (`FixedAPR`, `BondingCurveAPR`, `DynamicMarketAPR`).\n./README.md:121:### -l \u0026 Earn with a Custom Strategy\n./README.md:124:from univault.-l import -lPool\n./README.md:125:from univault.-l.strategies import BondingCurveAPR\n./README.md:127:pool = -lPool.create(\n./README.md:128:    name=\"VIP -l\",\n./README.md:161:   `univault/-l/strategies/compound_apr.py`\n./README.md:165:       def apr(self, amount_-ld: int, days: int) -\u003e Decimal:\n./README.md:166:           return amount_-ld * ((1 + self.rate / 365) ** days - 1)\n./README.md:170:   -l_STRATEGIES[\"compound\"] = \"univault.-l.strategies.compound_apr:CompoundAPR\"\n./README.md:172:3. Use via API: `POST /v1/-l?strategy=compound`\n./main.py:135:class -l(BASE):\n./main.py:136:    __tablename__ = \"-ls\"\n./main.py:139:    -lr = sa.Column(sa.String, nullable=False)\n./main.py:144:    token = orm.relationship(\"Token\", backref=\"-ls\")\n./main.py:158:# Strategy Pattern – -l Calculation\n./main.py:161:class -lStrategy:\n./main.py:162:    def compute_-l(self, -l: -l) -\u003e int:\n./main.py:166:class Linear-lStrategy(-lStrategy):\n./main.py:170:    def compute_-l(self, -l: -l) -\u003e int:\n./main.py:171:        months = -l.lock_days / 30\n./main.py:172:        -l = int(-l.amount * self.RATE * months)\n./main.py:173:        logger.debug(\"Linear -l for %s: %s\", -l.id, -l)\n./main.py:174:        return -l\n./main.py:177:class Compounding-lStrategy(-lStrategy):\n./main.py:181:    def compute_-l(self, -l: -l) -\u003e int:\n./main.py:182:        months = -l.lock_days / 30\n./main.py:183:        -l = int(-l.amount * ((1 + self.RATE) ** months - 1))\n./main.py:184:        logger.debug(\"Compound -l for %s: %s\", -l.id, -l)\n./main.py:185:        return -l\n./main.py:188:STRATEGIES: Dict[str, Type[-lStrategy]] = {\n./main.py:189:    \"linear\": Linear-lStrategy,\n./main.py:190:    \"compound\": Compounding-lStrategy,\n./main.py:274:class -lReq(BaseModel):\n./main.py:326:@app.post(\"/-l/{-lr}\")\n./main.py:327:async def -l_tokens(-lr: str, req: -lReq, strategy: str = \"linear\") -\u003e JSONResponse:\n./main.py:333:        -l = -l(\n./main.py:335:            -lr=-lr,\n./main.py:339:        db.add(-l)\n./main.py:341:        db.refresh(-l)\n./main.py:343:        strat_cls = STRATEGIES.get(strategy, Linear-lStrategy)\n./main.py:344:        -l = strat_cls().compute_-l(-l)\n./main.py:346:    payload = {\"-l_id\": -l.id, \"-l\": -l}\n./main.py:347:    await EVENT_BUS.publish(Event(type=\"-l.created\", payload=payload))\n./main.py:469:@cli.command(\"-l\")\n./main.py:470:@click.argument(\"-lr\")\n./main.py:476:async def cli_-l(-lr: str, token_id: str, amount: int, lock: int, strategy: str) -\u003e None:\n./main.py:477:    \"\"\"-l tokens.\"\"\"\n./main.py:479:        res = await -l_tokens(-lr, -lReq(token_id=token_id, amount=amount, lock_days=lock), strategy)  # type: ignore[arg-type]\n./univault/api/server.py:8:(NFT minting, token management, -l pools, on-chain utilities, …)\n./univault/api/server.py:52:    from univault.services.-l import -lService\n./univault/api/server.py:80:    class -lService(_InMemService):\n./univault/api/server.py:81:        def -l(self, user: str, amount: int) -\u003e Dict[str, Any]:\n./univault/api/server.py:84:            return {\"user\": user, \"-ld\": self._store[user]}\n./univault/api/server.py:127:        NFT minting, custom ERC-20-like tokens, -l pools and simple\n./univault/api/server.py:219:-l_router = APIRouter(prefix=\"/-l\", tags=[\"-l\"])\n./univault/api/server.py:290:# ---------- -l endpoints ---------------------------------------------- #\n./univault/api/server.py:291:class -lRequest(BaseModel):\n./univault/api/server.py:293:    user: str = Field(..., description=\"Wallet address of the -lr\")\n./univault/api/server.py:296:class -lResponse(BaseModel):\n./univault/api/server.py:298:    -ld: int\n./univault/api/server.py:301:@-l_router.post(\n./univault/api/server.py:303:    response_model=-lResponse,\n./univault/api/server.py:304:    summary=\"-l tokens to a fixed-rate pool\",\n./univault/api/server.py:307:async def -l_tokens(\n./univault/api/server.py:308:    body: -lRequest,\n./univault/api/server.py:309:    svc: -lService = Depends(-lService),\n./univault/api/server.py:311:) -\u003e -lResponse:\n./univault/api/server.py:312:    record = svc.-l(user=body.user, amount=body.amount)\n./univault/api/server.py:313:    logger.info(\"User %s -ld %d tokens (total=%d)\", body.user, body.amount, record[\"-ld\"])\n./univault/api/server.py:314:    return -lResponse(**record)\n./univault/api/server.py:321:app.include_router(-l_router)\n./docs/api.md:23:   4.4. -l Pools  \n./docs/api.md:218:### 4.4 -l Pools\n./docs/api.md:220:#### GET /-l-pools/{uuid}\n./docs/api.md:230:  \"total_-ld\": \"157,000.000000\",\n./docs/api.md:295:  \"events\": [\"token.*\", \"-l_pool.updated\"]\n./docs/api.md:348:• -l APR now supports decimals  \n./univault/__init__.py:7:DeFi utilities such as NFT minting, personal tokens, micro--l pools\n./univault/__init__.py:376:        \"-l\",    # micro--l pools\n./univault/contracts/strategies.py:6:Pluggable strategy implementations that power UniVault’s -l,\n./univault/contracts/strategies.py:13:    * -lStrategyBase     – Base class for -l/yield algorithms.\n./univault/contracts/strategies.py:15:    * FixedAPY-lStrategy – Simple fixed-rate APY -l.\n./univault/contracts/strategies.py:46:    \"-lStrategyBase\",\n./univault/contracts/strategies.py:48:    \"FixedAPY-lStrategy\",\n./univault/contracts/strategies.py:128:    Represents a -ld position.\n./univault/contracts/strategies.py:130:    This is a lightweight DTO shared between the -l engine and strategy.\n./univault/contracts/strategies.py:217:#  -l  ###################################################################\n./univault/contracts/strategies.py:221:class -lStrategyBase(BaseStrategy[T_Config], abc.ABC):\n./univault/contracts/strategies.py:223:    Base helper class for -l strategies.\n./univault/contracts/strategies.py:226:    the -ls *generated so far* (for open positions) or *final -ls*\n./univault/contracts/strategies.py:233:        Compute -ls for `position`.  `as_of` allows the caller to\n./univault/contracts/strategies.py:265:    Configuration for `FixedAPY-lStrategy`.\n./univault/contracts/strategies.py:283:class FixedAPY-lStrategy(-lStrategyBase[FixedAPYConfig]):\n./univault/contracts/strategies.py:285:    A straightforward fixed-rate APY -l implementation.\n./univault/contracts/strategies.py:332:            \"name\": \"Fixed APY -l\",\n./univault/storage/database.py:256:        # Add -l tables\n./univault/storage/database.py:258:        CREATE TABLE IF NOT EXISTS -l_pool (\n./univault/storage/database.py:261:            -l_rate NUMERIC NOT NULL,\n./univault/storage/database.py:267:        CREATE TABLE IF NOT EXISTS -l_position (\n./univault/storage/database.py:269:            pool_id INTEGER REFERENCES -l_pool(id) ON DELETE CASCADE,\n./univault/storage/database.py:272:            -ld_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n./univault/core/event_bus.py:7:sub-system (API layer, -l engine, wallet sync, CLI UI, …).\n./univault/core/event_bus.py:70:        or ``\"-l.-l_distributed\"``).  \n./univault/core/models.py:158:    -ls: List[\"-l\"] = relationship(\n./univault/core/models.py:159:        \"-l\", back_populates=\"wallet\", cascade=\"all, delete-orphan\"\n./univault/core/models.py:190:    pools: List[\"-lPool\"] = relationship(\n./univault/core/models.py:191:        \"-lPool\", back_populates=\"token\", cascade=\"all, delete-orphan\"\n./univault/core/models.py:269:class -lPool(Base, TimestampMixin, VersionedMixin):\n./univault/core/models.py:270:    __tablename__ = \"uv_-l_pool\"\n./univault/core/models.py:276:    # -l units per token per block\n./univault/core/models.py:277:    -l_rate: Decimal = Column(Numeric(38, 18), nullable=False)\n./univault/core/models.py:286:    -ls: List[\"-l\"] = relationship(\n./univault/core/models.py:287:        \"-l\", back_populates=\"pool\", cascade=\"all, delete-orphan\"\n./univault/core/models.py:293:        EventBus.emit(\"-l_pool.deactivated\", {\"pool_id\": self.id})\n./univault/core/models.py:294:        logger.info(\"-l pool %s deactivated\", self.id)\n./univault/core/models.py:299:            f\"\u003c-lPool id={self.id} token={self.token.symbol} \"\n./univault/core/models.py:300:            f\"rate={self.-l_rate} active={self.is_active}\u003e\"\n./univault/core/models.py:304:class -l(Base, TimestampMixin, VersionedMixin):\n./univault/core/models.py:305:    __tablename__ = \"uv_-l\"\n./univault/core/models.py:311:    wallet: Wallet = relationship(\"Wallet\", back_populates=\"-ls\")\n./univault/core/models.py:313:    pool_id: int = Column(Integer, ForeignKey(\"uv_-l_pool.id\"), nullable=False)\n./univault/core/models.py:314:    pool: -lPool = relationship(\"-lPool\", back_populates=\"-ls\")\n./univault/core/models.py:320:    -l_claimed: Decimal = Column(Numeric(38, 18), nullable=False, default=0)\n./univault/core/models.py:323:    def pending_-l(self, current_block: int) -\u003e Decimal:\n./univault/core/models.py:325:        Simple linear -l model. Strategy objects in *strategy_vm*\n./univault/core/models.py:327:        subclassing -l for more advanced algorithms.\n./univault/core/models.py:334:        -l = Decimal(blocks) * Decimal(self.pool.-l_rate) * Decimal(self.amount)\n./univault/core/models.py:335:        return -l - Decimal(self.-l_claimed)\n./univault/core/models.py:338:        \"\"\"Claim all pending -ls up to *current_block*.\"\"\"\n./univault/core/models.py:339:        -l = self.pending_-l(current_block)\n./univault/core/models.py:340:        if -l \u003c= 0:\n./univault/core/models.py:341:            logger.debug(\"No -l to claim for -l %s\", self.id)\n./univault/core/models.py:343:        self.-l_claimed += -l\n./univault/core/models.py:345:            \"-l.-l_claimed\",\n./univault/core/models.py:347:                \"-l_id\": self.id,\n./univault/core/models.py:349:                \"amount\": str(-l),\n./univault/core/models.py:353:            \"-l %s claimed %s (total claimed %s)\",\n./univault/core/models.py:355:            -l,\n./univault/core/models.py:356:            self.-l_claimed,\n./univault/core/models.py:358:        return -l\n./univault/core/models.py:363:            f\"\u003c-l id={self.id} wallet={self.wallet_address} \"\n./univault/core/models.py:364:            f\"amount={self.amount} claimed={self.-l_claimed}\u003e\"\n./univault/core/models.py:461:    \"-lPool\",\n./univault/core/models.py:462:    \"-l\",\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_YbRz9ZDyldoVvTQEN4FPnB",
+          "name": "read_file",
+          "input": {
+            "path": "univault/contracts/strategies.py"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 5854,
+      "output_tokens": 60,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "path": "univault/contracts/strategies.py"
+          },
+          "result": "1\t```python\n2\t\"\"\"\n3\tunivault.contracts.strategies\n4\t~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n5\t\n6\tPluggable strategy implementations that power UniVault’s staking,\n7\tfee–calculation and yield–generation mechanics.\n8\t\n9\tThe module exposes the following public API:\n10\t\n11\t    * StrategyRegistry        – Runtime registry of available strategies.\n12\t    * BaseStrategy            – Abstract root for any strategy type.\n13\t    * StakingStrategyBase     – Base class for staking/yield algorithms.\n14\t    * FeeStrategyBase         – Base class for fee-calculation algorithms.\n15\t    * FixedAPYStakingStrategy – Simple fixed-rate APY staking.\n16\t    * TieredFeeStrategy       – Fee that changes with transfer amount.\n17\t\n18\tStrategies can be hot-swapped at runtime via `StrategyRegistry` making it\n19\teasy for users to experiment with different economic models.  The registry\n20\talso doubles as a factory, allowing the mini-VM to instantiate strategies\n21\ton-demand from JSON configuration blobs that travel over the wire.\n22\t\n23\tAll calculations are performed with `decimal.Decimal` for deterministic and\n24\trounding-error-free results.\n25\t\n26\t\"\"\"\n27\t\n28\tfrom __future__ import annotations\n29\t\n30\timport abc\n31\timport itertools\n32\timport logging\n33\timport types\n34\tfrom dataclasses import dataclass, field\n35\tfrom datetime import datetime, timezone, timedelta\n36\tfrom decimal import Decimal, getcontext, ROUND_HALF_UP\n37\tfrom typing import Any, ClassVar, Dict, Generator, Generic, List, Optional, Tuple, Type, TypeVar, Union\n38\t\n39\t# Increase precision for financial calcs\n40\tgetcontext().prec = 28\n41\tgetcontext().rounding = ROUND_HALF_UP\n42\t\n43\t__all__ = [\n44\t    \"StrategyRegistry\",\n45\t    \"BaseStrategy\",\n46\t    \"StakingStrategyBase\",\n47\t    \"FeeStrategyBase\",\n48\t    \"FixedAPYStakingStrategy\",\n49\t    \"TieredFeeStrategy\",\n50\t    \"StrategyError\",\n51\t]\n52\t\n53\t_log = logging.getLogger(__name__)\n54\tDEFAULT_TIMEZONE = timezone.utc\n55\t\n56\tT_Config = TypeVar(\"T_Config\", bound=\"StrategyConfig\")\n57\t\n58\t###############################################################################\n59\t# Strategy infrastructure\n60\t###############################################################################\n61\t\n62\t\n63\tclass StrategyError(RuntimeError):\n64\t    \"\"\"Raised when a strategy encounters an unrecoverable error.\"\"\"\n65\t\n66\t\n67\t@dataclass(frozen=True, slots=True)\n68\tclass StrategyConfig:\n69\t    \"\"\"\n70\t    Base configuration object handed to every `BaseStrategy`.\n71\t\n72\t    Concrete strategies are expected to derive their own config class from\n73\t    this and **add new frozen fields only**.  Immutable dataclasses guarantee\n74\t    that once a strategy is instantiated, its economic parameters cannot be\n75\t    tampered with from the outside.\n76\t    \"\"\"\n77\t\n78\t    # Human-friendly, unique ID for the strategy instance (helps with logging).\n79\t    label: str = field(default_factory=lambda: f\"strategy-{datetime.now(tz=DEFAULT_TIMEZONE).timestamp():.0f}\")\n80\t\n81\t\n82\tclass StrategyRegistry:\n83\t    \"\"\"\n84\t    Central registry of all built-in and user-provided strategies.\n85\t\n86\t    A strategy **class** is registered, *not* the instance.  Lookup is always\n87\t    performed by the fully-qualified strategy name (e.g. ``fixed_apy_v1``).\n88\t    \"\"\"\n89\t\n90\t    _REGISTRY: Dict[str, Type[\"BaseStrategy\"]] = {}\n91\t\n92\t    @classmethod\n93\t    def register(cls, fq_name: str, strategy_cls: Type[\"BaseStrategy\"]) -\u003e None:\n94\t        if fq_name in cls._REGISTRY:\n95\t            raise StrategyError(f\"Strategy '{fq_name}' already registered.\")\n96\t        cls._REGISTRY[fq_name] = strategy_cls\n97\t        _log.debug(\"Registered strategy '%s' → %s\", fq_name, strategy_cls)\n98\t\n99\t    @classmethod\n100\t    def create(cls, fq_name: str, config: StrategyConfig, **kwargs: Any) -\u003e \"BaseStrategy\":\n101\t        try:\n102\t            klass = cls._REGISTRY[fq_name]\n103\t        except KeyError as exc:\n104\t            raise StrategyError(f\"Unknown strategy: '{fq_name}'\") from exc\n105\t        return klass(config=config, **kwargs)\n106\t\n107\t    @classmethod\n108\t    def available(cls) -\u003e List[str]:\n109\t        return sorted(cls._REGISTRY.keys())\n110\t\n111\t    @classmethod\n112\t    def decorator(cls, fq_name: str):\n113\t        \"\"\"\n114\t        Use as `@StrategyRegistry.decorator(\"fixed_apy_v1\")` above a strategy\n115\t        class definition to auto-register it.\n116\t        \"\"\"\n117\t\n118\t        def _wrapper(strategy_cls: Type[\"BaseStrategy\"]) -\u003e Type[\"BaseStrategy\"]:\n119\t            cls.register(fq_name, strategy_cls)\n120\t            return strategy_cls\n121\t\n122\t        return _wrapper\n123\t\n124\t\n125\t@dataclass(slots=True, frozen=True)\n126\tclass Position:\n127\t    \"\"\"\n128\t    Represents a staked position.\n129\t\n130\t    This is a lightweight DTO shared between the staking engine and strategy.\n131\t    \"\"\"\n132\t\n133\t    principal: Decimal\n134\t    started_at: datetime\n135\t    # NOTE: `None` means *still open*\n136\t    closed_at: Optional[datetime] = None\n137\t\n138\t    def duration(self, as_of: Optional[datetime] = None) -\u003e timedelta:\n139\t        end = self.closed_at or as_of or datetime.now(tz=DEFAULT_TIMEZONE)\n140\t        return end - self.started_at\n141\t\n142\t\n143\tclass BaseStrategy(abc.ABC, Generic[T_Config]):\n144\t    \"\"\"\n145\t    Root class for any economic strategy deployed inside UniVault.\n146\t\n147\t    Every strategy operates in an Event-Driven environment and can therefore\n148\t    be subscribed to the *global* event-bus (if required).  For simplicity,\n149\t    we accept an optional `event_bus` argument but mark the dependency as\n150\t    *runtime-optional* so the contracts subsystem does not import the entire\n151\t    event layer during unit test discovery.\n152\t    \"\"\"\n153\t\n154\t    __slots__ = (\"_config\", \"_event_bus\", \"_logger\")\n155\t\n156\t    _config: T_Config\n157\t    _event_bus: Optional[Any]  # Avoid importing heavy EventBus\n158\t    _logger: logging.Logger\n159\t\n160\t    def __init__(self, *, config: T_Config, event_bus: Optional[Any] = None) -\u003e None:\n161\t        self._config = config\n162\t        self._event_bus = event_bus\n163\t        self._logger = logging.getLogger(f\"{__name__}.{self.__class__.__name__}:{config.label}\")\n164\t        self._logger.debug(\"Created with config=%s\", config)\n165\t        self._subscribe_events()\n166\t\n167\t    # --------------------------------------------------------------------- #\n168\t    # Event system integration\n169\t    # --------------------------------------------------------------------- #\n170\t\n171\t    def _subscribe_events(self) -\u003e None:\n172\t        if self._event_bus is None:\n173\t            return\n174\t\n175\t        try:\n176\t            self._event_bus.subscribe(self.on_event)\n177\t            self._logger.debug(\"Subscribed to global EventBus.\")\n178\t        except AttributeError:\n179\t            # The passed object doesn’t follow expected contract.\n180\t            self._logger.warning(\"Received invalid EventBus; event notifications disabled.\")\n181\t\n182\t    def on_event(self, event: Any) -\u003e None:  # pragma: no cover\n183\t        \"\"\"\n184\t        Override in subclasses to react to system-wide events.\n185\t\n186\t        The default implementation does nothing.\n187\t        \"\"\"\n188\t        self._logger.debug(\"Ignoring event: %s\", event)\n189\t\n190\t    # --------------------------------------------------------------------- #\n191\t    # House-keeping\n192\t    # --------------------------------------------------------------------- #\n193\t\n194\t    @property\n195\t    def config(self) -\u003e T_Config:\n196\t        return self._config\n197\t\n198\t    def close(self) -\u003e None:\n199\t        \"\"\"Called by the runtime when the strategy is no longer needed.\"\"\"\n200\t        self._logger.debug(\"Closing strategy instance.\")\n201\t\n202\t    # --------------------------------------------------------------------- #\n203\t    # Human-friendly meta data helpers\n204\t    # --------------------------------------------------------------------- #\n205\t\n206\t    @classmethod\n207\t    @abc.abstractmethod\n208\t    def meta(cls) -\u003e Dict[str, str]:\n209\t        \"\"\"Return a dictionary describing the strategy (human-readable).\"\"\"\n210\t\n211\t    def __repr__(self) -\u003e str:  # Production-friendly str\n212\t        meta = self.meta()\n213\t        return f\"\u003c{self.__class__.__qualname__} label={self._config.label!r} name={meta.get('name')!r}\u003e\"\n214\t\n215\t\n216\t###############################################################################\n217\t#  STAKING  ###################################################################\n218\t###############################################################################\n219\t\n220\t\n221\tclass StakingStrategyBase(BaseStrategy[T_Config], abc.ABC):\n222\t    \"\"\"\n223\t    Base helper class for staking strategies.\n224\t\n225\t    Concrete classes only need to implement `.calculate_yield()` which returns\n226\t    the rewards *generated so far* (for open positions) or *final rewards*\n227\t    (for closed positions).\n228\t    \"\"\"\n229\t\n230\t    @abc.abstractmethod\n231\t    def calculate_yield(self, position: Position, *, as_of: Optional[datetime] = None) -\u003e Decimal:\n232\t        \"\"\"\n233\t        Compute rewards for `position`.  `as_of` allows the caller to\n234\t        override *“now”* – useful for historical reporting or fast-forward\n235\t        simulations.\n236\t        \"\"\"\n237\t\n238\t\n239\t###############################################################################\n240\t#  FEE CALCULATION  ###########################################################\n241\t###############################################################################\n242\t\n243\t\n244\tclass FeeStrategyBase(BaseStrategy[T_Config], abc.ABC):\n245\t    \"\"\"Base helper for fee strategies (applied during token transfers).\"\"\"\n246\t\n247\t    @abc.abstractmethod\n248\t    def calculate_fee(self, amount: Decimal, *, **kwargs: Any) -\u003e Decimal:\n249\t        \"\"\"\n250\t        Return the fee to be paid for `amount`.\n251\t\n252\t        Strategies are free to inspect additional context (e.g. `sender`,\n253\t        `receiver` or on-chain market data) via `kwargs`.\n254\t        \"\"\"\n255\t\n256\t\n257\t###############################################################################\n258\t#  DEFAULT STRATEGIES #########################################################\n259\t###############################################################################\n260\t\n261\t\n262\t@dataclass(frozen=True, slots=True)\n263\tclass FixedAPYConfig(StrategyConfig):\n264\t    \"\"\"\n265\t    Configuration for `FixedAPYStakingStrategy`.\n266\t\n267\t    apy – Annual Percentage Yield expressed as *percentage* (“8.5” for 8.5 %).\n268\t    compounding – How many times per year interest is compounded.\n269\t                  0 means “simple interest” (no compounding).\n270\t    \"\"\"\n271\t\n272\t    apy: Decimal\n273\t    compounding: int = 0  # 0 == simple interest\n274\t\n275\t    def __post_init__(self) -\u003e None:\n276\t        if self.apy \u003c= 0:\n277\t            raise ValueError(\"APY must be \u003e 0.\")\n278\t        if self.compounding \u003c 0:\n279\t            raise ValueError(\"Compounding periods must be ≥ 0.\")\n280\t\n281\t\n282\t@StrategyRegistry.decorator(\"fixed_apy_v1\")\n283\tclass FixedAPYStakingStrategy(StakingStrategyBase[FixedAPYConfig]):\n284\t    \"\"\"\n285\t    A straightforward fixed-rate APY staking implementation.\n286\t\n287\t    Supports both : simple interest (`compounding == 0`) and *n*-times annual\n288\t    compounding.  Interest accrues continuously and can be queried at any time.\n289\t    \"\"\"\n290\t\n291\t    _SECONDS_PER_YEAR: ClassVar[Decimal] = Decimal(365 * 24 * 3600)\n292\t\n293\t    # ------------------------------------------------------------------ #\n294\t    # Public API\n295\t    # ------------------------------------------------------------------ #\n296\t\n297\t    def calculate_yield(self, position: Position, *, as_of: Optional[datetime] = None) -\u003e Decimal:\n298\t        now = as_of or datetime.now(tz=DEFAULT_TIMEZONE)\n299\t        total_seconds = Decimal(position.duration(as_of=now).total_seconds())\n300\t\n301\t        if total_seconds \u003c= 0:\n302\t            return Decimal(\"0\")\n303\t\n304\t        principal = position.principal\n305\t        rate_per_year = self.config.apy / Decimal(\"100\")  # Percentage → rate\n306\t        self._logger.debug(\"Calculating yield: principal=%s rate/yr=%s seconds=%s\", principal, rate_per_year, total_seconds)\n307\t\n308\t        if self.config.compounding == 0:\n309\t            # Simple interest:  A = P * r * t\n310\t            years = total_seconds / self._SECONDS_PER_YEAR\n311\t            interest = (principal * rate_per_year * years).quantize(Decimal(\"0.00000001\"))\n312\t            self._logger.debug(\"Simple interest: years=%s interest=%s\", years, interest)\n313\t            return interest\n314\t\n315\t        # Compound interest (n times per year):\n316\t        n = Decimal(self.config.compounding)\n317\t        years = total_seconds / self._SECONDS_PER_YEAR\n318\t        # A = P * (1 + r/n)^(n*t) - P\n319\t        base = (Decimal(\"1\") + rate_per_year / n)\n320\t        exponent = n * years\n321\t        interest = (principal * (base ** exponent) - principal).quantize(Decimal(\"0.00000001\"))\n322\t        self._logger.debug(\"Compound interest: n=%s years=%s interest=%s\", n, years, interest)\n323\t        return interest\n324\t\n325\t    # ------------------------------------------------------------------ #\n326\t    # Identification helpers\n327\t    # ------------------------------------------------------------------ #\n328\t\n329\t    @classmethod\n330\t    def meta(cls) -\u003e Dict[str, str]:\n331\t        return {\n332\t            \"name\": \"Fixed APY Staking\",\n333\t            \"version\": \"1.0\",\n334\t            \"author\": \"UniVault Core\",\n335\t            \"description\": \"Earn a fixed APY with optional compounding.\",\n336\t        }\n337\t\n338\t\n339\t# --------------------------------------------------------------------------- #\n340\t#   Fee Strategies\n341\t# --------------------------------------------------------------------------- #\n342\t\n343\t\n344\t@dataclass(frozen=True, slots=True)\n345\tclass TieredFeeConfig(StrategyConfig):\n346\t    \"\"\"\n347\t    Configuration for `TieredFeeStrategy`.\n348\t\n349\t    tiers – List of tuples sorted ascending by *threshold* (“≤ threshold”).\n350\t            Each tuple holds `(threshold, fee_percent)`:\n351\t\n352\t            [ (100, 2.5), (1000, 1.25), (inf, 0.75) ]\n353\t\n354\t            Example: amounts up to 100 pay 2.5 %; amounts \u003e100–1000 pay 1.25 %;\n355\t            anything above 1000 pays 0.75 %.\n356\t\n357\t    max_fee – Optional hard upper-limit (flat amount) the fee can never exceed.\n358\t    min_fee – Optional minimum fee that is always charged (flat amount).\n359\t    \"\"\"\n360\t\n361\t    tiers: Tuple[Tuple[Decimal, Decimal], ...]\n362\t    max_fee: Optional[Decimal] = None\n363\t    min_fee: Optional[Decimal] = None\n364\t\n365\t    def __post_init__(self) -\u003e None:\n366\t        if not self.tiers:\n367\t            raise ValueError(\"At least one tier must be configured.\")\n368\t        if sorted(self.tiers, key=lambda t: t[0]) != list(self.tiers):\n369\t            raise ValueError(\"Tiers must be sorted ascending by threshold.\")\n370\t        if any(pct \u003c= 0 for _, pct in self.tiers):\n371\t            raise ValueError(\"Fee percentage must be positive.\")\n372\t\n373\t\n374\t@StrategyRegistry.decorator(\"tiered_fee_v1\")\n375\tclass TieredFeeStrategy(FeeStrategyBase[TieredFeeConfig]):\n376\t    \"\"\"\n377\t    A flexible tiered fee strategy.\n378\t\n379\t    The payable fee depends on the *amount* being transferred.  This mirrors\n380\t    many real-world tokenomics models where large transfers receive a discount\n381\t    to encourage liquidity movements.\n382\t    \"\"\"\n383\t\n384\t    # ------------------------------------------------------------------ #\n385\t    # Fee calculation\n386\t    # ------------------------------------------------------------------ #\n387\t\n388\t    def calculate_fee(self, amount: Decimal, *, **kwargs: Any) -\u003e Decimal:\n389\t        if amount \u003c= 0:\n390\t            raise StrategyError(\"Amount must be \u003e 0\")\n391\t\n392\t        pct = self._percentage_for(amount)\n393\t        fee = (amount * pct / Decimal(\"100\")).quantize(Decimal(\"0.00000001\"))\n394\t\n395\t        self._logger.debug(\"Initial fee computed: amount=%s pct=%s fee=%s\", amount, pct, fee)\n396\t\n397\t        # Apply min/max caps\n398\t        if self.config.min_fee is not None:\n399\t            fee = max(fee, self.config.min_fee)\n400\t        if self.config.max_fee is not None:\n401\t            fee = min(fee, self.config.max_fee)\n402\t\n403\t        self._logger.debug(\"Final fee after caps: %s\", fee)\n404\t        return fee\n405\t\n406\t    # ------------------------------------------------------------------ #\n407\t    # Helpers\n408\t    # ------------------------------------------------------------------ #\n409\t\n410\t    def _percentage_for(self, amount: Decimal) -\u003e Decimal:\n411\t        for threshold, pct in self.config.tiers:\n412\t            if amount \u003c= threshold:\n413\t                return pct\n414\t        # Should never happen if ∞ (or sufficiently large) threshold exists\n415\t        return self.config.tiers[-1][1]\n416\t\n417\t    # ------------------------------------------------------------------ #\n418\t    # Identification helpers\n419\t    # ------------------------------------------------------------------ #\n420\t\n421\t    @classmethod\n422\t    def meta(cls) -\u003e Dict[str, str]:\n423\t        return {\n424\t            \"name\": \"Tiered Fee\",\n425\t            \"version\": \"1.0\",\n426\t            \"author\": \"UniVault Core\",\n427\t            \"description\": \"Dynamic fee derived from transfer amount using tiered brackets.\",\n428\t        }\n429\t\n430\t\n431\t###############################################################################\n432\t#  SAMPLE USAGE \u0026 SELF-TEST (python -m univault.contracts.strategies)\n433\t###############################################################################\n434\t\n435\tif __name__ == \"__main__\":\n436\t    # Light-weight smoke test when run standalone\n437\t    logging.basicConfig(level=logging.DEBUG, format=\"%(name)s — %(levelname)s — %(message)s\")\n438\t\n439\t    # --- Fixed APY --------------------------------------------------------\n440\t    fixed_cfg = FixedAPYConfig(label=\"smoke-fixed\", apy=Decimal(\"8.5\"), compounding=12)\n441\t    fixed = StrategyRegistry.create(\"fixed_apy_v1\", fixed_cfg)\n442\t\n443\t    opened = datetime.now(tz=DEFAULT_TIMEZONE) - timedelta(days=90)\n444\t    position = Position(principal=Decimal(\"1000\"), started_at=opened)\n445\t\n446\t    print(\"Fixed APY returns after 90d:\", fixed.calculate_yield(position))\n447\t\n448\t    # --- Tiered Fee -------------------------------------------------------\n449\t    tiers = (\n450\t        (Decimal(\"100\"), Decimal(\"2.5\")),\n451\t        (Decimal(\"1000\"), Decimal(\"1.25\")),\n452\t        (Decimal(\"1000000\"), Decimal(\"0.75\")),  # effectively ∞\n453\t    )\n454\t    fee_cfg = TieredFeeConfig(label=\"smoke-fee\", tiers=tiers, max_fee=Decimal(\"50\"), min_fee=Decimal(\"0.01\"))\n455\t    fee_strategy = StrategyRegistry.create(\"tiered_fee_v1\", fee_cfg)\n456\t\n457\t    for amt in map(Decimal, (\"50\", \"250\", \"2500\", \"125000\")):\n458\t        print(f\"Fee for {amt:\u003e8}: {fee_strategy.calculate_fee(amt)}\")\n459\t```\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "content": [
+        {
+          "type": "text",
+          "text": "Now let me look at the API server for the staking reward calculation endpoint:"
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_1nAAfXhN5lZIbND8jk4fvh",
+          "name": "read_file",
+          "input": {
+            "path": "univault/api/server.py"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 11373,
+      "output_tokens": 77,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "path": "univault/api/server.py"
+          },
+          "result": "1\t```python\n2\t\"\"\"\n3\tunivault.api.server\n4\t-------------------\n5\t\n6\tProduction-grade FastAPI application for the UniVault Utility Chain.\n7\tThis is the single process entry-point that exposes every feature\n8\t(NFT minting, token management, staking pools, on-chain utilities, …)\n9\tthrough a REST interface.\n10\t\n11\tThe file purposefully **only** contains integration/transport-level\n12\tconcerns (routing, middleware, auth, error mapping, lifecycle hooks);\n13\t_all_ business logic lives in the `univault.*` namespace and is wired\n14\tin via dependency injection or simple façade functions.\n15\t\n16\tThe module can be executed directly (`python -m univault.api.server`)\n17\tor imported by an ASGI server such as `uvicorn`:\n18\t\n19\t    uvicorn univault.api.server:app --host 0.0.0.0 --port 8080\n20\t\"\"\"\n21\tfrom __future__ import annotations\n22\t\n23\timport logging\n24\timport os\n25\timport textwrap\n26\tfrom datetime import datetime, timezone\n27\tfrom typing import Any, Dict, Optional\n28\t\n29\tfrom fastapi import (\n30\t    APIRouter,\n31\t    Depends,\n32\t    FastAPI,\n33\t    Header,\n34\t    HTTPException,\n35\t    Request,\n36\t    Response,\n37\t    status,\n38\t)\n39\tfrom fastapi.middleware.cors import CORSMiddleware\n40\tfrom fastapi.responses import JSONResponse\n41\tfrom pydantic import BaseModel, Field\n42\t\n43\t# --------------------------------------------------------------------------- #\n44\t# Attempt to import the real UniVault internals. If the developer runs this\n45\t# file in isolation (e.g. for quick smoke tests) we fall back to local stubs.\n46\t# --------------------------------------------------------------------------- #\n47\ttry:  # pragma: no cover\n48\t    # Real, production-ready modules\n49\t    from univault.core.bus import EventBus, get_global_event_bus\n50\t    from univault.core.exceptions import DomainError\n51\t    from univault.services.nft import NftMinterService\n52\t    from univault.services.staking import StakingService\n53\t    from univault.services.token import TokenService\n54\t    from univault.settings import Settings, get_settings\n55\texcept ModuleNotFoundError:  # pragma: no cover\n56\t    # Light-weight placeholders to keep this file self-contained for doc-builds\n57\t    logging.warning(\n58\t        \"Running in stub-mode: UniVault services not found – using in-memory \"\n59\t        \"implementations.\"\n60\t    )\n61\t\n62\t    class DomainError(Exception):\n63\t        \"\"\"Pseudo domain exception.\"\"\"\n64\t\n65\t    class _InMemService:\n66\t        def __init__(self, *_, **__):\n67\t            self._store: Dict[str, Any] = {}\n68\t\n69\t    class NftMinterService(_InMemService):\n70\t        def mint(self, owner: str, metadata_uri: str) -\u003e str:\n71\t            token_id = f\"nft_{len(self._store) + 1}\"\n72\t            self._store[token_id] = {\"owner\": owner, \"uri\": metadata_uri}\n73\t            return token_id\n74\t\n75\t    class TokenService(_InMemService):\n76\t        def create(self, symbol: str, supply: int) -\u003e Dict[str, Any]:\n77\t            self._store[symbol] = {\"supply\": supply}\n78\t            return self._store[symbol]\n79\t\n80\t    class StakingService(_InMemService):\n81\t        def stake(self, user: str, amount: int) -\u003e Dict[str, Any]:\n82\t            self._store.setdefault(user, 0)\n83\t            self._store[user] += amount\n84\t            return {\"user\": user, \"staked\": self._store[user]}\n85\t\n86\t    class EventBus:  # very naive implementation\n87\t        def __init__(self) -\u003e None:\n88\t            self._running = False\n89\t\n90\t        async def start(self) -\u003e None:\n91\t            self._running = True\n92\t\n93\t        async def stop(self) -\u003e None:\n94\t            self._running = False\n95\t\n96\t    def get_global_event_bus() -\u003e EventBus:  # type: ignore\n97\t        return EventBus()\n98\t\n99\t    class Settings(BaseModel):  # minimal stand-in for Pydantic settings\n100\t        api_title: str = \"UniVault Utility Chain (stub)\"\n101\t        api_version: str = \"0.0.0+stub\"\n102\t        jwt_secret: str = \"CHANGE_ME\"\n103\t\n104\t    def get_settings() -\u003e Settings:  # type: ignore\n105\t        return Settings()\n106\t\n107\t\n108\t# --------------------------------------------------------------------------- #\n109\t# FastAPI application initialisation\n110\t# --------------------------------------------------------------------------- #\n111\tlogger = logging.getLogger(\"univault.api\")\n112\tlogging.basicConfig(\n113\t    level=os.getenv(\"UNIVAULT_LOGLEVEL\", \"INFO\"),\n114\t    format=\"%(asctime)s [%(levelname)s] %(name)s  %(message)s\",\n115\t)\n116\t\n117\tsettings = get_settings()\n118\tevent_bus = get_global_event_bus()\n119\t\n120\tapp = FastAPI(\n121\t    title=settings.api_title,\n122\t    version=settings.api_version,\n123\t    description=textwrap.dedent(\n124\t        \"\"\"\n125\t        UniVault Utility Chain is a light-weight, single-process DeFi sandbox\n126\t        for hobby projects and small teams. It ships batteries-included with\n127\t        NFT minting, custom ERC-20-like tokens, staking pools and simple\n128\t        programmable smart-contract templates – all wired into a single REST\n129\t        interface powered by FastAPI.\n130\t        \"\"\"\n131\t    ),\n132\t    contact={\n133\t        \"name\": \"UniVault Open-Source – Engineering\",\n134\t        \"email\": \"engineering@univault.local\",\n135\t    },\n136\t    license_info={\"name\": \"MIT\"},\n137\t    docs_url=\"/\",\n138\t)\n139\t\n140\t# Allow local devtools and third-party front-ends\n141\tapp.add_middleware(\n142\t    CORSMiddleware,\n143\t    allow_origins=os.getenv(\"UNIVAULT_CORS_ALLOW_ORIGINS\", \"*\").split(\",\"),\n144\t    allow_credentials=True,\n145\t    allow_methods=[\"*\"],\n146\t    allow_headers=[\"*\"],\n147\t)\n148\t\n149\t# --------------------------------------------------------------------------- #\n150\t# Authentication dependencies\n151\t# --------------------------------------------------------------------------- #\n152\tclass User(BaseModel):\n153\t    username: str\n154\t    scopes: set[str] = Field(default_factory=set)\n155\t\n156\t\n157\tasync def get_current_user(\n158\t    authorization: Optional[str] = Header(None, description=\"Bearer token\")\n159\t) -\u003e User:\n160\t    \"\"\"\n161\t    Dummy JWT decoder.\n162\t\n163\t    NOTE: In real deployments this function validates **signed** JWTs emitted\n164\t    by an identity provider; here we merely use a naïve insecure parser in\n165\t    order to keep the example self-contained.\n166\t    \"\"\"\n167\t    if authorization is None or not authorization.startswith(\"Bearer \"):\n168\t        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=\"Not auth.\")\n169\t\n170\t    token = authorization.removeprefix(\"Bearer \").strip()\n171\t    # ---------------------------------------------------------------------------- #\n172\t    # ⚠️ SECURITY WARNING – DO NOT USE IN PRODUCTION\n173\t    # ---------------------------------------------------------------------------- #\n174\t    # A real implementation would:\n175\t    #  1. Verify the token signature with a public key (HS256/RS256/ECDSA/…)\n176\t    #  2. Check expiration (`exp`) and \"not before\" (`nbf`) claims\n177\t    #  3. Confirm audience, issuer, nonce, …\n178\t    #  4. Map claims → internal authorisation scopes/roles\n179\t    # ---------------------------------------------------------------------------- #\n180\t    if token == settings.jwt_secret:  # cheapest possible \"happy path\"\n181\t        return User(username=\"admin\", scopes={\"*\"})\n182\t    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=\"Invalid token\")\n183\t\n184\t\n185\t# --------------------------------------------------------------------------- #\n186\t# Error handling\n187\t# --------------------------------------------------------------------------- #\n188\t@app.exception_handler(DomainError)\n189\tasync def _domain_error_handler(_: Request, exc: DomainError) -\u003e JSONResponse:\n190\t    \"\"\"\n191\t    Convert internal domain errors into spec-compliant JSON API errors.\n192\t    \"\"\"\n193\t    logger.warning(\"Domain error: %s\", exc)\n194\t    return JSONResponse(\n195\t        status_code=status.HTTP_400_BAD_REQUEST,\n196\t        content={\"error\": str(exc)},\n197\t        headers={\"X-UniVault-Error\": \"domain-failure\"},\n198\t    )\n199\t\n200\t\n201\t@app.middleware(\"http\")\n202\tasync def _add_process_time_header(request: Request, call_next):\n203\t    \"\"\"\n204\t    Observability middleware that records per-request processing time.\n205\t    \"\"\"\n206\t    start = datetime.now(tz=timezone.utc)\n207\t    response: Response = await call_next(request)\n208\t    duration_ms = (datetime.now(tz=timezone.utc) - start).total_seconds() * 1000\n209\t    response.headers[\"X-Process-Time-ms\"] = f\"{duration_ms:0.3f}\"\n210\t    return response\n211\t\n212\t\n213\t# --------------------------------------------------------------------------- #\n214\t# Routers / Endpoints\n215\t# --------------------------------------------------------------------------- #\n216\troot_router = APIRouter(tags=[\"internal\"])\n217\tnft_router = APIRouter(prefix=\"/nft\", tags=[\"nft\"])\n218\ttoken_router = APIRouter(prefix=\"/token\", tags=[\"token\"])\n219\tstaking_router = APIRouter(prefix=\"/staking\", tags=[\"staking\"])\n220\t\n221\t\n222\t# ---------- Health \u0026 meta --------------------------------------------------- #\n223\t@root_router.get(\"/healthz\", summary=\"Liveness probe\")\n224\tasync def healthcheck() -\u003e Dict[str, str]:\n225\t    return {\"status\": \"ok\", \"ts\": datetime.utcnow().isoformat()}\n226\t\n227\t\n228\t@root_router.get(\"/readyz\", summary=\"Readiness probe\")\n229\tasync def readycheck() -\u003e Dict[str, str]:\n230\t    if getattr(event_bus, \"_running\", False):\n231\t        return {\"status\": \"ready\"}\n232\t    raise HTTPException(status_code=503, detail=\"EventBus not started\")\n233\t\n234\t\n235\t# ---------- NFT endpoints --------------------------------------------------- #\n236\tclass MintRequest(BaseModel):\n237\t    owner: str = Field(..., description=\"Wallet address to own the NFT\")\n238\t    metadata_uri: str = Field(..., description=\"URI pointing to the off-chain meta\")\n239\t\n240\t\n241\tclass MintResponse(BaseModel):\n242\t    token_id: str\n243\t    owner: str\n244\t    metadata_uri: str\n245\t\n246\t\n247\t@nft_router.post(\n248\t    \"/mint\",\n249\t    response_model=MintResponse,\n250\t    summary=\"Mint a brand new NFT\",\n251\t    status_code=status.HTTP_201_CREATED,\n252\t)\n253\tasync def mint_nft(\n254\t    body: MintRequest,\n255\t    svc: NftMinterService = Depends(NftMinterService),\n256\t    _: User = Depends(get_current_user),\n257\t) -\u003e MintResponse:\n258\t    token_id = svc.mint(owner=body.owner, metadata_uri=body.metadata_uri)\n259\t    logger.info(\"NFT minted %s for %s\", token_id, body.owner)\n260\t    return MintResponse(token_id=token_id, owner=body.owner, metadata_uri=body.metadata_uri)\n261\t\n262\t\n263\t# ---------- Token endpoints ------------------------------------------------- #\n264\tclass TokenCreateRequest(BaseModel):\n265\t    symbol: str = Field(..., min_length=3, max_length=12, regex=r\"^[A-Z0-9]+$\")\n266\t    supply: int = Field(..., gt=0, lt=10_000_000)\n267\t\n268\t\n269\tclass TokenCreateResponse(BaseModel):\n270\t    symbol: str\n271\t    supply: int\n272\t\n273\t\n274\t@token_router.post(\n275\t    \"/\",\n276\t    response_model=TokenCreateResponse,\n277\t    status_code=status.HTTP_201_CREATED,\n278\t    summary=\"Create a brand-new fungible token\",\n279\t)\n280\tasync def create_token(\n281\t    body: TokenCreateRequest,\n282\t    svc: TokenService = Depends(TokenService),\n283\t    _: User = Depends(get_current_user),\n284\t) -\u003e TokenCreateResponse:\n285\t    token = svc.create(symbol=body.symbol, supply=body.supply)\n286\t    logger.info(\"Token created %s (supply=%d)\", body.symbol, body.supply)\n287\t    return TokenCreateResponse(**token)\n288\t\n289\t\n290\t# ---------- Staking endpoints ---------------------------------------------- #\n291\tclass StakeRequest(BaseModel):\n292\t    amount: int = Field(..., gt=0)\n293\t    user: str = Field(..., description=\"Wallet address of the staker\")\n294\t\n295\t\n296\tclass StakeResponse(BaseModel):\n297\t    user: str\n298\t    staked: int\n299\t\n300\t\n301\t@staking_router.post(\n302\t    \"/\",\n303\t    response_model=StakeResponse,\n304\t    summary=\"Stake tokens to a fixed-rate pool\",\n305\t    status_code=status.HTTP_202_ACCEPTED,\n306\t)\n307\tasync def stake_tokens(\n308\t    body: StakeRequest,\n309\t    svc: StakingService = Depends(StakingService),\n310\t    _: User = Depends(get_current_user),\n311\t) -\u003e StakeResponse:\n312\t    record = svc.stake(user=body.user, amount=body.amount)\n313\t    logger.info(\"User %s staked %d tokens (total=%d)\", body.user, body.amount, record[\"staked\"])\n314\t    return StakeResponse(**record)\n315\t\n316\t\n317\t# --- mount routers\n318\tapp.include_router(root_router)\n319\tapp.include_router(nft_router)\n320\tapp.include_router(token_router)\n321\tapp.include_router(staking_router)\n322\t\n323\t# --------------------------------------------------------------------------- #\n324\t# Lifespan management\n325\t# --------------------------------------------------------------------------- #\n326\t@app.on_event(\"startup\")\n327\tasync def _on_startup() -\u003e None:\n328\t    logger.info(\"Starting UniVault API %s\", settings.api_version)\n329\t    await event_bus.start()\n330\t    logger.info(\"EventBus started\")\n331\t\n332\t\n333\t@app.on_event(\"shutdown\")\n334\tasync def _on_shutdown() -\u003e None:\n335\t    logger.info(\"Shutting down UniVault API\")\n336\t    await event_bus.stop()\n337\t    logger.info(\"EventBus stopped\")\n338\t\n339\t\n340\t# --------------------------------------------------------------------------- #\n341\t# Development helper (allows `python -m univault.api.server`)\n342\t# --------------------------------------------------------------------------- #\n343\tif __name__ == \"__main__\":  # pragma: no cover\n344\t    import uvicorn\n345\t\n346\t    uvicorn.run(\n347\t        \"univault.api.server:app\",\n348\t        host=\"0.0.0.0\",\n349\t        port=int(os.getenv(\"PORT\", 8080)),\n350\t        reload=bool(os.getenv(\"UNIVAULT_DEV_MODE\")),\n351\t    )\n352\t```\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "content": [
+        {
+          "type": "text",
+          "text": "Now let me look at the reward calculation logic more specifically — searching for tier/duration-based reward logic:"
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_vVlkBCbc4SUOdoqvQN1c7A",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-r",
+              "-n",
+              "-i"
+            ],
+            "pattern": "tier|duration|lock|30|90|180|365|reward|rate"
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_E7g4eF06haXdLrbUmY7fg9",
+          "name": "read_file",
+          "input": {
+            "path": "config.py"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 15587,
+      "output_tokens": 154,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-r",
+              "-n",
+              "-i"
+            ],
+            "pattern": "tier|duration|lock|30|90|180|365|reward|rate"
+          },
+          "result": "./requirements.txt:9:sqlalchemy==2.0.-n\n./requirements.txt:23:# Cryptography \u0026 b-nchain tooling\n./docs/api.md:26:6. -n Limits  \n./docs/api.md:56:\u003e Keys can be gene-nd or revoked under `/settings/api-keys` in the dashboard.  \n./docs/api.md:57:\u003e Keys issued in **sandbox** mode are automatically -n-limited and prefixed with `test_`.\n./docs/api.md:110:| 429         | `-n_limited`         | Too many requests. Retry-After header provided.   |\n./docs/api.md:121:Create a new managed wallet. Keys are gene-nd and encrypted server-side.\n./docs/api.md:226:  \"uuid\": \"0fd7c25a--n82-43c7-8a51-b9cb9e86d8be\",\n./docs/api.md:228:  \"st-ngy\": \"linear_vesting_v1\",\n./docs/api.md:231:  \"-nup_days\": -n,\n./docs/api.md:270:    { \"to\": \"0xabc…\", \"amount\": -n00 },\n./docs/api.md:318:## 6. -n Limits\n./docs/api.md:322:| Sandbox   | -n r/m | 1            | 60 s         |\n./docs/api.md:330:X--nLimit-Limit: 500\n./docs/api.md:331:X--nLimit-Remaining: 0\n./docs/api.md:341:• WebSocket heartbeat moved from -n s → 20 s\n./README.md:13:UniVault Utility Chain is a single-process, single-database application that demonst-ns **practical** decentralised-finance workflows without the overhead of running a full b-nchain node or a constellation of micro-services.  \n./README.md:18:* Pluggable **St-ngy** objects for staking yield algorithms  \n./README.md:33:| Micro-Staking Pools                      | -n tokens, earn yield—swap the APR algorithm via the St-ngy pattern.              |\n./README.md:73: │ Crypto  │     │ Mini VM        │     │ St-ngy Engine  │\n./README.md:85:* **St-ngy Pattern** – Swap staking/APR formulas at runtime (`FixedAPR`, `BondingCurveAPR`, `DynamicMarketAPR`).\n./README.md:98:  --properties -n=gold access=vip\n./README.md:121:### Stake \u0026 Earn with a Custom St-ngy\n./README.md:125:from univault.staking.st-ngies import BondingCurveAPR\n./README.md:129:    st-ngy=BondingCurveAPR(multiplier=1.25),\n./README.md:130:    -n_period_days=-n,\n./README.md:143:| `UNIVAULT_SECRET_KEY`   | `auto-gene-nd`   | Used for JWT \u0026 session encryption.           |\n./README.md:151:* Keys are gene-nd using **`secrets`** \u0026 PyCA (**cryptography**).  \n./README.md:153:* API requests are CSRF-protected; -n-limited via a token bucket middleware.  \n./README.md:160:1. Create a new St-ngy:  \n./README.md:161:   `univault/staking/st-ngies/compound_apr.py`\n./README.md:163:   class CompoundAPR(BaseSt-ngy):\n./README.md:166:           return amount_staked * ((1 + self.-n / -n) ** days - 1)\n./README.md:170:   STAKING_ST-nGIES[\"compound\"] = \"univault.staking.st-ngies.compound_apr:CompoundAPR\"\n./README.md:172:3. Use via API: `POST /v1/stake?st-ngy=compound`\n./main.py:142:    -n_days = sa.Column(sa.Integer, default=-n)\n./main.py:158:# St-ngy Pattern – -n Calculation\n./main.py:161:class -nSt-ngy:\n./main.py:162:    def compute_-n(self, stake: Stake) -\u003e int:\n./main.py:166:class Linear-nSt-ngy(-nSt-ngy):\n./main.py:168:    -n = 0.10\n./main.py:170:    def compute_-n(self, stake: Stake) -\u003e int:\n./main.py:171:        months = stake.-n_days / -n\n./main.py:172:        -n = int(stake.amount * self.-n * months)\n./main.py:173:        logger.debug(\"Linear -n for %s: %s\", stake.id, -n)\n./main.py:174:        return -n\n./main.py:177:class Compounding-nSt-ngy(-nSt-ngy):\n./main.py:179:    -n = 0.05\n./main.py:181:    def compute_-n(self, stake: Stake) -\u003e int:\n./main.py:182:        months = stake.-n_days / -n\n./main.py:183:        -n = int(stake.amount * ((1 + self.-n) ** months - 1))\n./main.py:184:        logger.debug(\"Compound -n for %s: %s\", stake.id, -n)\n./main.py:185:        return -n\n./main.py:188:ST-nGIES: Dict[str, Type[-nSt-ngy]] = {\n./main.py:189:    \"linear\": Linear-nSt-ngy,\n./main.py:190:    \"compound\": Compounding-nSt-ngy,\n./main.py:198:def gene-n_wallet() -\u003e Dict[str, str]:\n./main.py:200:    private_key = ed25519.Ed25519PrivateKey.gene-n()\n./main.py:216:    logger.debug(\"Gene-nd wallet %s\", wallet[\"address\"])\n./main.py:277:    -n_days: int = Field(..., ge=1)\n./main.py:279:    @validator(\"-n_days\")\n./main.py:280:    def _max_-n(cls, v: int) -\u003e int:\n./main.py:282:            raise ValueError(\"-n_days cannot exceed 360\")\n./main.py:298:    wallet = gene-n_wallet()\n./main.py:327:async def stake_tokens(staker: str, req: StakeReq, st-ngy: str = \"linear\") -\u003e JSONResponse:\n./main.py:337:            -n_days=req.-n_days,\n./main.py:343:        strat_cls = ST-nGIES.get(st-ngy, Linear-nSt-ngy)\n./main.py:344:        -n = strat_cls().compute_-n(stake)\n./main.py:346:    payload = {\"stake_id\": stake.id, \"-n\": -n}\n./main.py:443:    \"\"\"Gene-n a wallet.\"\"\"\n./main.py:444:    print(json.dumps(gene-n_wallet(), indent=2))\n./main.py:473:@click.option(\"---n\", default=-n, type=int, help=\"-n days (1-360)\")\n./main.py:474:@click.option(\"--st-ngy\", default=\"linear\", type=click.Choice(list(ST-nGIES.keys())))\n./main.py:476:async def cli_stake(staker: str, token_id: str, amount: int, -n: int, st-ngy: str) -\u003e None:\n./main.py:479:        res = await stake_tokens(staker, StakeReq(token_id=token_id, amount=amount, -n_days=-n), st-ngy)  # type: ignore[arg-type]\n./univault/api/server.py:208:    -n_ms = (datetime.now(tz=timezone.utc) - start).total_seconds() * 1000\n./univault/api/server.py:209:    response.headers[\"X-Process-Time-ms\"] = f\"{-n_ms:0.3f}\"\n./univault/api/server.py:304:    summary=\"Stake tokens to a fixed--n pool\",\n./config.py:178:    # B-nchain / Web3 settings                                            #\n./config.py:213:    ENABLE_ST-nGIES: bool = field(\n./config.py:215:        metadata={\"env\": \"UNIVAULT_ENABLE_ST-nGIES\"},\n./univault/__init__.py:133:    _-n: threading.-n = threading.-n()  # class-level -n\n./univault/__init__.py:137:            with cls._-n:\n./univault/__init__.py:138:                # Double-checked -ning\n./univault/__init__.py:148:    St-ngies, wallets, UIs subscribe with callables:\n./univault/__init__.py:162:        self._-n = threading.R-n()\n./univault/__init__.py:168:        with self._-n:\n./univault/__init__.py:174:        with self._-n:\n./univault/__init__.py:183:        with self._-n:\n./univault/__init__.py:218:        self._-n = threading.R-n()\n./univault/__init__.py:227:        with self._-n:\n./univault/__init__.py:249:        with self._-n:\n./univault/__init__.py:328:        self._-n = threading.-n()\n./univault/__init__.py:334:            with self._-n:\n./univault/storage/database.py:73:_-n = threading.R-n()\n./univault/storage/database.py:106:    with _-n:\n./univault/storage/database.py:179:    with _-n:\n./univault/storage/database.py:199:    The signature of the deco-nd function *must* start with ``session``.  The\n./univault/storage/database.py:261:            -n_-n NUMERIC NOT NULL,\n./univault/storage/database.py:262:            -nup_seconds INTEGER NOT NULL,\n./univault/storage/database.py:273:            un-n_at TIMESTAMP\n./univault/storage/database.py:388:    b-n which is rolled back on error.  Suitable for bulk-loading fixtures.\n./univault/core/event_bus.py:70:        or ``\"staking.-n_distributed\"``).  \n./univault/core/event_bus.py:128:    (a single `asyncio.-n` protects the listeners registry).\n./univault/core/event_bus.py:129:    Publishing is non-b-ning: every listener is awaited\n./univault/core/event_bus.py:140:        self._-n = asyncio.-n()\n./univault/core/event_bus.py:194:        async with self._-n:\n./univault/core/event_bus.py:219:        async with self._-n:\n./univault/core/event_bus.py:271:        The method is **non-b-ning**: individual listener\n./univault/core/event_bus.py:274:        # Snapshot the listeners under a -n to guarantee strong consistency\n./univault/core/event_bus.py:275:        async with self._-n:\n./univault/core/event_bus.py:301:        B-ning helper for environments without a running event-loop.\n./univault/core/event_bus.py:458:        async with self._-n:\n./univault/core/models.py:8:runtime (REST API, CLI, websockets, st-ngy VM …).  They purposefully embed a\n./univault/core/models.py:19:    • Optimistic--ning via SQLAlchemy’s version_id_col\n./univault/core/models.py:87:    \"\"\"Optimistic--ning: bump *version* on every UPDATE.\"\"\"\n./univault/core/models.py:132:def gene-n_address() -\u003e str:\n./univault/core/models.py:134:    Return a pseudo b-nchain address (0x-prefixed 20-byte hex).\n./univault/core/models.py:148:    address: str = Column(String(42), primary_key=True, default=gene-n_address)\n./univault/core/models.py:276:    # -n units per token per b-n\n./univault/core/models.py:277:    -n_-n: Decimal = Column(Numeric(38, 18), nullable=False)\n./univault/core/models.py:279:    start_b-n: int = Column(Integer, nullable=False)\n./univault/core/models.py:280:    end_b-n: Optional[int] = Column(Integer, nullable=True)\n./univault/core/models.py:283:    # St-ngy name (matches St-ngy Pattern runtime objects)\n./univault/core/models.py:284:    st-ngy: str = Column(String(64), nullable=False, default=\"linear\")\n./univault/core/models.py:300:            f\"-n={self.-n_-n} active={self.is_active}\u003e\"\n./univault/core/models.py:317:    start_b-n: int = Column(Integer, nullable=False)\n./univault/core/models.py:318:    end_b-n: Optional[int] = Column(Integer, nullable=True)\n./univault/core/models.py:320:    -n_claimed: Decimal = Column(Numeric(38, 18), nullable=False, default=0)\n./univault/core/models.py:323:    def pending_-n(self, current_b-n: int) -\u003e Decimal:\n./univault/core/models.py:325:        Simple linear -n model. St-ngy objects in *st-ngy_vm*\n./univault/core/models.py:329:        if current_b-n \u003c self.start_b-n:\n./univault/core/models.py:332:        effective_end = self.end_b-n or current_b-n\n./univault/core/models.py:333:        b-ns = effective_end - self.start_b-n\n./univault/core/models.py:334:        -n = Decimal(b-ns) * Decimal(self.pool.-n_-n) * Decimal(self.amount)\n./univault/core/models.py:335:        return -n - Decimal(self.-n_claimed)\n./univault/core/models.py:337:    def claim(self, current_b-n: int) -\u003e Decimal:\n./univault/core/models.py:338:        \"\"\"Claim all pending -ns up to *current_b-n*.\"\"\"\n./univault/core/models.py:339:        -n = self.pending_-n(current_b-n)\n./univault/core/models.py:340:        if -n \u003c= 0:\n./univault/core/models.py:341:            logger.debug(\"No -n to claim for stake %s\", self.id)\n./univault/core/models.py:343:        self.-n_claimed += -n\n./univault/core/models.py:345:            \"stake.-n_claimed\",\n./univault/core/models.py:349:                \"amount\": str(-n),\n./univault/core/models.py:355:            -n,\n./univault/core/models.py:356:            self.-n_claimed,\n./univault/core/models.py:358:        return -n\n./univault/core/models.py:364:            f\"amount={self.amount} claimed={self.-n_claimed}\u003e\"\n./univault/core/models.py:371:    that the st-ngy VM can compile, parameterise and deploy on-chain.\n./univault/core/models.py:452:    \"gene-n_address\",\n./univault/crypto/toolbox.py:276:        private_key = ec.gene-n_private_key(ec.SECP256K1(), default_backend())\n./univault/crypto/toolbox.py:372:        _logger.debug(\"Address gene-nd: %s\", address)\n./univault/crypto/toolbox.py:450:        directly or integ-n HSM / hardware wallet RNG sources.\n./univault/crypto/toolbox.py:456:        _logger.debug(\"Entropy gene-nd: %d bits.\", bits)\n./univault/contracts/strategies.py:3:univault.contracts.st-ngies\n./univault/contracts/strategies.py:6:Pluggable st-ngy implementations that power UniVault’s staking,\n./univault/contracts/strategies.py:11:    * St-ngyRegistry        – Runtime registry of available st-ngies.\n./univault/contracts/strategies.py:12:    * BaseSt-ngy            – Abstract root for any st-ngy type.\n./univault/contracts/strategies.py:13:    * StakingSt-ngyBase     – Base class for staking/yield algorithms.\n./univault/contracts/strategies.py:14:    * FeeSt-ngyBase         – Base class for fee-calculation algorithms.\n./univault/contracts/strategies.py:15:    * FixedAPYStakingSt-ngy – Simple fixed--n APY staking.\n./univault/contracts/strategies.py:16:    * -nedFeeSt-ngy       – Fee that changes with transfer amount.\n./univault/contracts/strategies.py:18:St-ngies can be hot-swapped at runtime via `St-ngyRegistry` making it\n./univault/contracts/strategies.py:20:also doubles as a factory, allowing the mini-VM to instantiate st-ngies\n./univault/contracts/strategies.py:44:    \"St-ngyRegistry\",\n./univault/contracts/strategies.py:45:    \"BaseSt-ngy\",\n./univault/contracts/strategies.py:46:    \"StakingSt-ngyBase\",\n./univault/contracts/strategies.py:47:    \"FeeSt-ngyBase\",\n./univault/contracts/strategies.py:48:    \"FixedAPYStakingSt-ngy\",\n./univault/contracts/strategies.py:49:    \"-nedFeeSt-ngy\",\n./univault/contracts/strategies.py:50:    \"St-ngyError\",\n./univault/contracts/strategies.py:56:T_Config = TypeVar(\"T_Config\", bound=\"St-ngyConfig\")\n./univault/contracts/strategies.py:59:# St-ngy infrastructure\n./univault/contracts/strategies.py:63:class St-ngyError(RuntimeError):\n./univault/contracts/strategies.py:64:    \"\"\"Raised when a st-ngy encounters an unrecoverable error.\"\"\"\n./univault/contracts/strategies.py:68:class St-ngyConfig:\n./univault/contracts/strategies.py:70:    Base configuration object handed to every `BaseSt-ngy`.\n./univault/contracts/strategies.py:72:    Concrete st-ngies are expected to derive their own config class from\n./univault/contracts/strategies.py:74:    that once a st-ngy is instantiated, its economic parameters cannot be\n./univault/contracts/strategies.py:78:    # Human-friendly, unique ID for the st-ngy instance (helps with logging).\n./univault/contracts/strategies.py:79:    label: str = field(default_factory=lambda: f\"st-ngy-{datetime.now(tz=DEFAULT_TIMEZONE).timestamp():.0f}\")\n./univault/contracts/strategies.py:82:class St-ngyRegistry:\n./univault/contracts/strategies.py:84:    Central registry of all built-in and user-provided st-ngies.\n./univault/contracts/strategies.py:86:    A st-ngy **class** is registered, *not* the instance.  Lookup is always\n./univault/contracts/strategies.py:87:    performed by the fully-qualified st-ngy name (e.g. ``fixed_apy_v1``).\n./univault/contracts/strategies.py:90:    _REGISTRY: Dict[str, Type[\"BaseSt-ngy\"]] = {}\n./univault/contracts/strategies.py:93:    def register(cls, fq_name: str, st-ngy_cls: Type[\"BaseSt-ngy\"]) -\u003e None:\n./univault/contracts/strategies.py:95:            raise St-ngyError(f\"St-ngy '{fq_name}' already registered.\")\n./univault/contracts/strategies.py:96:        cls._REGISTRY[fq_name] = st-ngy_cls\n./univault/contracts/strategies.py:97:        _log.debug(\"Registered st-ngy '%s' → %s\", fq_name, st-ngy_cls)\n./univault/contracts/strategies.py:100:    def create(cls, fq_name: str, config: St-ngyConfig, **kwargs: Any) -\u003e \"BaseSt-ngy\":\n./univault/contracts/strategies.py:104:            raise St-ngyError(f\"Unknown st-ngy: '{fq_name}'\") from exc\n./univault/contracts/strategies.py:114:        Use as `@St-ngyRegistry.decorator(\"fixed_apy_v1\")` above a st-ngy\n./univault/contracts/strategies.py:118:        def _wrapper(st-ngy_cls: Type[\"BaseSt-ngy\"]) -\u003e Type[\"BaseSt-ngy\"]:\n./univault/contracts/strategies.py:119:            cls.register(fq_name, st-ngy_cls)\n./univault/contracts/strategies.py:120:            return st-ngy_cls\n./univault/contracts/strategies.py:130:    This is a lightweight DTO shared between the staking engine and st-ngy.\n./univault/contracts/strategies.py:138:    def -n(self, as_of: Optional[datetime] = None) -\u003e timedelta:\n./univault/contracts/strategies.py:143:class BaseSt-ngy(abc.ABC, Generic[T_Config]):\n./univault/contracts/strategies.py:145:    Root class for any economic st-ngy deployed inside UniVault.\n./univault/contracts/strategies.py:147:    Every st-ngy ope-ns in an Event-Driven environment and can therefore\n./univault/contracts/strategies.py:199:        \"\"\"Called by the runtime when the st-ngy is no longer needed.\"\"\"\n./univault/contracts/strategies.py:200:        self._logger.debug(\"Closing st-ngy instance.\")\n./univault/contracts/strategies.py:209:        \"\"\"Return a dictionary describing the st-ngy (human-readable).\"\"\"\n./univault/contracts/strategies.py:221:class StakingSt-ngyBase(BaseSt-ngy[T_Config], abc.ABC):\n./univault/contracts/strategies.py:223:    Base helper class for staking st-ngies.\n./univault/contracts/strategies.py:226:    the -ns *gene-nd so far* (for open positions) or *final -ns*\n./univault/contracts/strategies.py:233:        Compute -ns for `position`.  `as_of` allows the caller to\n./univault/contracts/strategies.py:244:class FeeSt-ngyBase(BaseSt-ngy[T_Config], abc.ABC):\n./univault/contracts/strategies.py:245:    \"\"\"Base helper for fee st-ngies (applied during token transfers).\"\"\"\n./univault/contracts/strategies.py:252:        St-ngies are free to inspect additional context (e.g. `sender`,\n./univault/contracts/strategies.py:258:#  DEFAULT ST-nGIES #########################################################\n./univault/contracts/strategies.py:263:class FixedAPYConfig(St-ngyConfig):\n./univault/contracts/strategies.py:265:    Configuration for `FixedAPYStakingSt-ngy`.\n./univault/contracts/strategies.py:282:@St-ngyRegistry.decorator(\"fixed_apy_v1\")\n./univault/contracts/strategies.py:283:class FixedAPYStakingSt-ngy(StakingSt-ngyBase[FixedAPYConfig]):\n./univault/contracts/strategies.py:285:    A straightforward fixed--n APY staking implementation.\n./univault/contracts/strategies.py:291:    _SECONDS_PER_YEAR: ClassVar[Decimal] = Decimal(-n * 24 * 3600)\n./univault/contracts/strategies.py:299:        total_seconds = Decimal(position.-n(as_of=now).total_seconds())\n./univault/contracts/strategies.py:305:        -n_per_year = self.config.apy / Decimal(\"100\")  # Percentage → -n\n./univault/contracts/strategies.py:306:        self._logger.debug(\"Calculating yield: principal=%s -n/yr=%s seconds=%s\", principal, -n_per_year, total_seconds)\n./univault/contracts/strategies.py:311:            interest = (principal * -n_per_year * years).quantize(Decimal(\"0.00000001\"))\n./univault/contracts/strategies.py:319:        base = (Decimal(\"1\") + -n_per_year / n)\n./univault/contracts/strategies.py:340:#   Fee St-ngies\n./univault/contracts/strategies.py:345:class -nedFeeConfig(St-ngyConfig):\n./univault/contracts/strategies.py:347:    Configuration for `-nedFeeSt-ngy`.\n./univault/contracts/strategies.py:349:    -ns – List of tuples sorted ascending by *threshold* (“≤ threshold”).\n./univault/contracts/strategies.py:361:    -ns: Tuple[Tuple[Decimal, Decimal], ...]\n./univault/contracts/strategies.py:366:        if not self.-ns:\n./univault/contracts/strategies.py:367:            raise ValueError(\"At least one -n must be configured.\")\n./univault/contracts/strategies.py:368:        if sorted(self.-ns, key=lambda t: t[0]) != list(self.-ns):\n./univault/contracts/strategies.py:369:            raise ValueError(\"-ns must be sorted ascending by threshold.\")\n./univault/contracts/strategies.py:370:        if any(pct \u003c= 0 for _, pct in self.-ns):\n./univault/contracts/strategies.py:374:@St-ngyRegistry.decorator(\"-ned_fee_v1\")\n./univault/contracts/strategies.py:375:class -nedFeeSt-ngy(FeeSt-ngyBase[-nedFeeConfig]):\n./univault/contracts/strategies.py:377:    A flexible -ned fee st-ngy.\n./univault/contracts/strategies.py:390:            raise St-ngyError(\"Amount must be \u003e 0\")\n./univault/contracts/strategies.py:411:        for threshold, pct in self.config.-ns:\n./univault/contracts/strategies.py:415:        return self.config.-ns[-1][1]\n./univault/contracts/strategies.py:424:            \"name\": \"-ned Fee\",\n./univault/contracts/strategies.py:427:            \"description\": \"Dynamic fee derived from transfer amount using -ned brackets.\",\n./univault/contracts/strategies.py:432:#  SAMPLE USAGE \u0026 SELF-TEST (python -m univault.contracts.st-ngies)\n./univault/contracts/strategies.py:441:    fixed = St-ngyRegistry.create(\"fixed_apy_v1\", fixed_cfg)\n./univault/contracts/strategies.py:443:    opened = datetime.now(tz=DEFAULT_TIMEZONE) - timedelta(days=-n)\n./univault/contracts/strategies.py:446:    print(\"Fixed APY returns after -nd:\", fixed.calculate_yield(position))\n./univault/contracts/strategies.py:448:    # --- -ned Fee -------------------------------------------------------\n./univault/contracts/strategies.py:449:    -ns = (\n./univault/contracts/strategies.py:454:    fee_cfg = -nedFeeConfig(label=\"smoke-fee\", -ns=-ns, max_fee=Decimal(\"50\"), min_fee=Decimal(\"0.01\"))\n./univault/contracts/strategies.py:455:    fee_st-ngy = St-ngyRegistry.create(\"-ned_fee_v1\", fee_cfg)\n./univault/contracts/strategies.py:458:        print(f\"Fee for {amt:\u003e8}: {fee_st-ngy.calculate_fee(amt)}\")\n",
+          "is_error": false
+        },
+        {
+          "name": "read_file",
+          "input": {
+            "path": "config.py"
+          },
+          "result": "1\t```python\n2\t\"\"\"\n3\tunivault_utility_chain.config\n4\t~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n5\t\n6\tCentralised runtime-configuration utilities for UniVault Utility Chain.\n7\tThe module is responsible for:\n8\t\n9\t1. Discovering configuration sources (.env files, environment variables).\n10\t2. Validating/typing user-provided values into a dataclass instance.\n11\t3. Exposing a singleton-like interface (`get_config()`) to the rest of\n12\t   the application.\n13\t\n14\tThe code purposefully avoids external dependencies besides the standard\n15\tlibrary except for `python-dotenv`, which is optional and only used when\n16\tinstalled.  If the package is missing, the loader simply skips `.env`\n17\tparsing and relies on already-defined environment variables.\n18\t\n19\tTypical usage\n20\t-------------\n21\t\n22\t\u003e\u003e\u003e from univault_utility_chain.config import get_config\n23\t\u003e\u003e\u003e cfg = get_config()\n24\t\u003e\u003e\u003e print(cfg.DATABASE_URL)\n25\t'sqlite:///./univault.db'\n26\t\n27\tChanging configuration at runtime is intentionally prohibited—the\n28\tresulting `Config` instance is *frozen* for safety and performance.\n29\t\"\"\"\n30\tfrom __future__ import annotations\n31\t\n32\timport os\n33\timport secrets\n34\timport sys\n35\tfrom dataclasses import dataclass, field, fields, FrozenInstanceError\n36\tfrom enum import Enum\n37\tfrom pathlib import Path\n38\tfrom typing import Any, Dict, Optional, Type, TypeVar\n39\t\n40\t# --------------------------------------------------------------------------- #\n41\t# Optional dependency: `python-dotenv`                                         #\n42\t# --------------------------------------------------------------------------- #\n43\ttry:\n44\t    from dotenv import load_dotenv\n45\texcept ModuleNotFoundError:  # pragma: no cover\n46\t    load_dotenv = None  # type: ignore[assignment]\n47\t\n48\t\n49\t_T = TypeVar(\"_T\")\n50\t\n51\t\n52\tclass Environment(str, Enum):\n53\t    \"\"\"\n54\t    Enumeration of supported runtime environments.\n55\t    \"\"\"\n56\t\n57\t    DEVELOPMENT = \"development\"\n58\t    TESTING = \"testing\"\n59\t    STAGING = \"staging\"\n60\t    PRODUCTION = \"production\"\n61\t\n62\t    @classmethod\n63\t    def from_str(cls, raw: str | None) -\u003e \"Environment\":\n64\t        \"\"\"\n65\t        Convert a string (possibly None) into an Environment enum value.\n66\t\n67\t        Falls back to DEVELOPMENT if `raw` cannot be matched.\n68\t        \"\"\"\n69\t        if raw is None:\n70\t            return cls.DEVELOPMENT\n71\t\n72\t        raw = raw.strip().lower()\n73\t        for member in cls:\n74\t            if member.value == raw:\n75\t                return member\n76\t        return cls.DEVELOPMENT  # sensible default\n77\t\n78\t\n79\t# --------------------------------------------------------------------------- #\n80\t# Helper functions                                                             #\n81\t# --------------------------------------------------------------------------- #\n82\tdef _parse_bool(value: str | None, default: bool = False) -\u003e bool:\n83\t    if value is None:\n84\t        return default\n85\t    return value.strip().lower() in {\"1\", \"true\", \"yes\", \"on\"}\n86\t\n87\t\n88\tdef _parse_int(value: str | None, default: int) -\u003e int:\n89\t    if value is None or value == \"\":\n90\t        return default\n91\t    try:\n92\t        return int(value)\n93\t    except (TypeError, ValueError) as exc:  # pragma: no cover\n94\t        raise ValueError(f\"Cannot parse integer from {value!r}\") from exc\n95\t\n96\t\n97\tdef _require_non_empty(value: str | None, var_name: str) -\u003e str:\n98\t    if not value:\n99\t        raise ValueError(\n100\t            f\"Required environment variable {var_name} is not set or empty.\"\n101\t        )\n102\t    return value\n103\t\n104\t\n105\tdef _coerce(field_type: Type[_T], raw_value: str | None, default: _T) -\u003e _T:\n106\t    \"\"\"\n107\t    Attempt to cast `raw_value` to the specified `field_type`.\n108\t\n109\t    The function currently supports: str, bool, int, float, Enum subclasses.\n110\t    \"\"\"\n111\t    if raw_value is None:\n112\t        return default\n113\t\n114\t    if issubclass(field_type, Enum):\n115\t        try:\n116\t            return field_type(raw_value)  # type: ignore[arg-type]\n117\t        except ValueError as exc:  # pragma: no cover\n118\t            raise ValueError(\n119\t                f\"{raw_value!r} is not a valid value for {field_type.__name__}\"\n120\t            ) from exc\n121\t\n122\t    if field_type is bool:\n123\t        return _parse_bool(raw_value, default=bool(default))  # type: ignore[return-value]\n124\t\n125\t    if field_type is int:\n126\t        return _parse_int(raw_value, default=int(default))  # type: ignore[return-value]\n127\t\n128\t    if field_type is float:\n129\t        try:\n130\t            return float(raw_value)  # type: ignore[return-value]\n131\t        except ValueError as exc:  # pragma: no cover\n132\t            raise ValueError(f\"Cannot parse float from {raw_value!r}\") from exc\n133\t\n134\t    # Fallback to raw string\n135\t    return raw_value  # type: ignore[return-value]\n136\t\n137\t\n138\t# --------------------------------------------------------------------------- #\n139\t# Global project metadata                                                      #\n140\t# --------------------------------------------------------------------------- #\n141\tROOT_PATH: Path = Path(__file__).resolve().parent\n142\tENV_PATH: Path = ROOT_PATH / \".env\"\n143\tDEFAULT_DB_PATH: Path = ROOT_PATH / \"univault.db\"\n144\t\n145\t\n146\t# --------------------------------------------------------------------------- #\n147\t# Dataclass with frozen configuration                                          #\n148\t# --------------------------------------------------------------------------- #\n149\t@dataclass(frozen=True, slots=True)\n150\tclass Config:\n151\t    \"\"\"Immutable runtime configuration for UniVault Utility Chain.\"\"\"\n152\t\n153\t    # --------------------------------------------------------------------- #\n154\t    # Application basics                                                    #\n155\t    # --------------------------------------------------------------------- #\n156\t    APP_NAME: str = \"UniVault Utility Chain\"\n157\t    VERSION: str = \"0.1.0\"\n158\t\n159\t    ENV: Environment = field(\n160\t        default=Environment.DEVELOPMENT,\n161\t        metadata={\"env\": \"UNIVAULT_ENV\"},\n162\t    )\n163\t\n164\t    DEBUG: bool = field(\n165\t        default=False,\n166\t        metadata={\"env\": \"UNIVAULT_DEBUG\"},\n167\t    )\n168\t\n169\t    # --------------------------------------------------------------------- #\n170\t    # Database                                                              #\n171\t    # --------------------------------------------------------------------- #\n172\t    DATABASE_URL: str = field(\n173\t        default=f\"sqlite:///{DEFAULT_DB_PATH}\",\n174\t        metadata={\"env\": \"UNIVAULT_DATABASE_URL\"},\n175\t    )\n176\t\n177\t    # --------------------------------------------------------------------- #\n178\t    # Blockchain / Web3 settings                                            #\n179\t    # --------------------------------------------------------------------- #\n180\t    CHAIN_RPC_URL: str = field(\n181\t        default=\"https://rpc.ankr.com/eth\",\n182\t        metadata={\"env\": \"UNIVAULT_CHAIN_RPC_URL\"},\n183\t    )\n184\t    DEFAULT_GAS_LIMIT: int = field(\n185\t        default=2_000_000,\n186\t        metadata={\"env\": \"UNIVAULT_DEFAULT_GAS_LIMIT\"},\n187\t    )\n188\t    CONFIRMATIONS_REQUIRED: int = field(\n189\t        default=3,\n190\t        metadata={\"env\": \"UNIVAULT_CONFIRMATIONS_REQUIRED\"},\n191\t    )\n192\t\n193\t    # --------------------------------------------------------------------- #\n194\t    # Security                                                              #\n195\t    # --------------------------------------------------------------------- #\n196\t    SECRET_KEY: str = field(\n197\t        default_factory=lambda: secrets.token_hex(32),\n198\t        repr=False,\n199\t        metadata={\"env\": \"UNIVAULT_SECRET_KEY\"},\n200\t    )\n201\t\n202\t    # --------------------------------------------------------------------- #\n203\t    # Feature Flags                                                         #\n204\t    # --------------------------------------------------------------------- #\n205\t    ENABLE_WEBSOCKETS: bool = field(\n206\t        default=True,\n207\t        metadata={\"env\": \"UNIVAULT_ENABLE_WEBSOCKETS\"},\n208\t    )\n209\t    ENABLE_CLI: bool = field(\n210\t        default=True,\n211\t        metadata={\"env\": \"UNIVAULT_ENABLE_CLI\"},\n212\t    )\n213\t    ENABLE_STRATEGIES: bool = field(\n214\t        default=True,\n215\t        metadata={\"env\": \"UNIVAULT_ENABLE_STRATEGIES\"},\n216\t    )\n217\t\n218\t    # --------------------------------------------------------------------- #\n219\t    # Miscellaneous                                                         #\n220\t    # --------------------------------------------------------------------- #\n221\t    LOG_LEVEL: str = field(\n222\t        default=\"INFO\",\n223\t        metadata={\"env\": \"UNIVAULT_LOG_LEVEL\"},\n224\t    )\n225\t    MAX_CONCURRENT_TASKS: int = field(\n226\t        default=100,\n227\t        metadata={\"env\": \"UNIVAULT_MAX_CONCURRENT_TASKS\"},\n228\t    )\n229\t\n230\t    def as_dict(self) -\u003e Dict[str, Any]:\n231\t        \"Return config as a plain `dict` (with SECRET_KEY excluded by default).\"\n232\t        return {\n233\t            f.name: getattr(self, f.name)\n234\t            for f in fields(self)\n235\t            if f.name != \"SECRET_KEY\"\n236\t        }\n237\t\n238\t    # ------------------------------------------------------------------ #\n239\t    # Validation hooks                                                   #\n240\t    # ------------------------------------------------------------------ #\n241\t    def __post_init__(self) -\u003e None:\n242\t        \"\"\"\n243\t        Post-construction sanity checks.\n244\t\n245\t        - Refuse to run in production with DEBUG=True\n246\t        - Bail out early if SECRET_KEY still uses the default token in prod\n247\t        \"\"\"\n248\t        object.__setattr__(self, \"ENV\", Environment.from_str(str(self.ENV)))\n249\t\n250\t        if self.ENV is Environment.PRODUCTION and self.DEBUG:\n251\t            raise ValueError(\n252\t                \"DEBUG must be disabled when ENV is set to PRODUCTION.\"\n253\t            )\n254\t\n255\t        if (\n256\t            self.ENV is Environment.PRODUCTION\n257\t            and self.SECRET_KEY == self.__class__.__dataclass_fields__[\n258\t                \"SECRET_KEY\"\n259\t            ].default\n260\t        ):\n261\t            raise ValueError(\n262\t                \"SECRET_KEY must be explicitly set in production environments.\"\n263\t            )\n264\t\n265\t\n266\t# --------------------------------------------------------------------------- #\n267\t# Loading logic                                                               #\n268\t# --------------------------------------------------------------------------- #\n269\tclass ConfigLoader:\n270\t    \"\"\"\n271\t    Responsible for generating a `Config` instance from environment data.\n272\t\n273\t    The loader evaluates (in order of precedence):\n274\t\n275\t        1. Already-loaded environment variables (os.environ)\n276\t        2. A user-supplied '.env' file (if `python-dotenv` is installed)\n277\t        3. Field defaults declared in `Config`\n278\t    \"\"\"\n279\t\n280\t    def __init__(self, dotenv_path: Optional[Path] = None) -\u003e None:\n281\t        self.dotenv_path = dotenv_path or ENV_PATH\n282\t        self._load_dotenv()\n283\t\n284\t    # Internal helpers -------------------------------------------------- #\n285\t    def _load_dotenv(self) -\u003e None:\n286\t        if load_dotenv is None:\n287\t            return  # Dependency not available; skip gracefully.\n288\t\n289\t        if self.dotenv_path.exists():\n290\t            load_dotenv(dotenv_path=self.dotenv_path, override=False)\n291\t\n292\t    def _resolve_field(\n293\t        self, f: \"dataclasses.Field[Any]\", current_env: Dict[str, str]\n294\t    ) -\u003e Any:\n295\t        env_var_name: str = f.metadata.get(\"env\") or f.name\n296\t        raw_value: Optional[str] = current_env.get(env_var_name)\n297\t\n298\t        try:\n299\t            return _coerce(type(f.default), raw_value, f.default)\n300\t        except Exception as exc:\n301\t            raise ValueError(\n302\t                f\"Error while resolving configuration field {f.name!r}: {exc}\"\n303\t            ) from exc\n304\t\n305\t    # Public API -------------------------------------------------------- #\n306\t    def load(self) -\u003e Config:\n307\t        \"\"\"\n308\t        Build and return an immutable `Config` instance.\n309\t\n310\t        Any validation exceptions raised by `Config.__post_init__` bubble\n311\t        up to the caller.\n312\t        \"\"\"\n313\t        kwargs: Dict[str, Any] = {}\n314\t\n315\t        for f in fields(Config):\n316\t            value = self._resolve_field(f, os.environ)\n317\t            kwargs[f.name] = value\n318\t\n319\t        # If SECRET_KEY is still None/empty, fail early.  Using '_require_non_empty'\n320\t        kwargs[\"SECRET_KEY\"] = _require_non_empty(\n321\t            kwargs.get(\"SECRET_KEY\"), \"UNIVAULT_SECRET_KEY\"\n322\t        )\n323\t\n324\t        return Config(**kwargs)\n325\t\n326\t\n327\t# --------------------------------------------------------------------------- #\n328\t# Singleton accessor                                                          #\n329\t# --------------------------------------------------------------------------- #\n330\t_config_singleton: Optional[Config] = None\n331\t\n332\t\n333\tdef get_config(refresh: bool = False) -\u003e Config:\n334\t    \"\"\"\n335\t    Retrieve the frozen Config instance used by the current process.\n336\t\n337\t    Args:\n338\t        refresh (bool):\n339\t            When True, forces the configuration to be reloaded from all\n340\t            sources (typically not recommended in production).\n341\t\n342\t    Returns:\n343\t        Config: application configuration (immutable).\n344\t    \"\"\"\n345\t    global _config_singleton\n346\t\n347\t    if _config_singleton is None or refresh:\n348\t        loader = ConfigLoader()\n349\t        _config_singleton = loader.load()\n350\t\n351\t    return _config_singleton\n352\t\n353\t\n354\t# --------------------------------------------------------------------------- #\n355\t# CLI entry-point                                                             #\n356\t# --------------------------------------------------------------------------- #\n357\tif __name__ == \"__main__\":  # pragma: no cover\n358\t    # Simple introspection utility when invoked directly.\n359\t    import argparse\n360\t    import pprint\n361\t\n362\t    parser = argparse.ArgumentParser(\n363\t        description=\"Inspect UniVault Utility Chain configuration.\"\n364\t    )\n365\t    parser.add_argument(\n366\t        \"--refresh\",\n367\t        action=\"store_true\",\n368\t        help=\"Reload configuration ignoring cached singleton.\",\n369\t    )\n370\t    args = parser.parse_args()\n371\t\n372\t    try:\n373\t        cfg = get_config(refresh=args.refresh)\n374\t    except Exception as exc:\n375\t        print(f\"Error: {exc}\", file=sys.stderr)\n376\t        sys.exit(1)\n377\t\n378\t    print(\"# === UniVault Utility Chain Configuration === #\")\n379\t    pprint.pprint(cfg.as_dict(), sort_dicts=False)\n380\t```\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "content": [
+        {
+          "type": "text",
+          "text": "Now let me look at the main.py file more carefully, specifically the staking reward calculation:"
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_k0t7v7lEBaDJ6ZwgMt5pbH",
+          "name": "read_file",
+          "input": {
+            "path": "main.py"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 27020,
+      "output_tokens": 76,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "path": "main.py"
+          },
+          "result": "1\t```python\n2\t\"\"\"\n3\tUniVault Utility Chain – main.py\n4\tA single–file, single–process De-Fi playground.\n5\t\n6\tThis module exposes:\n7\t\n8\t1. REST API      … FastAPI                 →  http://127.0.0.1:8000\n9\t2. CLI           … Click                   →  python main.py --help\n10\t3. Event Hub     … websockets/asyncio      →  ws://127.0.0.1:8765\n11\t4. Storage       … SQLite + SQLAlchemy\n12\t5. Crypto tools  … cryptography, hashlib\n13\t6. Mini-VM       … template driven\n14\t\n15\tEverything lives in this file so users can “view source” with ease.\n16\t\"\"\"\n17\t\n18\tfrom __future__ import annotations\n19\t\n20\timport asyncio\n21\timport contextlib\n22\timport datetime as _dt\n23\timport functools\n24\timport hashlib\n25\timport json\n26\timport logging\n27\timport os\n28\timport secrets\n29\timport sys\n30\timport textwrap\n31\timport types\n32\timport uuid\n33\tfrom dataclasses import dataclass\n34\tfrom pathlib import Path\n35\tfrom typing import Any, AsyncIterator, Callable, Dict, List, Optional, Sequence, Set, Type\n36\t\n37\timport click\n38\timport sqlalchemy as sa\n39\timport sqlalchemy.orm as orm\n40\timport uvicorn\n41\tfrom fastapi import FastAPI, HTTPException\n42\tfrom fastapi.responses import JSONResponse\n43\tfrom pydantic import BaseModel, Field, validator\n44\tfrom sqlalchemy.orm import Session\n45\t\n46\ttry:\n47\t    import cryptography.hazmat.primitives.asymmetric.ed25519 as ed25519\n48\t    from cryptography.hazmat.primitives import serialization\n49\texcept ImportError as exc:  # pragma: no cover\n50\t    raise RuntimeError(\"cryptography package is required: pip install cryptography\") from exc\n51\t\n52\ttry:\n53\t    import websockets\n54\t    from websockets.server import WebSocketServerProtocol\n55\texcept ImportError as exc:  # pragma: no cover\n56\t    raise RuntimeError(\"websockets package is required: pip install websockets\") from exc\n57\t\n58\t\n59\t###############################################################################\n60\t# Logging\n61\t###############################################################################\n62\t\n63\tLOG_LEVEL = os.getenv(\"UV_LOG_LEVEL\", \"INFO\").upper()\n64\tlogging.basicConfig(\n65\t    level=LOG_LEVEL,\n66\t    format=\"%(asctime)s ┇ %(levelname)-8s ┇ %(name)s │ %(message)s\",\n67\t    datefmt=\"%H:%M:%S\",\n68\t)\n69\tlogger = logging.getLogger(\"univault.main\")\n70\t\n71\t\n72\t###############################################################################\n73\t# Event-Driven Core\n74\t###############################################################################\n75\t\n76\t@dataclass(slots=True)\n77\tclass Event:\n78\t    \"\"\"Generic event emitted throughout the system.\"\"\"\n79\t    type: str\n80\t    payload: Dict[str, Any]\n81\t    ts: _dt.datetime = _dt.datetime.utcnow()\n82\t\n83\t\n84\tclass EventBus:\n85\t    \"\"\"\n86\t    A very small async event bus using the Observer-pattern.\n87\t    Subscribers register coroutines per `event.type`.\n88\t    \"\"\"\n89\t\n90\t    def __init__(self) -\u003e None:\n91\t        self._subs: Dict[str, Set[Callable[[Event], Any]]] = {}\n92\t\n93\t    def subscribe(self, event_type: str, handler: Callable[[Event], Any]) -\u003e None:\n94\t        logger.debug(\"Subscribing %s to %s\", handler, event_type)\n95\t        self._subs.setdefault(event_type, set()).add(handler)\n96\t\n97\t    async def publish(self, event: Event) -\u003e None:\n98\t        logger.debug(\"Publishing event %s\", event)\n99\t        for handler in self._subs.get(event.type, set()):\n100\t            try:\n101\t                res = handler(event)\n102\t                if asyncio.iscoroutine(res):\n103\t                    await res\n104\t            except Exception:  # pragma: no cover\n105\t                logger.exception(\"Handler failure for %s\", event.type)\n106\t\n107\t\n108\tEVENT_BUS = EventBus()\n109\t\n110\t\n111\t###############################################################################\n112\t# Storage – SQLite via SQLAlchemy ORM\n113\t###############################################################################\n114\t\n115\tBASE = orm.declarative_base()\n116\t\n117\t\n118\tclass Token(BASE):\n119\t    __tablename__ = \"tokens\"\n120\t    id = sa.Column(sa.String, primary_key=True, default=lambda: str(uuid.uuid4()))\n121\t    symbol = sa.Column(sa.String, unique=True, nullable=False)\n122\t    owner = sa.Column(sa.String, nullable=False)\n123\t    supply = sa.Column(sa.Integer, nullable=False, default=0)\n124\t    created_ts = sa.Column(sa.DateTime, default=_dt.datetime.utcnow)\n125\t\n126\t\n127\tclass NFT(BASE):\n128\t    __tablename__ = \"nfts\"\n129\t    id = sa.Column(sa.String, primary_key=True, default=lambda: str(uuid.uuid4()))\n130\t    owner = sa.Column(sa.String, nullable=False)\n131\t    uri = sa.Column(sa.String, nullable=False)\n132\t    created_ts = sa.Column(sa.DateTime, default=_dt.datetime.utcnow)\n133\t\n134\t\n135\tclass Stake(BASE):\n136\t    __tablename__ = \"stakes\"\n137\t    id = sa.Column(sa.String, primary_key=True, default=lambda: str(uuid.uuid4()))\n138\t    token_id = sa.Column(sa.String, sa.ForeignKey(\"tokens.id\"))\n139\t    staker = sa.Column(sa.String, nullable=False)\n140\t    amount = sa.Column(sa.Integer, nullable=False)\n141\t    start_ts = sa.Column(sa.DateTime, default=_dt.datetime.utcnow)\n142\t    lock_days = sa.Column(sa.Integer, default=30)\n143\t\n144\t    token = orm.relationship(\"Token\", backref=\"stakes\")\n145\t\n146\t\n147\tDB_PATH = Path(os.getenv(\"UV_DB_PATH\", \"univault.sqlite\"))\n148\tENGINE = sa.create_engine(f\"sqlite:///{DB_PATH}\", echo=False, future=True)\n149\tSessionLocal = orm.sessionmaker(bind=ENGINE, expire_on_commit=False)\n150\t\n151\t\n152\tdef init_db() -\u003e None:\n153\t    logger.info(\"Initialising database at %s\", DB_PATH)\n154\t    BASE.metadata.create_all(bind=ENGINE)\n155\t\n156\t\n157\t###############################################################################\n158\t# Strategy Pattern – Reward Calculation\n159\t###############################################################################\n160\t\n161\tclass RewardStrategy:\n162\t    def compute_reward(self, stake: Stake) -\u003e int:\n163\t        raise NotImplementedError\n164\t\n165\t\n166\tclass LinearRewardStrategy(RewardStrategy):\n167\t    \"\"\"10% monthly, linear.\"\"\"\n168\t    RATE = 0.10\n169\t\n170\t    def compute_reward(self, stake: Stake) -\u003e int:\n171\t        months = stake.lock_days / 30\n172\t        reward = int(stake.amount * self.RATE * months)\n173\t        logger.debug(\"Linear reward for %s: %s\", stake.id, reward)\n174\t        return reward\n175\t\n176\t\n177\tclass CompoundingRewardStrategy(RewardStrategy):\n178\t    \"\"\"5% monthly compounding.\"\"\"\n179\t    RATE = 0.05\n180\t\n181\t    def compute_reward(self, stake: Stake) -\u003e int:\n182\t        months = stake.lock_days / 30\n183\t        reward = int(stake.amount * ((1 + self.RATE) ** months - 1))\n184\t        logger.debug(\"Compound reward for %s: %s\", stake.id, reward)\n185\t        return reward\n186\t\n187\t\n188\tSTRATEGIES: Dict[str, Type[RewardStrategy]] = {\n189\t    \"linear\": LinearRewardStrategy,\n190\t    \"compound\": CompoundingRewardStrategy,\n191\t}\n192\t\n193\t\n194\t###############################################################################\n195\t# Crypto Toolbox\n196\t###############################################################################\n197\t\n198\tdef generate_wallet() -\u003e Dict[str, str]:\n199\t    \"\"\"Create an Ed25519 keypair and return hex strings.\"\"\"\n200\t    private_key = ed25519.Ed25519PrivateKey.generate()\n201\t    public_key = private_key.public_key()\n202\t    pk_bytes = private_key.private_bytes(\n203\t        encoding=serialization.Encoding.Raw,\n204\t        format=serialization.PrivateFormat.Raw,\n205\t        encryption_algorithm=serialization.NoEncryption(),\n206\t    )\n207\t    pub_bytes = public_key.public_bytes(\n208\t        encoding=serialization.Encoding.Raw,\n209\t        format=serialization.PublicFormat.Raw,\n210\t    )\n211\t    wallet = {\n212\t        \"public_key\": pub_bytes.hex(),\n213\t        \"private_key\": pk_bytes.hex(),\n214\t        \"address\": hashlib.sha256(pub_bytes).hexdigest()[:40],\n215\t    }\n216\t    logger.debug(\"Generated wallet %s\", wallet[\"address\"])\n217\t    return wallet\n218\t\n219\t\n220\tdef sign_message(private_hex: str, message: str) -\u003e str:\n221\t    try:\n222\t        private_key = ed25519.Ed25519PrivateKey.from_private_bytes(bytes.fromhex(private_hex))\n223\t        signature = private_key.sign(message.encode())\n224\t        sig_hex = signature.hex()\n225\t        logger.debug(\"Signed message '%s' → %s\", message, sig_hex)\n226\t        return sig_hex\n227\t    except Exception as exc:\n228\t        logger.error(\"Signing failed: %s\", exc)\n229\t        raise\n230\t\n231\t\n232\t###############################################################################\n233\t# Mini-VM – very small template “smart contract” executor\n234\t###############################################################################\n235\t\n236\tclass MiniVM:\n237\t    \"\"\"\n238\t    Executes a whitelisted subset of python statements in a controlled globals dict.\n239\t    This is NOT secure for production but suffices for education.\n240\t    \"\"\"\n241\t\n242\t    ALLOWED_BUILTINS = {\n243\t        \"abs\", \"min\", \"max\", \"sum\", \"len\", \"int\", \"float\", \"str\", \"dict\", \"list\"\n244\t    }\n245\t\n246\t    @classmethod\n247\t    def run(cls, template: str, context: Dict[str, Any]) -\u003e Any:\n248\t        cleaned = textwrap.dedent(template).strip()\n249\t        byte_code = compile(cleaned, \"\u003cmini-vm\u003e\", \"exec\")\n250\t\n251\t        safe_builtins = {k: __builtins__[k] for k in cls.ALLOWED_BUILTINS}  # type: ignore\n252\t        safe_globals = {\"__builtins__\": safe_builtins, **context}\n253\t        safe_locals: Dict[str, Any] = {}\n254\t\n255\t        logger.debug(\"Executing VM template:\\n%s\", cleaned)\n256\t        with contextlib.suppress(SystemExit, KeyboardInterrupt):\n257\t            exec(byte_code, safe_globals, safe_locals)\n258\t        result = safe_locals.get(\"result\")\n259\t        logger.debug(\"VM result: %s\", result)\n260\t        return result\n261\t\n262\t\n263\t###############################################################################\n264\t# FastAPI Schemas\n265\t###############################################################################\n266\t\n267\tclass TokenCreate(BaseModel):\n268\t    symbol: str = Field(..., regex=\"^[A-Z]{2,8}$\")\n269\t    initial_supply: int = Field(..., ge=0)\n270\t\n271\tclass NFTMint(BaseModel):\n272\t    uri: str\n273\t\n274\tclass StakeReq(BaseModel):\n275\t    token_id: str\n276\t    amount: int = Field(..., gt=0)\n277\t    lock_days: int = Field(..., ge=1)\n278\t\n279\t    @validator(\"lock_days\")\n280\t    def _max_lock(cls, v: int) -\u003e int:\n281\t        if v \u003e 360:\n282\t            raise ValueError(\"lock_days cannot exceed 360\")\n283\t        return v\n284\t\n285\t###############################################################################\n286\t# REST API\n287\t###############################################################################\n288\t\n289\tapp = FastAPI(title=\"UniVault Utility Chain\", version=\"0.1.0\")\n290\t\n291\t@app.on_event(\"startup\")\n292\tasync def _startup() -\u003e None:\n293\t    init_db()\n294\t    logger.info(\"REST API started\")\n295\t\n296\t@app.post(\"/wallet\")\n297\tasync def create_wallet() -\u003e JSONResponse:\n298\t    wallet = generate_wallet()\n299\t    await EVENT_BUS.publish(Event(type=\"wallet.created\", payload=wallet))\n300\t    return JSONResponse(wallet)\n301\t\n302\t@app.post(\"/tokens\")\n303\tasync def create_token(req: TokenCreate) -\u003e JSONResponse:\n304\t    with SessionLocal() as db:\n305\t        if db.query(Token).filter_by(symbol=req.symbol).first():\n306\t            raise HTTPException(status_code=409, detail=\"Symbol already exists\")\n307\t\n308\t        token = Token(symbol=req.symbol, owner=\"SYSTEM\", supply=req.initial_supply)\n309\t        db.add(token)\n310\t        db.commit()\n311\t        db.refresh(token)\n312\t\n313\t    await EVENT_BUS.publish(Event(type=\"token.created\", payload={\"symbol\": token.symbol, \"id\": token.id}))\n314\t    return JSONResponse({\"id\": token.id, \"symbol\": token.symbol})\n315\t\n316\t@app.post(\"/nft/{owner}\")\n317\tasync def mint_nft(owner: str, req: NFTMint) -\u003e JSONResponse:\n318\t    nft = NFT(owner=owner, uri=req.uri)\n319\t    with SessionLocal() as db:\n320\t        db.add(nft)\n321\t        db.commit()\n322\t        db.refresh(nft)\n323\t    await EVENT_BUS.publish(Event(type=\"nft.minted\", payload={\"id\": nft.id, \"owner\": owner}))\n324\t    return JSONResponse({\"id\": nft.id, \"uri\": nft.uri})\n325\t\n326\t@app.post(\"/stake/{staker}\")\n327\tasync def stake_tokens(staker: str, req: StakeReq, strategy: str = \"linear\") -\u003e JSONResponse:\n328\t    with SessionLocal() as db:\n329\t        token = db.query(Token).filter_by(id=req.token_id).first()\n330\t        if not token:\n331\t            raise HTTPException(status_code=404, detail=\"Token not found\")\n332\t\n333\t        stake = Stake(\n334\t            token=token,\n335\t            staker=staker,\n336\t            amount=req.amount,\n337\t            lock_days=req.lock_days,\n338\t        )\n339\t        db.add(stake)\n340\t        db.commit()\n341\t        db.refresh(stake)\n342\t\n343\t        strat_cls = STRATEGIES.get(strategy, LinearRewardStrategy)\n344\t        reward = strat_cls().compute_reward(stake)\n345\t\n346\t    payload = {\"stake_id\": stake.id, \"reward\": reward}\n347\t    await EVENT_BUS.publish(Event(type=\"stake.created\", payload=payload))\n348\t    return JSONResponse(payload)\n349\t\n350\t###############################################################################\n351\t# WebSocket Event Hub\n352\t###############################################################################\n353\t\n354\tclass WebSocketHub:\n355\t    \"\"\"\n356\t    Broadcasts EventBus items to all connected WS clients.\n357\t    \"\"\"\n358\t\n359\t    def __init__(self, host: str = \"0.0.0.0\", port: int = 8765) -\u003e None:\n360\t        self.host = host\n361\t        self.port = port\n362\t        self._clients: Set[WebSocketServerProtocol] = set()\n363\t\n364\t    async def _register_client(self, ws: WebSocketServerProtocol) -\u003e None:\n365\t        logger.info(\"WS connect %s\", ws.remote_address)\n366\t        self._clients.add(ws)\n367\t\n368\t    async def _unregister_client(self, ws: WebSocketServerProtocol) -\u003e None:\n369\t        logger.info(\"WS disconnect %s\", ws.remote_address)\n370\t        self._clients.discard(ws)\n371\t\n372\t    async def _handler(self, ws: WebSocketServerProtocol) -\u003e None:\n373\t        await self._register_client(ws)\n374\t        try:\n375\t            async for _ in ws:  # just keep open, ignore messages\n376\t                pass\n377\t        finally:\n378\t            await self._unregister_client(ws)\n379\t\n380\t    async def start(self) -\u003e None:\n381\t        logger.info(\"Starting WebSocket hub on ws://%s:%s\", self.host, self.port)\n382\t        async with websockets.serve(self._handler, self.host, self.port):\n383\t            await asyncio.Future()  # run forever\n384\t\n385\t    async def broadcast(self, event: Event) -\u003e None:\n386\t        if not self._clients:\n387\t            return\n388\t        message = json.dumps({\"type\": event.type, \"payload\": event.payload, \"ts\": event.ts.isoformat()})\n389\t        logger.debug(\"Broadcasting to %s clients\", len(self._clients))\n390\t        # Send concurrently, prune closed sockets\n391\t        await asyncio.gather(\n392\t            *[self._safe_send(ws, message) for ws in set(self._clients)],\n393\t            return_exceptions=True\n394\t        )\n395\t\n396\t    async def _safe_send(self, ws: WebSocketServerProtocol, message: str) -\u003e None:\n397\t        try:\n398\t            await ws.send(message)\n399\t        except websockets.ConnectionClosed:\n400\t            await self._unregister_client(ws)\n401\t\n402\t\n403\tWS_HUB = WebSocketHub()\n404\tEVENT_BUS.subscribe(\"*\", WS_HUB.broadcast)  # wildcard mapping via custom logic\n405\t\n406\t# Because we used '*' above but EventBus doesn't know wildcard,\n407\t# we need to wrap EventBus.publish to also notify broadcast.\n408\t\n409\t_original_publish = EVENT_BUS.publish\n410\t\n411\t\n412\tasync def _patched_publish(event: Event) -\u003e None:\n413\t    await WS_HUB.broadcast(event)\n414\t    await _original_publish(event)\n415\t\n416\t\n417\tEVENT_BUS.publish = _patched_publish  # type: ignore\n418\t\n419\t\n420\t###############################################################################\n421\t# CLI\n422\t###############################################################################\n423\t\n424\t@click.group()\n425\tdef cli() -\u003e None:\n426\t    \"\"\"UniVault Utility Chain – Command Line Interface.\"\"\"\n427\t\n428\t\n429\tdef coro(f: Callable[..., Any]) -\u003e Callable[..., Any]:\n430\t    \"\"\"\n431\t    Decorator to run async functions inside click synchronously.\n432\t    \"\"\"\n433\t\n434\t    @functools.wraps(f)\n435\t    def _wrapper(*args: Any, **kwargs: Any) -\u003e Any:\n436\t        return asyncio.run(f(*args, **kwargs))\n437\t    return _wrapper\n438\t\n439\t\n440\t@cli.command(\"wallet\")\n441\t@coro\n442\tasync def cli_wallet() -\u003e None:\n443\t    \"\"\"Generate a wallet.\"\"\"\n444\t    print(json.dumps(generate_wallet(), indent=2))\n445\t\n446\t\n447\t@cli.command(\"token\")\n448\t@click.argument(\"symbol\")\n449\t@click.option(\"--supply\", default=0, type=int, help=\"Initial supply\")\n450\t@coro\n451\tasync def cli_token(symbol: str, supply: int) -\u003e None:\n452\t    \"\"\"Create token.\"\"\"\n453\t    async with _lifespan():\n454\t        res = await create_token(TokenCreate(symbol=symbol.upper(), initial_supply=supply))  # type: ignore[arg-type]\n455\t        print(res.body.decode())\n456\t\n457\t\n458\t@cli.command(\"nft\")\n459\t@click.argument(\"owner\")\n460\t@click.argument(\"uri\")\n461\t@coro\n462\tasync def cli_nft(owner: str, uri: str) -\u003e None:\n463\t    \"\"\"Mint an NFT.\"\"\"\n464\t    async with _lifespan():\n465\t        res = await mint_nft(owner, NFTMint(uri=uri))  # type: ignore[arg-type]\n466\t        print(res.body.decode())\n467\t\n468\t\n469\t@cli.command(\"stake\")\n470\t@click.argument(\"staker\")\n471\t@click.argument(\"token_id\")\n472\t@click.option(\"--amount\", required=True, type=int)\n473\t@click.option(\"--lock\", default=30, type=int, help=\"Lock days (1-360)\")\n474\t@click.option(\"--strategy\", default=\"linear\", type=click.Choice(list(STRATEGIES.keys())))\n475\t@coro\n476\tasync def cli_stake(staker: str, token_id: str, amount: int, lock: int, strategy: str) -\u003e None:\n477\t    \"\"\"Stake tokens.\"\"\"\n478\t    async with _lifespan():\n479\t        res = await stake_tokens(staker, StakeReq(token_id=token_id, amount=amount, lock_days=lock), strategy)  # type: ignore[arg-type]\n480\t        print(res.body.decode())\n481\t\n482\t\n483\t###############################################################################\n484\t# Lifespan utility for CLI to piggy-back on FastAPI startup events\n485\t###############################################################################\n486\t\n487\t@contextlib.asynccontextmanager\n488\tasync def _lifespan() -\u003e AsyncIterator[None]:\n489\t    await app.router.startup()\n490\t    try:\n491\t        yield\n492\t    finally:\n493\t        await app.router.shutdown()\n494\t\n495\t\n496\t###############################################################################\n497\t# Entrypoint Orchestration\n498\t###############################################################################\n499\t\n500\tasync def _run_ws_and_api(\n501\t    host: str = \"0.0.0.0\",\n502\t    port: int = 8000,\n503\t    ws_port: int = 8765,\n504\t) -\u003e None:\n505\t    \"\"\"\n506\t    Run FastAPI (via Uvicorn) and the WebSocket hub concurrently.\n507\t    \"\"\"\n508\t    config = uvicorn.Config(\n509\t        app,\n510\t        host=host,\n511\t        port=port,\n512\t        log_level=LOG_LEVEL.lower(),\n513\t        loop=\"asyncio\",\n514\t        reload=False,\n515\t    )\n516\t    server = uvicorn.Server(config)\n517\t\n518\t    # Uvicorn provides a .serve() coroutine.\n519\t    await asyncio.gather(\n520\t        server.serve(),\n521\t        WS_HUB.start(),\n522\t    )\n523\t\n524\t\n525\tdef main() -\u003e None:\n526\t    \"\"\"\n527\t    Program entry point.\n528\t    Usage:\n529\t        python main.py api     → run API+WS\n530\t        python main.py cli …   → run CLI commands\n531\t    \"\"\"\n532\t    if len(sys.argv) \u003e= 2 and sys.argv[1] == \"api\":\n533\t        # Remove \"api\" so uvicorn CLI args still work after ours\n534\t        sys.argv.pop(1)\n535\t        try:\n536\t            asyncio.run(_run_ws_and_api())\n537\t        except KeyboardInterrupt:\n538\t            logger.info(\"Shutting down.\")\n539\t    else:\n540\t        cli()  # Click handles args\n541\t\n542\t\n543\tif __name__ == \"__main__\":\n544\t    main()\n545\t```\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "content": [
+        {
+          "type": "text",
+          "text": "Now I have a clear picture of the main reward calculation. Let me also check the `_percentage_for` method in `strategies.py` and the `get_reward_rate` or similar tiered duration logic more carefully:"
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_pPQ6S1vSSiLfBWiaZBXOLc",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n",
+              "-i",
+              "-F"
+            ],
+            "pattern": "get_reward"
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_wAMWabtQVsODsK6k2bPtbG",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n",
+              "-i"
+            ],
+            "pattern": "lock_days|lock_period|duration_days|days.*tier|tier.*days"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 33364,
+      "output_tokens": 203,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n",
+              "-i",
+              "-F"
+            ],
+            "pattern": "get_reward"
+          },
+          "result": "(no matches)",
+          "is_error": false
+        },
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n",
+              "-i"
+            ],
+            "pattern": "lock_days|lock_period|duration_days|days.*tier|tier.*days"
+          },
+          "result": "./README.md:130:    lock_period_days=30,\n./main.py:142:    lock_days = sa.Column(sa.Integer, default=30)\n./main.py:171:        months = stake.lock_days / 30\n./main.py:182:        months = stake.lock_days / 30\n./main.py:277:    lock_days: int = Field(..., ge=1)\n./main.py:279:    @validator(\"lock_days\")\n./main.py:282:            raise ValueError(\"lock_days cannot exceed 360\")\n./main.py:337:            lock_days=req.lock_days,\n./main.py:479:        res = await stake_tokens(staker, StakeReq(token_id=token_id, amount=amount, lock_days=lock), strategy)  # type: ignore[arg-type]\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_bK5g7cCm97elNSuMfvmy4h",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n",
+              "-i"
+            ],
+            "pattern": "reward_rate|rate_for|_rate|bonus|multiplier|tier"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 33839,
+      "output_tokens": 90,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n",
+              "-i"
+            ],
+            "pattern": "reward_rate|rate_for|_rate|bonus|multiplier|tier"
+          },
+          "result": "./README.md:98:  --properties tier=gold access=vip\n./README.md:129:    strategy=BondingCurveAPR(multiplier=1.25),\n./univault/storage/database.py:261:            reward_rate NUMERIC NOT NULL,\n./univault/core/models.py:277:    reward_rate: Decimal = Column(Numeric(38, 18), nullable=False)\n./univault/core/models.py:300:            f\"rate={self.reward_rate} active={self.is_active}\u003e\"\n./univault/core/models.py:334:        reward = Decimal(blocks) * Decimal(self.pool.reward_rate) * Decimal(self.amount)\n./univault/contracts/strategies.py:16:    * TieredFeeStrategy       – Fee that changes with transfer amount.\n./univault/contracts/strategies.py:49:    \"TieredFeeStrategy\",\n./univault/contracts/strategies.py:345:class TieredFeeConfig(StrategyConfig):\n./univault/contracts/strategies.py:347:    Configuration for `TieredFeeStrategy`.\n./univault/contracts/strategies.py:349:    tiers – List of tuples sorted ascending by *threshold* (“≤ threshold”).\n./univault/contracts/strategies.py:361:    tiers: Tuple[Tuple[Decimal, Decimal], ...]\n./univault/contracts/strategies.py:366:        if not self.tiers:\n./univault/contracts/strategies.py:367:            raise ValueError(\"At least one tier must be configured.\")\n./univault/contracts/strategies.py:368:        if sorted(self.tiers, key=lambda t: t[0]) != list(self.tiers):\n./univault/contracts/strategies.py:369:            raise ValueError(\"Tiers must be sorted ascending by threshold.\")\n./univault/contracts/strategies.py:370:        if any(pct \u003c= 0 for _, pct in self.tiers):\n./univault/contracts/strategies.py:374:@StrategyRegistry.decorator(\"tiered_fee_v1\")\n./univault/contracts/strategies.py:375:class TieredFeeStrategy(FeeStrategyBase[TieredFeeConfig]):\n./univault/contracts/strategies.py:377:    A flexible tiered fee strategy.\n./univault/contracts/strategies.py:411:        for threshold, pct in self.config.tiers:\n./univault/contracts/strategies.py:415:        return self.config.tiers[-1][1]\n./univault/contracts/strategies.py:424:            \"name\": \"Tiered Fee\",\n./univault/contracts/strategies.py:427:            \"description\": \"Dynamic fee derived from transfer amount using tiered brackets.\",\n./univault/contracts/strategies.py:448:    # --- Tiered Fee -------------------------------------------------------\n./univault/contracts/strategies.py:449:    tiers = (\n./univault/contracts/strategies.py:454:    fee_cfg = TieredFeeConfig(label=\"smoke-fee\", tiers=tiers, max_fee=Decimal(\"50\"), min_fee=Decimal(\"0.01\"))\n./univault/contracts/strategies.py:455:    fee_strategy = StrategyRegistry.create(\"tiered_fee_v1\", fee_cfg)\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "content": [
+        {
+          "type": "text",
+          "text": "Now let me look at the `__init__.py` for any staking reward tier logic:"
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_ChlXGR8Mkp64FQCo17Q345",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-t",
+              "py",
+              "-n",
+              "-i"
+            ],
+            "pattern": "reward|tier|30|90|180|365|lock|duration"
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_p7d9IH6JCqMY4GRcNrx3eO",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n"
+            ],
+            "pattern": "30\\|90\\|180\\|365"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 34752,
+      "output_tokens": 201,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-t",
+              "py",
+              "-n",
+              "-i"
+            ],
+            "pattern": "reward|tier|30|90|180|365|lock|duration"
+          },
+          "result": "./main.py:142:    lock_days = sa.Column(sa.Integer, default=30)\n./main.py:158:# Strategy Pattern – Reward Calculation\n./main.py:161:class RewardStrategy:\n./main.py:162:    def compute_reward(self, stake: Stake) -\u003e int:\n./main.py:166:class LinearRewardStrategy(RewardStrategy):\n./main.py:170:    def compute_reward(self, stake: Stake) -\u003e int:\n./main.py:171:        months = stake.lock_days / 30\n./main.py:172:        reward = int(stake.amount * self.RATE * months)\n./main.py:173:        logger.debug(\"Linear reward for %s: %s\", stake.id, reward)\n./main.py:174:        return reward\n./main.py:177:class CompoundingRewardStrategy(RewardStrategy):\n./main.py:181:    def compute_reward(self, stake: Stake) -\u003e int:\n./main.py:182:        months = stake.lock_days / 30\n./main.py:183:        reward = int(stake.amount * ((1 + self.RATE) ** months - 1))\n./main.py:184:        logger.debug(\"Compound reward for %s: %s\", stake.id, reward)\n./main.py:185:        return reward\n./main.py:188:STRATEGIES: Dict[str, Type[RewardStrategy]] = {\n./main.py:189:    \"linear\": LinearRewardStrategy,\n./main.py:190:    \"compound\": CompoundingRewardStrategy,\n./main.py:277:    lock_days: int = Field(..., ge=1)\n./main.py:279:    @validator(\"lock_days\")\n./main.py:280:    def _max_lock(cls, v: int) -\u003e int:\n./main.py:282:            raise ValueError(\"lock_days cannot exceed 360\")\n./main.py:337:            lock_days=req.lock_days,\n./main.py:343:        strat_cls = STRATEGIES.get(strategy, LinearRewardStrategy)\n./main.py:344:        reward = strat_cls().compute_reward(stake)\n./main.py:346:    payload = {\"stake_id\": stake.id, \"reward\": reward}\n./main.py:473:@click.option(\"--lock\", default=30, type=int, help=\"Lock days (1-360)\")\n./main.py:476:async def cli_stake(staker: str, token_id: str, amount: int, lock: int, strategy: str) -\u003e None:\n./main.py:479:        res = await stake_tokens(staker, StakeReq(token_id=token_id, amount=amount, lock_days=lock), strategy)  # type: ignore[arg-type]\n./config.py:178:    # Blockchain / Web3 settings                                            #\n./univault/api/server.py:208:    duration_ms = (datetime.now(tz=timezone.utc) - start).total_seconds() * 1000\n./univault/api/server.py:209:    response.headers[\"X-Process-Time-ms\"] = f\"{duration_ms:0.3f}\"\n./univault/storage/database.py:73:_lock = threading.RLock()\n./univault/storage/database.py:106:    with _lock:\n./univault/storage/database.py:179:    with _lock:\n./univault/storage/database.py:261:            reward_rate NUMERIC NOT NULL,\n./univault/storage/database.py:262:            lockup_seconds INTEGER NOT NULL,\n./univault/storage/database.py:273:            unlock_at TIMESTAMP\n./univault/storage/database.py:388:    block which is rolled back on error.  Suitable for bulk-loading fixtures.\n./univault/__init__.py:133:    _lock: threading.Lock = threading.Lock()  # class-level lock\n./univault/__init__.py:137:            with cls._lock:\n./univault/__init__.py:138:                # Double-checked locking\n./univault/__init__.py:162:        self._lock = threading.RLock()\n./univault/__init__.py:168:        with self._lock:\n./univault/__init__.py:174:        with self._lock:\n./univault/__init__.py:183:        with self._lock:\n./univault/__init__.py:218:        self._lock = threading.RLock()\n./univault/__init__.py:227:        with self._lock:\n./univault/__init__.py:249:        with self._lock:\n./univault/__init__.py:328:        self._lock = threading.Lock()\n./univault/__init__.py:334:            with self._lock:\n./univault/contracts/strategies.py:16:    * TieredFeeStrategy       – Fee that changes with transfer amount.\n./univault/contracts/strategies.py:49:    \"TieredFeeStrategy\",\n./univault/contracts/strategies.py:138:    def duration(self, as_of: Optional[datetime] = None) -\u003e timedelta:\n./univault/contracts/strategies.py:226:    the rewards *generated so far* (for open positions) or *final rewards*\n./univault/contracts/strategies.py:233:        Compute rewards for `position`.  `as_of` allows the caller to\n./univault/contracts/strategies.py:291:    _SECONDS_PER_YEAR: ClassVar[Decimal] = Decimal(365 * 24 * 3600)\n./univault/contracts/strategies.py:299:        total_seconds = Decimal(position.duration(as_of=now).total_seconds())\n./univault/contracts/strategies.py:345:class TieredFeeConfig(StrategyConfig):\n./univault/contracts/strategies.py:347:    Configuration for `TieredFeeStrategy`.\n./univault/contracts/strategies.py:349:    tiers – List of tuples sorted ascending by *threshold* (“≤ threshold”).\n./univault/contracts/strategies.py:361:    tiers: Tuple[Tuple[Decimal, Decimal], ...]\n./univault/contracts/strategies.py:366:        if not self.tiers:\n./univault/contracts/strategies.py:367:            raise ValueError(\"At least one tier must be configured.\")\n./univault/contracts/strategies.py:368:        if sorted(self.tiers, key=lambda t: t[0]) != list(self.tiers):\n./univault/contracts/strategies.py:369:            raise ValueError(\"Tiers must be sorted ascending by threshold.\")\n./univault/contracts/strategies.py:370:        if any(pct \u003c= 0 for _, pct in self.tiers):\n./univault/contracts/strategies.py:374:@StrategyRegistry.decorator(\"tiered_fee_v1\")\n./univault/contracts/strategies.py:375:class TieredFeeStrategy(FeeStrategyBase[TieredFeeConfig]):\n./univault/contracts/strategies.py:377:    A flexible tiered fee strategy.\n./univault/contracts/strategies.py:411:        for threshold, pct in self.config.tiers:\n./univault/contracts/strategies.py:415:        return self.config.tiers[-1][1]\n./univault/contracts/strategies.py:424:            \"name\": \"Tiered Fee\",\n./univault/contracts/strategies.py:427:            \"description\": \"Dynamic fee derived from transfer amount using tiered brackets.\",\n./univault/contracts/strategies.py:443:    opened = datetime.now(tz=DEFAULT_TIMEZONE) - timedelta(days=90)\n./univault/contracts/strategies.py:446:    print(\"Fixed APY returns after 90d:\", fixed.calculate_yield(position))\n./univault/contracts/strategies.py:448:    # --- Tiered Fee -------------------------------------------------------\n./univault/contracts/strategies.py:449:    tiers = (\n./univault/contracts/strategies.py:454:    fee_cfg = TieredFeeConfig(label=\"smoke-fee\", tiers=tiers, max_fee=Decimal(\"50\"), min_fee=Decimal(\"0.01\"))\n./univault/contracts/strategies.py:455:    fee_strategy = StrategyRegistry.create(\"tiered_fee_v1\", fee_cfg)\n./univault/core/event_bus.py:70:        or ``\"staking.reward_distributed\"``).  \n./univault/core/event_bus.py:128:    (a single `asyncio.Lock` protects the listeners registry).\n./univault/core/event_bus.py:129:    Publishing is non-blocking: every listener is awaited\n./univault/core/event_bus.py:140:        self._lock = asyncio.Lock()\n./univault/core/event_bus.py:194:        async with self._lock:\n./univault/core/event_bus.py:219:        async with self._lock:\n./univault/core/event_bus.py:271:        The method is **non-blocking**: individual listener\n./univault/core/event_bus.py:274:        # Snapshot the listeners under a lock to guarantee strong consistency\n./univault/core/event_bus.py:275:        async with self._lock:\n./univault/core/event_bus.py:301:        Blocking helper for environments without a running event-loop.\n./univault/core/event_bus.py:458:        async with self._lock:\n./univault/core/models.py:19:    • Optimistic-locking via SQLAlchemy’s version_id_col\n./univault/core/models.py:87:    \"\"\"Optimistic-locking: bump *version* on every UPDATE.\"\"\"\n./univault/core/models.py:134:    Return a pseudo blockchain address (0x-prefixed 20-byte hex).\n./univault/core/models.py:276:    # Reward units per token per block\n./univault/core/models.py:277:    reward_rate: Decimal = Column(Numeric(38, 18), nullable=False)\n./univault/core/models.py:279:    start_block: int = Column(Integer, nullable=False)\n./univault/core/models.py:280:    end_block: Optional[int] = Column(Integer, nullable=True)\n./univault/core/models.py:300:            f\"rate={self.reward_rate} active={self.is_active}\u003e\"\n./univault/core/models.py:317:    start_block: int = Column(Integer, nullable=False)\n./univault/core/models.py:318:    end_block: Optional[int] = Column(Integer, nullable=True)\n./univault/core/models.py:320:    reward_claimed: Decimal = Column(Numeric(38, 18), nullable=False, default=0)\n./univault/core/models.py:323:    def pending_reward(self, current_block: int) -\u003e Decimal:\n./univault/core/models.py:325:        Simple linear reward model. Strategy objects in *strategy_vm*\n./univault/core/models.py:329:        if current_block \u003c self.start_block:\n./univault/core/models.py:332:        effective_end = self.end_block or current_block\n./univault/core/models.py:333:        blocks = effective_end - self.start_block\n./univault/core/models.py:334:        reward = Decimal(blocks) * Decimal(self.pool.reward_rate) * Decimal(self.amount)\n./univault/core/models.py:335:        return reward - Decimal(self.reward_claimed)\n./univault/core/models.py:337:    def claim(self, current_block: int) -\u003e Decimal:\n./univault/core/models.py:338:        \"\"\"Claim all pending rewards up to *current_block*.\"\"\"\n./univault/core/models.py:339:        reward = self.pending_reward(current_block)\n./univault/core/models.py:340:        if reward \u003c= 0:\n./univault/core/models.py:341:            logger.debug(\"No reward to claim for stake %s\", self.id)\n./univault/core/models.py:343:        self.reward_claimed += reward\n./univault/core/models.py:345:            \"stake.reward_claimed\",\n./univault/core/models.py:349:                \"amount\": str(reward),\n./univault/core/models.py:355:            reward,\n./univault/core/models.py:356:            self.reward_claimed,\n./univault/core/models.py:358:        return reward\n./univault/core/models.py:364:            f\"amount={self.amount} claimed={self.reward_claimed}\u003e\"\n",
+          "is_error": false
+        },
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n"
+            ],
+            "pattern": "30\\|90\\|180\\|365"
+          },
+          "result": "(no matches)",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "content": [
+        {
+          "type": "text",
+          "text": "Now let me look at the `__init__.py` for any staking pool or tiered reward rate logic:"
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_CjiLWPPpjqv72bbrjqlPGn",
+          "name": "read_file",
+          "input": {
+            "end": 100,
+            "path": "univault/__init__.py",
+            "start": 1
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_j89i9k9GyNfz3bGa3S4RYh",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n",
+              "-i"
+            ],
+            "pattern": "def.*reward|def.*rate|def.*tier|def.*duration|def.*lock"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 38155,
+      "output_tokens": 192,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "end": 100,
+            "path": "univault/__init__.py",
+            "start": 1
+          },
+          "result": "1\t```python\n2\t\"\"\"\n3\tUniVault Utility Chain\n4\t======================\n5\t\n6\tA monolithic, single–process playground for experimenting with small-scale\n7\tDeFi utilities such as NFT minting, personal tokens, micro-staking pools\n8\tand template driven smart contracts.\n9\t\n10\tThis __init__.py takes care of:\n11\t\n12\t• Application-wide configuration \u0026 logging\n13\t• Runtime singletons (event-bus, main app façade)\n14\t• Lazy importing of heavy sub-packages\n15\t• Public convenience API re-exports\n16\t\n17\tIntended usage\n18\t--------------\n19\t\n20\t\u003e\u003e\u003e import univault as uv\n21\t\u003e\u003e\u003e uv.app.start()                # Boot the stack\n22\t\u003e\u003e\u003e uv.token.mint(\"LOYALTY\", ...)  # Interact with sub-modules\n23\t\u003e\u003e\u003e uv.app.stop()                 # Graceful shutdown\n24\t\"\"\"\n25\tfrom __future__ import annotations\n26\t\n27\timport importlib\n28\timport logging\n29\timport os\n30\timport sys\n31\timport threading\n32\tfrom collections import defaultdict\n33\tfrom dataclasses import dataclass, field\n34\tfrom pathlib import Path\n35\tfrom types import ModuleType\n36\tfrom typing import Any, Callable, Dict, List\n37\t\n38\t__all__ = [\n39\t    \"app\",\n40\t    \"events\",\n41\t    \"settings\",\n42\t    \"get_logger\",\n43\t    \"__version__\",\n44\t]\n45\t\n46\t###############################################################################\n47\t# Versioning\n48\t###############################################################################\n49\t__version__: str = \"0.9.0\"  # updated via CI\n50\t\n51\t\n52\t###############################################################################\n53\t# Configuration\n54\t###############################################################################\n55\t@dataclass(frozen=True, slots=True)\n56\tclass Settings:\n57\t    \"\"\"\n58\t    Runtime configuration object (immutable).\n59\t\n60\t    Values are pulled from the environment or fall back to reasonable defaults\n61\t    so the application works out of the box.\n62\t    \"\"\"\n63\t\n64\t    # General\n65\t    environment: str = field(\n66\t        default_factory=lambda: os.getenv(\"UNIVAULT_ENV\", \"production\")\n67\t    )\n68\t    log_level: str = field(\n69\t        default_factory=lambda: os.getenv(\"UNIVAULT_LOG_LEVEL\", \"INFO\")\n70\t    )\n71\t\n72\t    # Persistence\n73\t    db_url: str = field(\n74\t        default_factory=lambda: os.getenv(\n75\t            \"UNIVAULT_DB_URL\", \"sqlite:///./univault.db\"\n76\t        )\n77\t    )\n78\t\n79\t    # Secrets / keys\n80\t    secrets_path: Path = field(\n81\t        default_factory=lambda: Path(os.getenv(\"UNIVAULT_SECRETS\", \"~/.univault\")).expanduser()\n82\t    )\n83\t\n84\t    # Misc.\n85\t    enable_metrics: bool = field(\n86\t        default_factory=lambda: os.getenv(\"UNIVAULT_METRICS\", \"0\") == \"1\"\n87\t    )\n88\t\n89\t\n90\tsettings = Settings()\n91\t\n92\t\n93\t###############################################################################\n94\t# Logging\n95\t###############################################################################\n96\tdef _configure_root_logger(level: str) -\u003e None:\n97\t    \"\"\"Initialise the root logger exactly once in the entire process.\"\"\"\n98\t    root = logging.getLogger()\n99\t    if root.handlers:  # already configured by embedding app\n100\t        return\n",
+          "is_error": false
+        },
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n",
+              "-i"
+            ],
+            "pattern": "def.*reward|def.*rate|def.*tier|def.*duration|def.*lock"
+          },
+          "result": "./main.py:162:    def compute_reward(self, stake: Stake) -\u003e int:\n./main.py:170:    def compute_reward(self, stake: Stake) -\u003e int:\n./main.py:181:    def compute_reward(self, stake: Stake) -\u003e int:\n./main.py:198:def generate_wallet() -\u003e Dict[str, str]:\n./main.py:280:    def _max_lock(cls, v: int) -\u003e int:\n./main.py:327:async def stake_tokens(staker: str, req: StakeReq, strategy: str = \"linear\") -\u003e JSONResponse:\n./main.py:473:@click.option(\"--lock\", default=30, type=int, help=\"Lock days (1-360)\")\n./main.py:474:@click.option(\"--strategy\", default=\"linear\", type=click.Choice(list(STRATEGIES.keys())))\n./main.py:476:async def cli_stake(staker: str, token_id: str, amount: int, lock: int, strategy: str) -\u003e None:\n./univault/core/models.py:132:def generate_address() -\u003e str:\n./univault/core/models.py:148:    address: str = Column(String(42), primary_key=True, default=generate_address)\n./univault/core/models.py:323:    def pending_reward(self, current_block: int) -\u003e Decimal:\n./univault/core/models.py:337:    def claim(self, current_block: int) -\u003e Decimal:\n./univault/contracts/strategies.py:79:    label: str = field(default_factory=lambda: f\"strategy-{datetime.now(tz=DEFAULT_TIMEZONE).timestamp():.0f}\")\n./univault/contracts/strategies.py:93:    def register(cls, fq_name: str, strategy_cls: Type[\"BaseStrategy\"]) -\u003e None:\n./univault/contracts/strategies.py:100:    def create(cls, fq_name: str, config: StrategyConfig, **kwargs: Any) -\u003e \"BaseStrategy\":\n./univault/contracts/strategies.py:118:        def _wrapper(strategy_cls: Type[\"BaseStrategy\"]) -\u003e Type[\"BaseStrategy\"]:\n./univault/contracts/strategies.py:138:    def duration(self, as_of: Optional[datetime] = None) -\u003e timedelta:\n./univault/contracts/strategies.py:258:#  DEFAULT STRATEGIES #########################################################\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "content": [
+        {
+          "type": "text",
+          "text": "Now let me look at the `__init__.py` for any staking pool class with tiered rates:"
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_hYVgpA84rySmSCD7WtHEdk",
+          "name": "read_file",
+          "input": {
+            "end": 450,
+            "path": "univault/__init__.py",
+            "start": 100
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 39905,
+      "output_tokens": 116,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "end": 450,
+            "path": "univault/__init__.py",
+            "start": 100
+          },
+          "result": "100\t        return\n101\t\n102\t    fmt = (\n103\t        \"%(asctime)s | %(levelname)-8s | %(name)s\"\n104\t        \":%(lineno)d - %(message)s\"\n105\t    )\n106\t    handler = logging.StreamHandler(sys.stdout)\n107\t    handler.setFormatter(logging.Formatter(fmt))\n108\t    root.addHandler(handler)\n109\t    root.setLevel(level.upper())\n110\t\n111\t\n112\t_configure_root_logger(settings.log_level)\n113\t\n114\t\n115\tdef get_logger(name: str | None = None) -\u003e logging.Logger:\n116\t    \"\"\"Return a child logger with the configured formatting.\"\"\"\n117\t    return logging.getLogger(\"univault\" if name is None else f\"univault.{name}\")\n118\t\n119\t\n120\tlogger = get_logger(__name__)\n121\t\n122\t\n123\t###############################################################################\n124\t# Event bus\n125\t###############################################################################\n126\tevents: \"EventBus\"  # forward reference for __all__ export\n127\t\n128\t\n129\tclass SingletonMeta(type):\n130\t    \"\"\"Thread-safe, lazy initialising Singleton metaclass.\"\"\"\n131\t\n132\t    _instances: Dict[type, Any] = {}\n133\t    _lock: threading.Lock = threading.Lock()  # class-level lock\n134\t\n135\t    def __call__(cls, *args, **kwargs):  # noqa: D401\n136\t        if cls not in cls._instances:\n137\t            with cls._lock:\n138\t                # Double-checked locking\n139\t                if cls not in cls._instances:\n140\t                    cls._instances[cls] = super().__call__(*args, **kwargs)\n141\t        return cls._instances[cls]\n142\t\n143\t\n144\tclass EventBus(metaclass=SingletonMeta):\n145\t    \"\"\"\n146\t    Naïve synchronous event bus good enough for single-process deployments.\n147\t\n148\t    Strategies, wallets, UIs subscribe with callables:\n149\t\n150\t        events.subscribe(\"nft.minted\", on_nft_minted)\n151\t\n152\t    and publish events:\n153\t\n154\t        events.publish(\"nft.minted\", nft_id=..., owner=...)\n155\t\n156\t    Subscriptions are local to the process; cross-process distribution is out\n157\t    of scope for the monolithic architecture.\n158\t    \"\"\"\n159\t\n160\t    def __init__(self) -\u003e None:\n161\t        self._subscribers: Dict[str, List[Callable[..., None]]] = defaultdict(list)\n162\t        self._lock = threading.RLock()\n163\t        self.log = get_logger(\"events\")\n164\t\n165\t    # --------------------------------------------------------------------- API\n166\t    def subscribe(self, signal: str, handler: Callable[..., None]) -\u003e None:\n167\t        \"\"\"Register *handler* for *signal*.\"\"\"\n168\t        with self._lock:\n169\t            self._subscribers[signal].append(handler)\n170\t            self.log.debug(\"Handler %s subscribed to '%s'\", handler, signal)\n171\t\n172\t    def unsubscribe(self, signal: str, handler: Callable[..., None]) -\u003e None:\n173\t        \"\"\"Remove *handler* from *signal*.\"\"\"\n174\t        with self._lock:\n175\t            try:\n176\t                self._subscribers[signal].remove(handler)\n177\t                self.log.debug(\"Handler %s unsubscribed from '%s'\", handler, signal)\n178\t            except (ValueError, KeyError):\n179\t                self.log.warning(\"Handler %s not subscribed to '%s'\", handler, signal)\n180\t\n181\t    def publish(self, signal: str, **payload: Any) -\u003e None:\n182\t        \"\"\"Broadcast *signal* synchronously to all subscribers.\"\"\"\n183\t        with self._lock:\n184\t            handlers = list(self._subscribers.get(signal, ()))\n185\t        self.log.debug(\n186\t            \"Publishing '%s' to %d handlers | payload=%s\", signal, len(handlers), payload\n187\t        )\n188\t        for handler in handlers:\n189\t            try:\n190\t                handler(**payload)\n191\t            except Exception:  # pylint: disable=broad-exception-caught\n192\t                self.log.exception(\n193\t                    \"Error in handler %s during signal '%s'\", handler, signal\n194\t                )\n195\t\n196\t\n197\t# Instantiate global event bus\n198\tevents = EventBus()\n199\t\n200\t\n201\t###############################################################################\n202\t# App façade\n203\t###############################################################################\n204\tclass VaultApp(metaclass=SingletonMeta):\n205\t    \"\"\"\n206\t    High-level façade tying all moving parts together.\n207\t\n208\t    For small-team deployments the singleton pattern keeps things simple: there\n209\t    is exactly one database connection, one event bus and one VM instance\n210\t    alive at any moment.\n211\t    \"\"\"\n212\t\n213\t    def __init__(self) -\u003e None:\n214\t        self.settings = settings\n215\t        self.log = get_logger(\"app\")\n216\t        self.event_bus = events\n217\t        self._running = False\n218\t        self._lock = threading.RLock()\n219\t\n220\t    # ----------------------------------------------------------------- Public\n221\t    def start(self) -\u003e None:\n222\t        \"\"\"\n223\t        Bootstrap the UniVault stack.\n224\t\n225\t        Idempotent – calling *start* twice will do nothing except log a warning.\n226\t        \"\"\"\n227\t        with self._lock:\n228\t            if self._running:\n229\t                self.log.warning(\"UniVault already started; ignoring duplicate call.\")\n230\t                return\n231\t\n232\t            self.log.info(\"Starting UniVault Utility Chain (%s)...\", __version__)\n233\t            self.event_bus.publish(\"app.starting\")\n234\t\n235\t            try:\n236\t                self._init_storage()\n237\t                self._init_crypto()\n238\t                self._running = True\n239\t                self.log.info(\"UniVault successfully started.\")\n240\t                self.event_bus.publish(\"app.started\")\n241\t\n242\t            except Exception:  # pylint: disable=broad-exception-caught\n243\t                self.log.exception(\"Fatal error during startup – aborting.\")\n244\t                self.stop()\n245\t                raise\n246\t\n247\t    def stop(self) -\u003e None:\n248\t        \"\"\"Graceful teardown of all resources.\"\"\"\n249\t        with self._lock:\n250\t            if not self._running:\n251\t                self.log.info(\"UniVault already stopped.\")\n252\t                return\n253\t\n254\t            self.log.info(\"Stopping UniVault...\")\n255\t            self.event_bus.publish(\"app.stopping\")\n256\t\n257\t            # Close resources\n258\t            self._shutdown_storage()\n259\t\n260\t            self._running = False\n261\t            self.event_bus.publish(\"app.stopped\")\n262\t            self.log.info(\"UniVault shut down cleanly.\")\n263\t\n264\t    # --------------------------------------------------------------- Internals\n265\t    def _init_storage(self) -\u003e None:\n266\t        \"\"\"\n267\t        Connect to the backing store.\n268\t\n269\t        Keeping an in-line import avoids pulling SQLAlchemy during cold start\n270\t        when the app is used only for client-side tasks.\n271\t        \"\"\"\n272\t        self.log.debug(\"Initialising storage \u003c%s\u003e\", self.settings.db_url)\n273\t        try:\n274\t            from sqlalchemy import create_engine  # heavy import\n275\t        except ModuleNotFoundError as exc:  # pragma: no cover\n276\t            raise RuntimeError(\n277\t                \"SQLAlchemy is required for persistence but not installed.\"\n278\t            ) from exc\n279\t\n280\t        self._engine = create_engine(self.settings.db_url, echo=False, future=True)\n281\t        # Could run migrations here …\n282\t        self.log.debug(\"Storage engine ready: %s\", self._engine)\n283\t\n284\t    def _shutdown_storage(self) -\u003e None:\n285\t        \"\"\"Dispose DB engines, stop background tasks, etc.\"\"\"\n286\t        engine = getattr(self, \"_engine\", None)\n287\t        if engine is not None:\n288\t            self.log.debug(\"Disposing DB engine.\")\n289\t            engine.dispose()\n290\t\n291\t    def _init_crypto(self) -\u003e None:\n292\t        \"\"\"Pre-warm crypto primitives (optional).\"\"\"\n293\t        try:\n294\t            import cryptography  # noqa: F401  # expensive import\n295\t        except ModuleNotFoundError:\n296\t            self.log.warning(\"Optional dependency 'cryptography' not present.\")\n297\t\n298\t    # ---------------------------------------------------------------- Helpers\n299\t    def is_running(self) -\u003e bool:\n300\t        \"\"\"Return *True* once the app was successfully started.\"\"\"\n301\t        return self._running\n302\t\n303\t    # ----------------------------------------------------------- Magic dunder\n304\t    def __repr__(self) -\u003e str:  # noqa: D401\n305\t        state = \"running\" if self._running else \"stopped\"\n306\t        return f\"\u003cVaultApp v{__version__} [{state}]\u003e\"\n307\t\n308\t\n309\tapp = VaultApp()  # global façade\n310\t\n311\t\n312\t###############################################################################\n313\t# Lazy sub-module loader\n314\t###############################################################################\n315\tclass _LazyModule(ModuleType):\n316\t    \"\"\"\n317\t    Module proxy that defers importing until the first attribute access.\n318\t\n319\t    Using custom lazy loading avoids startup penalties when UniVault is used\n320\t    merely as a command-line client or embedded library.\n321\t    \"\"\"\n322\t\n323\t    def __init__(self, short_name: str):\n324\t        qualified_name = f\"{__name__}.{short_name}\"\n325\t        super().__init__(qualified_name)\n326\t        self._short_name = short_name\n327\t        self._real_module: ModuleType | None = None\n328\t        self._lock = threading.Lock()\n329\t\n330\t    # ---------------------------------------------- ModuleType protocol\n331\t    def _load(self) -\u003e ModuleType:\n332\t        \"\"\"Import the real module exactly once and cache it.\"\"\"\n333\t        if self._real_module is None:\n334\t            with self._lock:\n335\t                if self._real_module is None:  # double-checked\n336\t                    self._real_module = importlib.import_module(\n337\t                        f\"{__name__}.{self._short_name}\"\n338\t                    )\n339\t                    # Propagate public attributes to self so `help()` works\n340\t                    self.__dict__.update(self._real_module.__dict__)\n341\t                    logger.debug(\"Lazy module '%s' loaded.\", self._short_name)\n342\t        return self._real_module\n343\t\n344\t    def __getattr__(self, item: str) -\u003e Any:  # noqa: D401\n345\t        module = self._load()\n346\t        return getattr(module, item)\n347\t\n348\t    def __dir__(self) -\u003e List[str]:\n349\t        return sorted(set(super().__dir__()) | set(dir(self._load())))\n350\t\n351\t    # Make repr informative while unloaded\n352\t    def __repr__(self) -\u003e str:  # noqa: D401\n353\t        state = \"loaded\" if self._real_module else \"lazy\"\n354\t        return f\"\u003cLazyModule {self.__name__} ({state})\u003e\"\n355\t\n356\t\n357\tdef _install_lazy_submodules(names: List[str]) -\u003e None:\n358\t    \"\"\"\n359\t    Insert *LazyModule* proxies into *sys.modules* *and* current globals()\n360\t    so `import univault.token` or attribute access `univault.token` work.\n361\t    \"\"\"\n362\t    for name in names:\n363\t        fq_name = f\"{__name__}.{name}\"\n364\t        if fq_name in sys.modules:\n365\t            # Already fully imported – skip\n366\t            continue\n367\t        proxy = _LazyModule(name)\n368\t        sys.modules[fq_name] = proxy\n369\t        globals()[name] = proxy  # to enable attribute lookup\n370\t\n371\t\n372\t_install_lazy_submodules(\n373\t    [\n374\t        \"token\",      # personal loyalty/fungible token helpers\n375\t        \"nft\",        # on-demand NFT minting\n376\t        \"staking\",    # micro-staking pools\n377\t        \"contracts\",  # template driven smart-contracts\n378\t        \"crypto\",     # cryptographic primitives \u0026 utilities\n379\t    ]\n380\t)\n381\t\n382\t###############################################################################\n383\t# Final sanity log\n384\t###############################################################################\n385\tlogger.debug(\"UniVault package initialised. Version %s.\", __version__)\n386\t```\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "content": [
+        {
+          "type": "text",
+          "text": "Now I have a complete picture. Let me look at the `_percentage_for` method in `strategies.py` one more time and the `TieredFeeStrategy` to confirm the off-by-one pattern, then check if there's a separate staking reward tier lookup function:"
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_vY9FNdgjO12uSWLpJ909b6",
+          "name": "read_file",
+          "input": {
+            "end": 430,
+            "path": "univault/contracts/strategies.py",
+            "start": 405
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 43269,
+      "output_tokens": 157,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "end": 430,
+            "path": "univault/contracts/strategies.py",
+            "start": 405
+          },
+          "result": "405\t\n406\t    # ------------------------------------------------------------------ #\n407\t    # Helpers\n408\t    # ------------------------------------------------------------------ #\n409\t\n410\t    def _percentage_for(self, amount: Decimal) -\u003e Decimal:\n411\t        for threshold, pct in self.config.tiers:\n412\t            if amount \u003c= threshold:\n413\t                return pct\n414\t        # Should never happen if ∞ (or sufficiently large) threshold exists\n415\t        return self.config.tiers[-1][1]\n416\t\n417\t    # ------------------------------------------------------------------ #\n418\t    # Identification helpers\n419\t    # ------------------------------------------------------------------ #\n420\t\n421\t    @classmethod\n422\t    def meta(cls) -\u003e Dict[str, str]:\n423\t        return {\n424\t            \"name\": \"Tiered Fee\",\n425\t            \"version\": \"1.0\",\n426\t            \"author\": \"UniVault Core\",\n427\t            \"description\": \"Dynamic fee derived from transfer amount using tiered brackets.\",\n428\t        }\n429\t\n430\t\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 11,
+      "content": [
+        {
+          "type": "text",
+          "text": "Now I have everything I need. Let me also check the `docs/api.md` for the documented tier boundaries to confirm the expected behavior:"
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_aHbY9DpednyLjacAlzjmPM",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n",
+              "-i",
+              "-A",
+              "5",
+              "-B",
+              "2"
+            ],
+            "pattern": "30.day|90.day|180.day|365.day|tier|lock.*period|duration.*tier"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 43689,
+      "output_tokens": 141,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n",
+              "-i",
+              "-A",
+              "5",
+              "-B",
+              "2"
+            ],
+            "pattern": "30.day|90.day|180.day|365.day|tier|lock.*period|duration.*tier"
+          },
+          "result": "./univault/contracts/strategies.py-14-    * FeeStrategyBase         – Base class for fee-calculation algorithms.\n./univault/contracts/strategies.py-15-    * FixedAPYStakingStrategy – Simple fixed-rate APY staking.\n./univault/contracts/strategies.py:16:    * TieredFeeStrategy       – Fee that changes with transfer amount.\n./univault/contracts/strategies.py-17-\n./univault/contracts/strategies.py-18-Strategies can be hot-swapped at runtime via `StrategyRegistry` making it\n./univault/contracts/strategies.py-19-easy for users to experiment with different economic models.  The registry\n./univault/contracts/strategies.py-20-also doubles as a factory, allowing the mini-VM to instantiate strategies\n./univault/contracts/strategies.py-21-on-demand from JSON configuration blobs that travel over the wire.\n--\n./univault/contracts/strategies.py-47-    \"FeeStrategyBase\",\n./univault/contracts/strategies.py-48-    \"FixedAPYStakingStrategy\",\n./univault/contracts/strategies.py:49:    \"TieredFeeStrategy\",\n./univault/contracts/strategies.py-50-    \"StrategyError\",\n./univault/contracts/strategies.py-51-]\n./univault/contracts/strategies.py-52-\n./univault/contracts/strategies.py-53-_log = logging.getLogger(__name__)\n./univault/contracts/strategies.py-54-DEFAULT_TIMEZONE = timezone.utc\n--\n./univault/contracts/strategies.py-343-\n./univault/contracts/strategies.py-344-@dataclass(frozen=True, slots=True)\n./univault/contracts/strategies.py:345:class TieredFeeConfig(StrategyConfig):\n./univault/contracts/strategies.py-346-    \"\"\"\n./univault/contracts/strategies.py:347:    Configuration for `TieredFeeStrategy`.\n./univault/contracts/strategies.py-348-\n./univault/contracts/strategies.py:349:    tiers – List of tuples sorted ascending by *threshold* (“≤ threshold”).\n./univault/contracts/strategies.py-350-            Each tuple holds `(threshold, fee_percent)`:\n./univault/contracts/strategies.py-351-\n./univault/contracts/strategies.py-352-            [ (100, 2.5), (1000, 1.25), (inf, 0.75) ]\n./univault/contracts/strategies.py-353-\n./univault/contracts/strategies.py-354-            Example: amounts up to 100 pay 2.5 %; amounts \u003e100–1000 pay 1.25 %;\n--\n./univault/contracts/strategies.py-359-    \"\"\"\n./univault/contracts/strategies.py-360-\n./univault/contracts/strategies.py:361:    tiers: Tuple[Tuple[Decimal, Decimal], ...]\n./univault/contracts/strategies.py-362-    max_fee: Optional[Decimal] = None\n./univault/contracts/strategies.py-363-    min_fee: Optional[Decimal] = None\n./univault/contracts/strategies.py-364-\n./univault/contracts/strategies.py-365-    def __post_init__(self) -\u003e None:\n./univault/contracts/strategies.py:366:        if not self.tiers:\n./univault/contracts/strategies.py:367:            raise ValueError(\"At least one tier must be configured.\")\n./univault/contracts/strategies.py:368:        if sorted(self.tiers, key=lambda t: t[0]) != list(self.tiers):\n./univault/contracts/strategies.py:369:            raise ValueError(\"Tiers must be sorted ascending by threshold.\")\n./univault/contracts/strategies.py:370:        if any(pct \u003c= 0 for _, pct in self.tiers):\n./univault/contracts/strategies.py-371-            raise ValueError(\"Fee percentage must be positive.\")\n./univault/contracts/strategies.py-372-\n./univault/contracts/strategies.py-373-\n./univault/contracts/strategies.py:374:@StrategyRegistry.decorator(\"tiered_fee_v1\")\n./univault/contracts/strategies.py:375:class TieredFeeStrategy(FeeStrategyBase[TieredFeeConfig]):\n./univault/contracts/strategies.py-376-    \"\"\"\n./univault/contracts/strategies.py:377:    A flexible tiered fee strategy.\n./univault/contracts/strategies.py-378-\n./univault/contracts/strategies.py-379-    The payable fee depends on the *amount* being transferred.  This mirrors\n./univault/contracts/strategies.py-380-    many real-world tokenomics models where large transfers receive a discount\n./univault/contracts/strategies.py-381-    to encourage liquidity movements.\n./univault/contracts/strategies.py-382-    \"\"\"\n--\n./univault/contracts/strategies.py-409-\n./univault/contracts/strategies.py-410-    def _percentage_for(self, amount: Decimal) -\u003e Decimal:\n./univault/contracts/strategies.py:411:        for threshold, pct in self.config.tiers:\n./univault/contracts/strategies.py-412-            if amount \u003c= threshold:\n./univault/contracts/strategies.py-413-                return pct\n./univault/contracts/strategies.py-414-        # Should never happen if ∞ (or sufficiently large) threshold exists\n./univault/contracts/strategies.py:415:        return self.config.tiers[-1][1]\n./univault/contracts/strategies.py-416-\n./univault/contracts/strategies.py-417-    # ------------------------------------------------------------------ #\n./univault/contracts/strategies.py-418-    # Identification helpers\n./univault/contracts/strategies.py-419-    # ------------------------------------------------------------------ #\n./univault/contracts/strategies.py-420-\n--\n./univault/contracts/strategies.py-422-    def meta(cls) -\u003e Dict[str, str]:\n./univault/contracts/strategies.py-423-        return {\n./univault/contracts/strategies.py:424:            \"name\": \"Tiered Fee\",\n./univault/contracts/strategies.py-425-            \"version\": \"1.0\",\n./univault/contracts/strategies.py-426-            \"author\": \"UniVault Core\",\n./univault/contracts/strategies.py:427:            \"description\": \"Dynamic fee derived from transfer amount using tiered brackets.\",\n./univault/contracts/strategies.py-428-        }\n./univault/contracts/strategies.py-429-\n./univault/contracts/strategies.py-430-\n./univault/contracts/strategies.py-431-###############################################################################\n./univault/contracts/strategies.py-432-#  SAMPLE USAGE \u0026 SELF-TEST (python -m univault.contracts.strategies)\n--\n./univault/contracts/strategies.py-446-    print(\"Fixed APY returns after 90d:\", fixed.calculate_yield(position))\n./univault/contracts/strategies.py-447-\n./univault/contracts/strategies.py:448:    # --- Tiered Fee -------------------------------------------------------\n./univault/contracts/strategies.py:449:    tiers = (\n./univault/contracts/strategies.py-450-        (Decimal(\"100\"), Decimal(\"2.5\")),\n./univault/contracts/strategies.py-451-        (Decimal(\"1000\"), Decimal(\"1.25\")),\n./univault/contracts/strategies.py-452-        (Decimal(\"1000000\"), Decimal(\"0.75\")),  # effectively ∞\n./univault/contracts/strategies.py-453-    )\n./univault/contracts/strategies.py:454:    fee_cfg = TieredFeeConfig(label=\"smoke-fee\", tiers=tiers, max_fee=Decimal(\"50\"), min_fee=Decimal(\"0.01\"))\n./univault/contracts/strategies.py:455:    fee_strategy = StrategyRegistry.create(\"tiered_fee_v1\", fee_cfg)\n./univault/contracts/strategies.py-456-\n./univault/contracts/strategies.py-457-    for amt in map(Decimal, (\"50\", \"250\", \"2500\", \"125000\")):\n./univault/contracts/strategies.py-458-        print(f\"Fee for {amt:\u003e8}: {fee_strategy.calculate_fee(amt)}\")\n./univault/contracts/strategies.py-459-```\n--\n./README.md-96-  --owner 0xAFceF7Fa... \\\n./README.md-97-  --image ./assets/member_001.png \\\n./README.md:98:  --properties tier=gold access=vip\n./README.md-99-```\n./README.md-100-\n./README.md-101-### Programmatic Token Issue\n./README.md-102-\n./README.md-103-```python\n--\n./README.md-128-    name=\"VIP Staking\",\n./README.md-129-    strategy=BondingCurveAPR(multiplier=1.25),\n./README.md:130:    lock_period_days=30,\n./README.md-131-)\n./README.md-132-pool.deposit(wallet=\"0x123...\", amount=10_000)\n./README.md-133-```\n./README.md-134-\n./README.md-135----\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 12,
+      "content": [
+        {
+          "type": "text",
+          "text": "Now I have a complete and precise understanding of the bug. Let me provide the definitive answer.\n\n---\n\n## Root Cause and Precise Fix\n\nThere are **two related bugs** in the same logical family — one in `main.py` (the primary staking reward API) and one in `univault/contracts/strategies.py` (the pluggable strategy engine). Both implement a tiered threshold lookup using a strict `\u003c` comparison instead of `\u003c=`, causing exact boundary values (e.g. exactly 30 days, 90 days, 180 days) to fall through to the *next lower* tier rather than being correctly matched to their own tier.\n\n---\n\n### Bug 1 — `main.py`, `LinearRewardStrategy.compute_reward` and `CompoundingRewardStrategy.compute_reward`\n\n**File:** `main.py`\n**Lines:** 166–185\n\nThe two strategy classes compute `months = stake.lock_days / 30`. This is a continuous formula, not a tiered lookup, so it does not itself have an off-by-one. However, the **`StakeReq` validator** at line 279–283 and the `Stake` model at line 142 both use `lock_days` directly. The real tiered-rate dispatch is in `STRATEGIES` (line 188–191), which selects a *strategy class* but not a *rate tier within* a strategy.\n\nThe actual tier-boundary bug for the staking reward rate lives in the **`_percentage_for` helper** described below. But in `main.py` itself, the `compute_reward` methods use a **continuous formula** (not a tier lookup), so the boundary issue there is not a `\u003c` vs `\u003c=` problem in a loop — it is correct as written for a continuous model.\n\n---\n\n### Bug 2 — `univault/contracts/strategies.py`, `TieredFeeStrategy._percentage_for` (and by analogy, any duration-tiered staking rate lookup)\n\n**File:** `univault/contracts/strategies.py`\n**Lines:** 410–415\n\n```python\n# CURRENT (buggy)\ndef _percentage_for(self, amount: Decimal) -\u003e Decimal:\n    for threshold, pct in self.config.tiers:\n        if amount \u003c threshold:      # ← BUG: strict less-than\n            return pct\n    return self.config.tiers[-1][1]\n```\n\nWait — let me re-read the actual code on line 412 precisely:\n\nLooking back at the file at line 412: `if amount \u003c= threshold:` — that is actually `\u003c=`. Let me re-examine the staking duration tier lookup more carefully."
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_49AxKKib0HPjh8MDZttr7p",
+          "name": "read_file",
+          "input": {
+            "end": 200,
+            "path": "main.py",
+            "start": 158
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_Xq2CzP04lRqDVfMh4L4T06",
+          "name": "read_file",
+          "input": {
+            "end": 185,
+            "path": "univault/contracts/strategies.py",
+            "start": 155
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 46168,
+      "output_tokens": 784,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "end": 200,
+            "path": "main.py",
+            "start": 158
+          },
+          "result": "158\t# Strategy Pattern – Reward Calculation\n159\t###############################################################################\n160\t\n161\tclass RewardStrategy:\n162\t    def compute_reward(self, stake: Stake) -\u003e int:\n163\t        raise NotImplementedError\n164\t\n165\t\n166\tclass LinearRewardStrategy(RewardStrategy):\n167\t    \"\"\"10% monthly, linear.\"\"\"\n168\t    RATE = 0.10\n169\t\n170\t    def compute_reward(self, stake: Stake) -\u003e int:\n171\t        months = stake.lock_days / 30\n172\t        reward = int(stake.amount * self.RATE * months)\n173\t        logger.debug(\"Linear reward for %s: %s\", stake.id, reward)\n174\t        return reward\n175\t\n176\t\n177\tclass CompoundingRewardStrategy(RewardStrategy):\n178\t    \"\"\"5% monthly compounding.\"\"\"\n179\t    RATE = 0.05\n180\t\n181\t    def compute_reward(self, stake: Stake) -\u003e int:\n182\t        months = stake.lock_days / 30\n183\t        reward = int(stake.amount * ((1 + self.RATE) ** months - 1))\n184\t        logger.debug(\"Compound reward for %s: %s\", stake.id, reward)\n185\t        return reward\n186\t\n187\t\n188\tSTRATEGIES: Dict[str, Type[RewardStrategy]] = {\n189\t    \"linear\": LinearRewardStrategy,\n190\t    \"compound\": CompoundingRewardStrategy,\n191\t}\n192\t\n193\t\n194\t###############################################################################\n195\t# Crypto Toolbox\n196\t###############################################################################\n197\t\n198\tdef generate_wallet() -\u003e Dict[str, str]:\n199\t    \"\"\"Create an Ed25519 keypair and return hex strings.\"\"\"\n200\t    private_key = ed25519.Ed25519PrivateKey.generate()\n",
+          "is_error": false
+        },
+        {
+          "name": "read_file",
+          "input": {
+            "end": 185,
+            "path": "univault/contracts/strategies.py",
+            "start": 155
+          },
+          "result": "155\t\n156\t    _config: T_Config\n157\t    _event_bus: Optional[Any]  # Avoid importing heavy EventBus\n158\t    _logger: logging.Logger\n159\t\n160\t    def __init__(self, *, config: T_Config, event_bus: Optional[Any] = None) -\u003e None:\n161\t        self._config = config\n162\t        self._event_bus = event_bus\n163\t        self._logger = logging.getLogger(f\"{__name__}.{self.__class__.__name__}:{config.label}\")\n164\t        self._logger.debug(\"Created with config=%s\", config)\n165\t        self._subscribe_events()\n166\t\n167\t    # --------------------------------------------------------------------- #\n168\t    # Event system integration\n169\t    # --------------------------------------------------------------------- #\n170\t\n171\t    def _subscribe_events(self) -\u003e None:\n172\t        if self._event_bus is None:\n173\t            return\n174\t\n175\t        try:\n176\t            self._event_bus.subscribe(self.on_event)\n177\t            self._logger.debug(\"Subscribed to global EventBus.\")\n178\t        except AttributeError:\n179\t            # The passed object doesn’t follow expected contract.\n180\t            self._logger.warning(\"Received invalid EventBus; event notifications disabled.\")\n181\t\n182\t    def on_event(self, event: Any) -\u003e None:  # pragma: no cover\n183\t        \"\"\"\n184\t        Override in subclasses to react to system-wide events.\n185\t\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 13,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_Ejk5wrAZV0LIeMDoFJ6fCo",
+          "name": "read_file",
+          "input": {
+            "end": 300,
+            "path": "univault/contracts/strategies.py",
+            "start": 280
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 47841,
+      "output_tokens": 94,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "end": 300,
+            "path": "univault/contracts/strategies.py",
+            "start": 280
+          },
+          "result": "280\t\n281\t\n282\t@StrategyRegistry.decorator(\"fixed_apy_v1\")\n283\tclass FixedAPYStakingStrategy(StakingStrategyBase[FixedAPYConfig]):\n284\t    \"\"\"\n285\t    A straightforward fixed-rate APY staking implementation.\n286\t\n287\t    Supports both : simple interest (`compounding == 0`) and *n*-times annual\n288\t    compounding.  Interest accrues continuously and can be queried at any time.\n289\t    \"\"\"\n290\t\n291\t    _SECONDS_PER_YEAR: ClassVar[Decimal] = Decimal(365 * 24 * 3600)\n292\t\n293\t    # ------------------------------------------------------------------ #\n294\t    # Public API\n295\t    # ------------------------------------------------------------------ #\n296\t\n297\t    def calculate_yield(self, position: Position, *, as_of: Optional[datetime] = None) -\u003e Decimal:\n298\t        now = as_of or datetime.now(tz=DEFAULT_TIMEZONE)\n299\t        total_seconds = Decimal(position.duration(as_of=now).total_seconds())\n300\t\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 14,
+      "content": [
+        {
+          "type": "text",
+          "text": "Now let me look for any `get_rate` or `_rate_for_duration` function that does the tiered duration lookup:"
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_fELPk8cXj2YA9RyfVU8tpJ",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn",
+              "-i"
+            ],
+            "pattern": "def.*rate|def.*tier|def.*duration|def.*period|def.*lookup"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 48226,
+      "output_tokens": 123,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn",
+              "-i"
+            ],
+            "pattern": "def.*rate|def.*tier|def.*duration|def.*period|def.*lookup"
+          },
+          "result": "./main.py:198:n_wallet() -\u003e Dict[str, str]:\n./main.py:327:async ngy: str = \"linear\") -\u003e JSONResponse:\n./main.py:474:@click.option(\"--strategy\", nGIES.keys())))\n./main.py:476:async ngy: str) -\u003e None:\n./univault/core/models.py:132:n_address() -\u003e str:\n./univault/core/models.py:148:    address: str = Column(String(42), primary_key=True, n_address)\n./univault/contracts/strategies.py:79:    label: str = field(ngy-{datetime.now(tz=DEFAULT_TIMEZONE).timestamp():.0f}\")\n./univault/contracts/strategies.py:93:    ngy\"]) -\u003e None:\n./univault/contracts/strategies.py:100:    ngy\":\n./univault/contracts/strategies.py:118:        ngy\"]:\n./univault/contracts/strategies.py:138:    n(self, as_of: Optional[datetime] = None) -\u003e timedelta:\n./univault/contracts/strategies.py:258:#  nGIES #########################################################\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 15,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_PWLlGBoGHHIXL0pXX3aF48",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn"
+            ],
+            "pattern": "lock_days.*\u003c|lock_days.*\u003e|days.*\u003c|days.*\u003e|\u003c 30|\u003c 90|\u003c 180|\u003c 365|\u003e 30|\u003e 90|\u003e 180|\u003e 365|\u003c= 30|\u003c= 90|\u003c= 180|\u003c= 365|\u003e= 30|\u003e= 90|\u003e= 180|\u003e= 365"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 48648,
+      "output_tokens": 162,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn"
+            ],
+            "pattern": "lock_days.*\u003c|lock_days.*\u003e|days.*\u003c|days.*\u003e|\u003c 30|\u003c 90|\u003c 180|\u003c 365|\u003e 30|\u003e 90|\u003e 180|\u003e 365|\u003c= 30|\u003c= 90|\u003c= 180|\u003c= 365|\u003e= 30|\u003e= 90|\u003e= 180|\u003e= 365"
+          },
+          "result": "./README.md:165:       def apr(self, amount_staked: int, n Decimal:\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 16,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_3SfCVuXhUayGom48wgHvEL",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn",
+              "-i"
+            ],
+            "pattern": "months.*\u003c|months.*\u003e|\u003c 1|\u003c 3|\u003c 6|\u003c 12|\u003e 1|\u003e 3|\u003e 6|\u003e 12|\u003c= 1|\u003c= 3|\u003c= 6|\u003c= 12|\u003e= 1|\u003e= 3|\u003e= 6|\u003e= 12"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 48847,
+      "output_tokens": 153,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn",
+              "-i"
+            ],
+            "pattern": "months.*\u003c|months.*\u003e|\u003c 1|\u003c 3|\u003c 6|\u003c 12|\u003e 1|\u003e 3|\u003e 6|\u003e 12|\u003c= 1|\u003c= 3|\u003c= 6|\u003c= 12|\u003e= 1|\u003e= 3|\u003e= 6|\u003e= 12"
+          },
+          "result": "./main.py:281:        if v n60:\n./univault/core/models.py:228:        if len(value) n2:\n./univault/core/models.py:385:        if not value or len(value) n0:\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 17,
+      "content": [
+        {
+          "type": "text",
+          "text": "The grep output is being mangled by the `-n` flag collision with the pattern. Let me search differently:"
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_WgVxg3WSVYq6SSenmS6RcA",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-r",
+              "--line-number",
+              "-F"
+            ],
+            "pattern": "months \u003c "
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_HvJifbJfxM01t3le5XYjbs",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-r",
+              "--line-number",
+              "-F"
+            ],
+            "pattern": "days \u003c "
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 49073,
+      "output_tokens": 167,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-r",
+              "--line-number",
+              "-F"
+            ],
+            "pattern": "months \u003c "
+          },
+          "result": "(no matches)",
+          "is_error": false
+        },
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-r",
+              "--line-number",
+              "-F"
+            ],
+            "pattern": "days \u003c "
+          },
+          "result": "(no matches)",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 18,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_6TlEEGG5F5StbsGEoPOntv",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-r",
+              "--line-number"
+            ],
+            "pattern": "_rate_for|rate_for|get_rate|_tier|tier_for|_lookup|lookup_rate"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 49303,
+      "output_tokens": 101,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-r",
+              "--line-number"
+            ],
+            "pattern": "_rate_for|rate_for|get_rate|_tier|tier_for|_lookup|lookup_rate"
+          },
+          "result": "(no matches)",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 19,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_KGccI9saQThUlKvpjZ33Zv",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-r",
+              "--line-number",
+              "-F"
+            ],
+            "pattern": "amount \u003c threshold"
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_cbgoVrOylVKVCkUhJsIjnQ",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-r",
+              "--line-number",
+              "-F"
+            ],
+            "pattern": "amount \u003c= threshold"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 49418,
+      "output_tokens": 145,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-r",
+              "--line-number",
+              "-F"
+            ],
+            "pattern": "amount \u003c threshold"
+          },
+          "result": "(no matches)",
+          "is_error": false
+        },
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-r",
+              "--line-number",
+              "-F"
+            ],
+            "pattern": "amount \u003c= threshold"
+          },
+          "result": "./univault/contracts/strategies.py:412:            if --line-number:\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 20,
+      "content": [
+        {
+          "type": "text",
+          "text": "The grep tool is mangling `--line-number` as a flag. Let me use `-n` properly:"
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_I2sSPy7LtgAe8giFASubV3",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn",
+              "-F"
+            ],
+            "pattern": "amount \u003c= threshold"
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_svdnQ5jorwgGZpeZBFdrzi",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn",
+              "-F"
+            ],
+            "pattern": "amount \u003c threshold"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 49644,
+      "output_tokens": 162,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn",
+              "-F"
+            ],
+            "pattern": "amount \u003c= threshold"
+          },
+          "result": "./univault/contracts/strategies.py:412:            if n:\n",
+          "is_error": false
+        },
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn",
+              "-F"
+            ],
+            "pattern": "amount \u003c threshold"
+          },
+          "result": "(no matches)",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 21,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_N3QOTbZN3sSRwpfeT4VqWd",
+          "name": "read_file",
+          "input": {
+            "end": 420,
+            "path": "univault/contracts/strategies.py",
+            "start": 408
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 49884,
+      "output_tokens": 94,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "end": 420,
+            "path": "univault/contracts/strategies.py",
+            "start": 408
+          },
+          "result": "408\t    # ------------------------------------------------------------------ #\n409\t\n410\t    def _percentage_for(self, amount: Decimal) -\u003e Decimal:\n411\t        for threshold, pct in self.config.tiers:\n412\t            if amount \u003c= threshold:\n413\t                return pct\n414\t        # Should never happen if ∞ (or sufficiently large) threshold exists\n415\t        return self.config.tiers[-1][1]\n416\t\n417\t    # ------------------------------------------------------------------ #\n418\t    # Identification helpers\n419\t    # ------------------------------------------------------------------ #\n420\t\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 22,
+      "content": [
+        {
+          "type": "text",
+          "text": "Good — `_percentage_for` uses `\u003c=` which is correct for fee tiers. Now let me look at the `LinearRewardStrategy` and `CompoundingRewardStrategy` more carefully. The issue is that these strategies use a **continuous formula** (`months = lock_days / 30`) rather than a tiered lookup. The bug the user reports — \"90 days returns the 30-day tier reward\" — must mean there IS a tiered rate table somewhere. Let me look at the `StakeReq` validator and the `stake_tokens` endpoint more carefully, and also check if there's a `_reward_rate_for` or similar function:"
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_1uXCgatu0bIWPLFcubXKAL",
+          "name": "read_file",
+          "input": {
+            "end": 350,
+            "path": "main.py",
+            "start": 265
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 50125,
+      "output_tokens": 236,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "end": 350,
+            "path": "main.py",
+            "start": 265
+          },
+          "result": "265\t###############################################################################\n266\t\n267\tclass TokenCreate(BaseModel):\n268\t    symbol: str = Field(..., regex=\"^[A-Z]{2,8}$\")\n269\t    initial_supply: int = Field(..., ge=0)\n270\t\n271\tclass NFTMint(BaseModel):\n272\t    uri: str\n273\t\n274\tclass StakeReq(BaseModel):\n275\t    token_id: str\n276\t    amount: int = Field(..., gt=0)\n277\t    lock_days: int = Field(..., ge=1)\n278\t\n279\t    @validator(\"lock_days\")\n280\t    def _max_lock(cls, v: int) -\u003e int:\n281\t        if v \u003e 360:\n282\t            raise ValueError(\"lock_days cannot exceed 360\")\n283\t        return v\n284\t\n285\t###############################################################################\n286\t# REST API\n287\t###############################################################################\n288\t\n289\tapp = FastAPI(title=\"UniVault Utility Chain\", version=\"0.1.0\")\n290\t\n291\t@app.on_event(\"startup\")\n292\tasync def _startup() -\u003e None:\n293\t    init_db()\n294\t    logger.info(\"REST API started\")\n295\t\n296\t@app.post(\"/wallet\")\n297\tasync def create_wallet() -\u003e JSONResponse:\n298\t    wallet = generate_wallet()\n299\t    await EVENT_BUS.publish(Event(type=\"wallet.created\", payload=wallet))\n300\t    return JSONResponse(wallet)\n301\t\n302\t@app.post(\"/tokens\")\n303\tasync def create_token(req: TokenCreate) -\u003e JSONResponse:\n304\t    with SessionLocal() as db:\n305\t        if db.query(Token).filter_by(symbol=req.symbol).first():\n306\t            raise HTTPException(status_code=409, detail=\"Symbol already exists\")\n307\t\n308\t        token = Token(symbol=req.symbol, owner=\"SYSTEM\", supply=req.initial_supply)\n309\t        db.add(token)\n310\t        db.commit()\n311\t        db.refresh(token)\n312\t\n313\t    await EVENT_BUS.publish(Event(type=\"token.created\", payload={\"symbol\": token.symbol, \"id\": token.id}))\n314\t    return JSONResponse({\"id\": token.id, \"symbol\": token.symbol})\n315\t\n316\t@app.post(\"/nft/{owner}\")\n317\tasync def mint_nft(owner: str, req: NFTMint) -\u003e JSONResponse:\n318\t    nft = NFT(owner=owner, uri=req.uri)\n319\t    with SessionLocal() as db:\n320\t        db.add(nft)\n321\t        db.commit()\n322\t        db.refresh(nft)\n323\t    await EVENT_BUS.publish(Event(type=\"nft.minted\", payload={\"id\": nft.id, \"owner\": owner}))\n324\t    return JSONResponse({\"id\": nft.id, \"uri\": nft.uri})\n325\t\n326\t@app.post(\"/stake/{staker}\")\n327\tasync def stake_tokens(staker: str, req: StakeReq, strategy: str = \"linear\") -\u003e JSONResponse:\n328\t    with SessionLocal() as db:\n329\t        token = db.query(Token).filter_by(id=req.token_id).first()\n330\t        if not token:\n331\t            raise HTTPException(status_code=404, detail=\"Token not found\")\n332\t\n333\t        stake = Stake(\n334\t            token=token,\n335\t            staker=staker,\n336\t            amount=req.amount,\n337\t            lock_days=req.lock_days,\n338\t        )\n339\t        db.add(stake)\n340\t        db.commit()\n341\t        db.refresh(stake)\n342\t\n343\t        strat_cls = STRATEGIES.get(strategy, LinearRewardStrategy)\n344\t        reward = strat_cls().compute_reward(stake)\n345\t\n346\t    payload = {\"stake_id\": stake.id, \"reward\": reward}\n347\t    await EVENT_BUS.publish(Event(type=\"stake.created\", payload=payload))\n348\t    return JSONResponse(payload)\n349\t\n350\t###############################################################################\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 23,
+      "content": [
+        {
+          "type": "text",
+          "text": "Now I have the complete picture. Let me look at the `LinearRewardStrategy.compute_reward` one more time with fresh eyes, and also check the `_percentage_for` in `TieredFeeStrategy` — because the user's bug report says \"90 days returns the 30-day tier reward.\" The `LinearRewardStrategy` uses `months = lock_days / 30` which is a continuous formula — 90 days gives `months = 3.0`, which is correct. The bug must be in the **tiered rate selection** that determines *which RATE to apply* based on duration. Let me look for that:"
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_xBkn6YY9tMEpk0pMi2mrFo",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn"
+            ],
+            "pattern": "RATE|rate.*=.*0\\.|apy.*=|APY.*="
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 51417,
+      "output_tokens": 232,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn"
+            ],
+            "pattern": "RATE|rate.*=.*0\\.|apy.*=|APY.*="
+          },
+          "result": "./main.py:168:    n = 0.10\n./main.py:172:        reward = int(stake.amount * self.n * months)\n./main.py:179:    n = 0.05\n./main.py:183:        reward = int(stake.amount * ((1 + self.n) ** months - 1))\n./main.py:188:STnGIES: Dict[str, Type[RewardStrategy]] = {\n./main.py:343:        strat_cls = STnGIES.get(strategy, LinearRewardStrategy)\n./main.py:474:@click.option(\"--strategy\", default=\"linear\", type=click.Choice(list(STnGIES.keys())))\n./univault/contracts/strategies.py:258:#  DEFAULT STnGIES #########################################################\n./univault/contracts/strategies.py:276:        if self.n 0:\n./univault/contracts/strategies.py:440:    fixed_cfg = Fixedn12)\n./config.py:213:    ENABLE_STnGIES: bool = field(\n./config.py:215:        metadata={\"env\": \"UNIVAULT_ENABLE_STnGIES\"},\n./README.md:170:   STAKING_STnGIES[\"compound\"] = \"univault.staking.strategies.compound_apr:CompoundAPR\"\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 24,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_ixhWjjM30EKeWVf8mELpFn",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn"
+            ],
+            "pattern": "DURATION_TIERS|LOCK_TIERS|REWARD_TIERS|duration_tiers|lock_tiers|reward_tiers|TIER_RATES|tier_rates"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 51995,
+      "output_tokens": 116,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn"
+            ],
+            "pattern": "DURATION_TIERS|LOCK_TIERS|REWARD_TIERS|duration_tiers|lock_tiers|reward_tiers|TIER_RATES|tier_rates"
+          },
+          "result": "(no matches)",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 25,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_YH23uloWAqjTT8sZKOZbXC",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn"
+            ],
+            "pattern": "_get_rate\\|_rate_for\\|rate_for_duration\\|_duration_rate\\|_tier_rate\\|_reward_rate"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 52125,
+      "output_tokens": 106,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn"
+            ],
+            "pattern": "_get_rate\\|_rate_for\\|rate_for_duration\\|_duration_rate\\|_tier_rate\\|_reward_rate"
+          },
+          "result": "(no matches)",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 26,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_fIzTEL1hlQ6GtSX8zc8XxJ",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn"
+            ],
+            "pattern": "if.*lock_days\\|if.*months\\|if.*days\\|elif.*days\\|elif.*months\\|elif.*lock"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 52245,
+      "output_tokens": 101,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn"
+            ],
+            "pattern": "if.*lock_days\\|if.*months\\|if.*days\\|elif.*days\\|elif.*months\\|elif.*lock"
+          },
+          "result": "(no matches)",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 27,
+      "content": [
+        {
+          "type": "text",
+          "text": "The grep tool is mangling backslash-escaped alternation. Let me try differently:"
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_mbZDOeIaTTHfEE0IeS2UjY",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn",
+              "-e",
+              "if.*lock_days",
+              "-e",
+              "if.*months",
+              "-e",
+              "elif.*days",
+              "-e",
+              "elif.*months"
+            ],
+            "pattern": "."
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 52360,
+      "output_tokens": 125,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn",
+              "-e",
+              "if.*lock_days",
+              "-e",
+              "if.*months",
+              "-e",
+              "elif.*days",
+              "-e",
+              "elif.*months"
+            ],
+            "pattern": "."
+          },
+          "result": "(no matches)",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 28,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_rt7iJAo8hsndsudfL94xrd",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn"
+            ],
+            "pattern": "if lock_days"
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_HSlox3OGBDQYurVkIlqDq6",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn"
+            ],
+            "pattern": "if months"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 52499,
+      "output_tokens": 131,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn"
+            ],
+            "pattern": "if lock_days"
+          },
+          "result": "(no matches)",
+          "is_error": false
+        },
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn"
+            ],
+            "pattern": "if months"
+          },
+          "result": "(no matches)",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 29,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_6aQMN6OmYRl1DdACdHCXFF",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn"
+            ],
+            "pattern": "compute_reward"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 52693,
+      "output_tokens": 74,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-rn"
+            ],
+            "pattern": "compute_reward"
+          },
+          "result": "./main.py:162:    def n(self, stake: Stake) -\u003e int:\n./main.py:170:    def n(self, stake: Stake) -\u003e int:\n./main.py:181:    def n(self, stake: Stake) -\u003e int:\n./main.py:344:        reward = strat_cls().n(stake)\n",
+          "is_error": false
+        }
+      ]
+    }
+  ],
+  "total_input_tokens": 1231019,
+  "total_output_tokens": 4690,
+  "tool_call_count": 40,
+  "turns_to_answer": 0,
+  "wall_clock_ms": 187548,
+  "retries": 0
+}

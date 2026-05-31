@@ -1,0 +1,50 @@
+{
+  "status": "completed",
+  "final_answer": "The `Response` class is defined in **`httpx/_models.py`** at line 515.",
+  "turns": [
+    {
+      "index": 0,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_b1BQUrVOzhUeDPQqHDsyAr",
+          "name": "grep",
+          "input": {
+            "pattern": "class Response"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 1486,
+      "output_tokens": 53,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "pattern": "class Response"
+          },
+          "result": "./tests/client/test_auth.py:115:class ResponseBodyAuth(httpx.Auth):\n./httpx/_exceptions.py:338:class ResponseNotRead(StreamError):\n./httpx/_models.py:515:class Response:\n./httpx/_transports/default.py:121:class ResponseStream(SyncByteStream):\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "content": [
+        {
+          "type": "text",
+          "text": "The `Response` class is defined in **`httpx/_models.py`** at line 515."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "input_tokens": 1632,
+      "output_tokens": 26
+    }
+  ],
+  "total_input_tokens": 3118,
+  "total_output_tokens": 79,
+  "tool_call_count": 1,
+  "turns_to_answer": 2,
+  "wall_clock_ms": 4705,
+  "retries": 0
+}

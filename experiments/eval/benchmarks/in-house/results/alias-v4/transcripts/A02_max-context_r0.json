@@ -1,0 +1,74 @@
+{
+  "status": "completed",
+  "final_answer": "Here is the complete caller chain for `resolve_all` (defined at `celery/app/annotations.py:50`):\n\n---\n\n### Direct Caller (depth 1)\n\n| Caller | File | Line | Notes |\n|---|---|---|---|\n| **`annotate`** | `celery/app/task.py` | 478 | Production method on the `Task` class; calls `resolve_all` directly via an imported reference |\n\n---\n\n### Indirect Caller (depth 2)\n\n| Caller | File | Line | Notes |\n|---|---|---|---|\n| **`test_annotate_decorator`** | `t/unit/app/test_app.py` | 857 | Test function that exercises `annotate`, which in turn calls `resolve_all` |\n\n---\n\n### Summary\n\nOnly **one production caller** exists:\n\n- **`annotate`** (`celery/app/task.py:478`) — this is the sole method that directly invokes `resolve_all`. It is the task annotation hook that applies per-task and wildcard annotations at task registration time.\n\nThe only other reachable caller is the test **`test_annotate_decorator`** (`t/unit/app/test_app.py:857`), which calls `annotate` and therefore reaches `resolve_all` transitively. No other functions or methods in the codebase call `resolve_all`, either directly or indirectly.",
+  "turns": [
+    {
+      "index": 0,
+      "content": [
+        {
+          "type": "text",
+          "text": "Let me look up `resolve_all` and trace its callers simultaneously."
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_vuMb6l8CnkVd5dF5yZvQk3",
+          "name": "get_definition",
+          "input": {
+            "symbol": "resolve_all"
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_mAnC8tgahzggHi3UoUCId6",
+          "name": "get_call_chain",
+          "input": {
+            "depth": 5,
+            "direction": "callers",
+            "function_name": "resolve_all"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 1778,
+      "output_tokens": 149,
+      "tool_calls": [
+        {
+          "name": "get_definition",
+          "input": {
+            "symbol": "resolve_all"
+          },
+          "result": "{\"ambiguous\":false,\"answer\":\"resolve_all (function) is defined at celery/app/annotations.py:50. This is the definitive location — answer now without further searches.\",\"answer_status\":\"definitive\",\"canonical\":{\"name\":\"resolve_all\",\"kind\":\"function\",\"label\":\"function\",\"file\":\"celery/app/annotations.py\",\"line\":50,\"canonical\":true},\"matches\":[{\"name\":\"resolve_all\",\"kind\":\"function\",\"label\":\"function\",\"file\":\"celery/app/annotations.py\",\"line\":50,\"canonical\":true}],\"recommended_next_action\":\"answer_now\",\"total\":1}",
+          "is_error": false
+        },
+        {
+          "name": "get_call_chain",
+          "input": {
+            "depth": 5,
+            "direction": "callers",
+            "function_name": "resolve_all"
+          },
+          "result": "{\"callers\":[{\"name\":\"annotate\",\"file_path\":\"celery/app/task.py\",\"line\":478,\"depth\":1,\"resolution\":\"import-symbol\"},{\"name\":\"test_annotate_decorator\",\"file_path\":\"t/unit/app/test_app.py\",\"line\":857,\"depth\":2,\"resolution\":\"receiver-typed\"}],\"depth\":5,\"function\":\"resolve_all\"}",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "content": [
+        {
+          "type": "text",
+          "text": "Here is the complete caller chain for `resolve_all` (defined at `celery/app/annotations.py:50`):\n\n---\n\n### Direct Caller (depth 1)\n\n| Caller | File | Line | Notes |\n|---|---|---|---|\n| **`annotate`** | `celery/app/task.py` | 478 | Production method on the `Task` class; calls `resolve_all` directly via an imported reference |\n\n---\n\n### Indirect Caller (depth 2)\n\n| Caller | File | Line | Notes |\n|---|---|---|---|\n| **`test_annotate_decorator`** | `t/unit/app/test_app.py` | 857 | Test function that exercises `annotate`, which in turn calls `resolve_all` |\n\n---\n\n### Summary\n\nOnly **one production caller** exists:\n\n- **`annotate`** (`celery/app/task.py:478`) — this is the sole method that directly invokes `resolve_all`. It is the task annotation hook that applies per-task and wildcard annotations at task registration time.\n\nThe only other reachable caller is the test **`test_annotate_decorator`** (`t/unit/app/test_app.py:857`), which calls `annotate` and therefore reaches `resolve_all` transitively. No other functions or methods in the codebase call `resolve_all`, either directly or indirectly."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "input_tokens": 2220,
+      "output_tokens": 330
+    }
+  ],
+  "total_input_tokens": 3998,
+  "total_output_tokens": 479,
+  "tool_call_count": 2,
+  "turns_to_answer": 2,
+  "wall_clock_ms": 10375,
+  "retries": 0
+}

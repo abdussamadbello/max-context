@@ -1,0 +1,224 @@
+{
+  "status": "completed",
+  "final_answer": "That's everything needed. Here is the complete picture:\n\n---\n\n## Where to make the change\n\n**File:** `httpx/_client.py`\n**Method:** `headers` setter on `BaseClient` — lines **305–316**\n\n```python\n@headers.setter\ndef headers(self, headers: HeaderTypes) -\u003e None:\n    client_headers = Headers(\n        {\n            b\"Accept\": b\"*/*\",\n            b\"Accept-Encoding\": ACCEPT_ENCODING.encode(\"ascii\"),\n            b\"Connection\": b\"keep-alive\",\n            b\"User-Agent\": USER_AGENT.encode(\"ascii\"),\n        }\n    )\n    client_headers.update(headers)\n    self._headers = client_headers\n```\n\nThis setter is the **single place** where the client's default headers are assembled. Every outgoing request goes through `build_request` → `_merge_headers`, which starts from `self.headers` (i.e. `self._headers`), so anything added here is automatically included in every request.\n\n---\n\n## Minimal edit\n\nAdd your new header to the dictionary literal inside the setter:\n\n```python\n@headers.setter\ndef headers(self, headers: HeaderTypes) -\u003e None:\n    client_headers = Headers(\n        {\n            b\"Accept\": b\"*/*\",\n            b\"Accept-Encoding\": ACCEPT_ENCODING.encode(\"ascii\"),\n            b\"Connection\": b\"keep-alive\",\n            b\"User-Agent\": USER_AGENT.encode(\"ascii\"),\n            b\"X-My-Header\": b\"my-value\",   # ← add your header here\n        }\n    )\n    client_headers.update(headers)\n    self._headers = client_headers\n```\n\n---\n\n## Why this is the right place\n\n| Call chain | Role |\n|---|---|\n| `Client.get/post/…` | calls `build_request` |\n| `build_request` | calls `_merge_headers(per_request_headers)` |\n| `_merge_headers` | starts from `Headers(self.headers)` and overlays per-request headers |\n| `headers` setter | **builds `self.headers`** from the hardcoded defaults dict + any headers passed to the constructor |\n\nBecause `_merge_headers` seeds itself from `self.headers`, any header you add to the defaults dict in the setter will be present on every outgoing request, and can still be overridden on a per-request basis (since `merged_headers.update(headers)` runs after).",
+  "turns": [
+    {
+      "index": 0,
+      "content": [
+        {
+          "type": "text",
+          "text": "Let me explore the repository structure and find the relevant client code."
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_ai0MHQKwNVn5IespwJ7w3F",
+          "name": "list_files",
+          "input": {}
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_0jIzdMB6TQmIeIXlHkkHY5",
+          "name": "grep",
+          "input": {
+            "pattern": "class Client"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 1429,
+      "output_tokens": 85,
+      "tool_calls": [
+        {
+          "name": "list_files",
+          "input": {},
+          "result": "CHANGELOG.md\nmkdocs.yml\nLICENSE.md\nREADME.md\ndocs/CNAME\npyproject.toml\nrequirements.txt\ndocs/advanced/authentication.md\ndocs/advanced/clients.md\ndocs/advanced/event-hooks.md\ndocs/advanced/extensions.md\ndocs/advanced/proxies.md\ndocs/advanced/resource-limits.md\ndocs/advanced/ssl.md\ndocs/advanced/text-encodings.md\ndocs/advanced/timeouts.md\ndocs/advanced/transports.md\ndocs/api.md\ndocs/async.md\ndocs/code_of_conduct.md\ndocs/compatibility.md\ndocs/contributing.md\nscripts/build\nscripts/check\nscripts/clean\nscripts/coverage\nscripts/docs\nscripts/install\nscripts/lint\nscripts/publish\nscripts/sync-version\nscripts/test\ndocs/css/custom.css\ndocs/environment_variables.md\ndocs/exceptions.md\ndocs/http2.md\ntests/__init__.py\ndocs/img/butterfly.png\ndocs/img/gh-actions-fail-check.png\ndocs/img/gh-actions-fail-test.png\ndocs/img/gh-actions-fail.png\ndocs/img/httpx-help.png\ndocs/img/httpx-request.png\ndocs/img/logo.jpg\ndocs/img/rich-progress.gif\ndocs/img/speakeasy.png\ndocs/img/tqdm-progress.gif\ndocs/index.md\ndocs/logging.md\ntests/client/__init__.py\ntests/client/test_async_client.py\ntests/client/test_auth.py\ntests/client/test_client.py\ntests/client/test_cookies.py\ntests/client/test_event_hooks.py\ntests/client/test_headers.py\ntests/client/test_properties.py\ntests/client/test_proxies.py\ntests/client/test_queryparams.py\ntests/client/test_redirects.py\ntests/common.py\ntests/concurrency.py\ntests/conftest.py\ndocs/third_party_packages.md\ndocs/troubleshooting.md\ndocs/overrides/partials/nav.html\ndocs/quickstart.md\ntests/test_decoders.py\ntests/test_exceptions.py\ntests/test_exported_members.py\ntests/test_main.py\ntests/test_multipart.py\ntests/test_status_codes.py\ntests/test_timeouts.py\ntests/test_utils.py\ntests/test_wsgi.py\ntests/test_api.py\ntests/test_asgi.py\ntests/test_auth.py\ntests/test_config.py\ntests/test_content.py\ntests/models/test_whatwg.py\ntests/models/whatwg.json\ntests/models/test_responses.py\ntests/models/test_url.py\ntests/models/test_requests.py\ntests/models/__init__.py\ntests/models/test_cookies.py\ntests/models/test_headers.py\ntests/models/test_queryparams.py\nhttpx/__init__.py\nhttpx/__version__.py\nhttpx/_api.py\nhttpx/_auth.py\nhttpx/_client.py\nhttpx/_config.py\nhttpx/_content.py\nhttpx/_decoders.py\nhttpx/_exceptions.py\nhttpx/_main.py\nhttpx/_models.py\nhttpx/_multipart.py\nhttpx/_status_codes.py\nhttpx/_transports/__init__.py\nhttpx/_transports/asgi.py\nhttpx/_transports/base.py\nhttpx/_transports/default.py\nhttpx/_transports/mock.py\nhttpx/_transports/wsgi.py\nhttpx/_types.py\nhttpx/_urlparse.py\nhttpx/_urls.py\nhttpx/_utils.py\nhttpx/py.typed\n",
+          "is_error": false
+        },
+        {
+          "name": "grep",
+          "input": {
+            "pattern": "class Client"
+          },
+          "result": "./httpx/_client.py:125:class ClientState(enum.Enum):\n./httpx/_client.py:594:class Client(BaseClient):\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_wE3BpWtKr9N6ucKGyCFFr9",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n",
+              "-F",
+              "--",
+              "httpx/_client.py"
+            ],
+            "pattern": "def _merge_headers\\|default_headers\\|_headers"
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_CXjACLkrT4YVSlIFXmTuol",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n",
+              "httpx/_client.py"
+            ],
+            "pattern": "class BaseClient"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 2551,
+      "output_tokens": 161,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n",
+              "-F",
+              "--",
+              "httpx/_client.py"
+            ],
+            "pattern": "def _merge_headers\\|default_headers\\|_headers"
+          },
+          "result": "grep error: exit status 2\nrg: def _merge_headers\\|default_headers\\|_headers: No such file or directory (os error 2)\n",
+          "is_error": true
+        },
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n",
+              "httpx/_client.py"
+            ],
+            "pattern": "class BaseClient"
+          },
+          "result": "grep error: exit status 2\nrg: class BaseClient: No such file or directory (os error 2)\n",
+          "is_error": true
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "tooluse_0ArpqDJhg5TiaNxeP5tGiw",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n",
+              "-t",
+              "py"
+            ],
+            "pattern": "class BaseClient"
+          }
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_yK0r5PpbJkXSmjQ53VKOQM",
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n",
+              "-t",
+              "py"
+            ],
+            "pattern": "default_headers|_merge_headers|_headers"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 2836,
+      "output_tokens": 149,
+      "tool_calls": [
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n",
+              "-t",
+              "py"
+            ],
+            "pattern": "class BaseClient"
+          },
+          "result": "./httpx/_client.py:188:class BaseClient:\n",
+          "is_error": false
+        },
+        {
+          "name": "grep",
+          "input": {
+            "args": [
+              "-n",
+              "-t",
+              "py"
+            ],
+            "pattern": "default_headers|_merge_headers|_headers"
+          },
+          "result": "./httpx/_models.py:130:def _obfuscate_sensitive_headers(\n./httpx/_models.py:358:            other_headers = Headers(other)\n./httpx/_models.py:363:        other_list = [(key, value) for _, key, value in other_headers._list]\n./httpx/_models.py:373:        as_list = list(_obfuscate_sensitive_headers(self.multi_items()))\n./httpx/_models.py:441:    def _prepare(self, default_headers: dict[str, str]) -\u003e None:\n./httpx/_models.py:442:        for key, value in default_headers.items():\n./httpx/_models.py:448:        auto_headers: list[tuple[bytes, bytes]] = []\n./httpx/_models.py:456:            auto_headers.append((b\"Host\", self.url.netloc))\n./httpx/_models.py:458:            auto_headers.append((b\"Content-Length\", b\"0\"))\n./httpx/_models.py:460:        self.headers = Headers(auto_headers + self.headers.raw)\n./httpx/_models.py:571:    def _prepare(self, default_headers: dict[str, str]) -\u003e None:\n./httpx/_models.py:572:        for key, value in default_headers.items():\n./httpx/_client.py:303:        return self._headers\n./httpx/_client.py:307:        client_headers = Headers(\n./httpx/_client.py:315:        client_headers.update(headers)\n./httpx/_client.py:316:        self._headers = client_headers\n./httpx/_client.py:367:        headers = self._merge_headers(headers)\n./httpx/_client.py:424:    def _merge_headers(self, headers: HeaderTypes | None = None) -\u003e HeaderTypes | None:\n./httpx/_client.py:429:        merged_headers = Headers(self.headers)\n./httpx/_client.py:430:        merged_headers.update(headers)\n./httpx/_client.py:431:        return merged_headers\n./httpx/_client.py:482:        headers = self._redirect_headers(request, url, method)\n./httpx/_client.py:546:    def _redirect_headers(self, request: Request, url: URL, method: str) -\u003e Headers:\n./httpx/_multipart.py:90:    def render_headers(self) -\u003e bytes:\n./httpx/_multipart.py:91:        if not hasattr(self, \"_headers\"):\n./httpx/_multipart.py:93:            self._headers = b\"\".join(\n./httpx/_multipart.py:97:        return self._headers\n./httpx/_multipart.py:106:        headers = self.render_headers()\n./httpx/_multipart.py:111:        yield self.render_headers()\n./httpx/_multipart.py:172:        headers = self.render_headers()\n./httpx/_multipart.py:186:    def render_headers(self) -\u003e bytes:\n./httpx/_multipart.py:187:        if not hasattr(self, \"_headers\"):\n./httpx/_multipart.py:199:            self._headers = b\"\".join(parts)\n./httpx/_multipart.py:201:        return self._headers\n./httpx/_multipart.py:220:        yield self.render_headers()\n./httpx/_multipart.py:287:    def get_headers(self) -\u003e dict[str, str]:\n./httpx/_content.py:156:    headers = multipart.get_headers()\n./httpx/_main.py:116:def format_request_headers(request: httpcore.Request, http2: bool = False) -\u003e str:\n./httpx/_main.py:129:def format_response_headers(\n./httpx/_main.py:147:def print_request_headers(request: httpcore.Request, http2: bool = False) -\u003e None:\n./httpx/_main.py:149:    http_text = format_request_headers(request, http2=http2)\n./httpx/_main.py:156:def print_response_headers(\n./httpx/_main.py:163:    http_text = format_response_headers(http_version, status, reason_phrase, headers)\n./httpx/_main.py:235:    elif name == \"http11.send_request_headers.started\" and verbose:\n./httpx/_main.py:237:        print_request_headers(request, http2=False)\n./httpx/_main.py:238:    elif name == \"http2.send_request_headers.started\" and verbose:  # pragma: no cover\n./httpx/_main.py:240:        print_request_headers(request, http2=True)\n./httpx/_main.py:241:    elif name == \"http11.receive_response_headers.complete\":\n./httpx/_main.py:243:        print_response_headers(http_version, status, reason_phrase, headers)\n./httpx/_main.py:244:    elif name == \"http2.receive_response_headers.complete\":  # pragma: no cover\n./httpx/_main.py:248:        print_response_headers(http_version, status, reason_phrase, headers)\n./httpx/_transports/asgi.py:127:        response_headers = None\n./httpx/_transports/asgi.py:149:            nonlocal status_code, response_headers, response_started\n./httpx/_transports/asgi.py:155:                response_headers = message.get(\"headers\", [])\n./httpx/_transports/asgi.py:178:            if response_headers is None:\n./httpx/_transports/asgi.py:179:                response_headers = {}\n./httpx/_transports/asgi.py:183:        assert response_headers is not None\n./httpx/_transports/asgi.py:187:        return Response(status_code, headers=response_headers, stream=stream)\n./httpx/_transports/default.py:177:                proxy_headers=proxy.headers.raw,\n./httpx/_transports/default.py:321:                proxy_headers=proxy.headers.raw,\n./tests/client/test_async_client.py:41:    url = server.url.copy_with(path=\"/echo_headers\")\n./tests/test_multipart.py:153:def test_multipart_file_tuple_headers(file_content_type: str | None) -\u003e None:\n./tests/test_multipart.py:156:    file_headers = {\"Expires\": \"0\"}\n./tests/test_multipart.py:160:    files = {\"file\": (file_name, file_content, file_content_type, file_headers)}\n./tests/test_multipart.py:178:def test_multipart_headers_include_content_type() -\u003e None:\n./tests/test_multipart.py:186:    file_headers = {\"Content-Type\": \"image/png\"}\n./tests/test_multipart.py:190:    files = {\"file\": (file_name, file_content, file_content_type, file_headers)}\n./tests/test_asgi.py:48:async def echo_headers(scope, receive, send):\n./tests/test_asgi.py:150:async def test_asgi_headers():\n./tests/test_asgi.py:151:    transport = httpx.ASGITransport(app=echo_headers)\n./tests/client/test_client.py:48:    url = server.url.copy_with(path=\"/echo_headers\")\n./tests/client/test_client.py:63:    url = server.url.copy_with(path=\"/echo_headers\")\n./tests/client/test_client.py:336:def echo_raw_headers(request: httpx.Request) -\u003e httpx.Response:\n./tests/client/test_client.py:348:    url = \"http://example.org/echo_headers\"\n./tests/client/test_client.py:352:        transport=httpx.MockTransport(echo_raw_headers), headers=headers\n./tests/client/test_redirects.py:40:        raw_headers = [(b\"location\", \"https://😇/\".encode(\"utf-8\"))]\n./tests/client/test_redirects.py:41:        return httpx.Response(status_code, headers=raw_headers)\n./httpx/_transports/wsgi.py:120:        seen_response_headers = None\n./httpx/_transports/wsgi.py:125:            response_headers: list[tuple[str, str]],\n./httpx/_transports/wsgi.py:128:            nonlocal seen_status, seen_response_headers, seen_exc_info\n./httpx/_transports/wsgi.py:130:            seen_response_headers = response_headers\n./httpx/_transports/wsgi.py:139:        assert seen_response_headers is not None\n./httpx/_transports/wsgi.py:146:            for key, value in seen_response_headers\n./tests/client/test_headers.py:8:def echo_headers(request: httpx.Request) -\u003e httpx.Response:\n./tests/client/test_headers.py:13:def echo_repeated_headers_multi_items(request: httpx.Request) -\u003e httpx.Response:\n./tests/client/test_headers.py:18:def echo_repeated_headers_items(request: httpx.Request) -\u003e httpx.Response:\n./tests/client/test_headers.py:27:    url = \"http://example.org/echo_headers\"\n./tests/client/test_headers.py:30:    client = httpx.Client(transport=httpx.MockTransport(echo_headers), headers=headers)\n./tests/client/test_headers.py:47:    url = \"http://example.org/echo_headers\"\n./tests/client/test_headers.py:48:    client_headers = {\"User-Agent\": \"python-myclient/0.2.1\"}\n./tests/client/test_headers.py:49:    request_headers = {\"X-Auth-Token\": \"FooBarBazToken\"}\n./tests/client/test_headers.py:51:        transport=httpx.MockTransport(echo_headers), headers=client_headers\n./tests/client/test_headers.py:53:    response = client.get(url, headers=request_headers)\n./tests/client/test_headers.py:68:def test_header_merge_conflicting_headers():\n./tests/client/test_headers.py:69:    url = \"http://example.org/echo_headers\"\n./tests/client/test_headers.py:70:    client_headers = {\"X-Auth-Token\": \"FooBar\"}\n./tests/client/test_headers.py:71:    request_headers = {\"X-Auth-Token\": \"BazToken\"}\n./tests/client/test_headers.py:73:        transport=httpx.MockTransport(echo_headers), headers=client_headers\n./tests/client/test_headers.py:75:    response = client.get(url, headers=request_headers)\n./tests/client/test_headers.py:91:    url = \"http://example.org/echo_headers\"\n./tests/client/test_headers.py:92:    client = httpx.Client(transport=httpx.MockTransport(echo_headers))\n./tests/client/test_headers.py:124:    url = \"http://example.org/echo_headers\"\n./tests/client/test_headers.py:125:    client = httpx.Client(transport=httpx.MockTransport(echo_repeated_headers_items))\n./tests/client/test_headers.py:130:    echoed_headers = response.json()[\"headers\"]\n./tests/client/test_headers.py:134:        [k, [subv.lstrip() for subv in v.split(\",\")]] for k, v in echoed_headers\n./tests/client/test_headers.py:139:    url = \"http://example.org/echo_headers\"\n./tests/client/test_headers.py:141:        transport=httpx.MockTransport(echo_repeated_headers_multi_items)\n./tests/client/test_headers.py:147:    echoed_headers = response.json()[\"headers\"]\n./tests/client/test_headers.py:148:    assert [\"x-header\", \"1\"] in echoed_headers\n./tests/client/test_headers.py:149:    assert [\"x-header\", \"2,3\"] in echoed_headers\n./tests/client/test_headers.py:156:    url = \"http://example.org/echo_headers\"\n./tests/client/test_headers.py:158:    client = httpx.Client(transport=httpx.MockTransport(echo_headers))\n./tests/client/test_headers.py:194:    url = \"http://username:password@example.org:80/echo_headers\"\n./tests/client/test_headers.py:196:    client = httpx.Client(transport=httpx.MockTransport(echo_headers))\n./tests/client/test_headers.py:217:    url = \"http://username:password@example.org:123/echo_headers\"\n./tests/client/test_headers.py:219:    client = httpx.Client(transport=httpx.MockTransport(echo_headers))\n./tests/client/test_headers.py:235:def test_request_auto_headers():\n./tests/client/test_headers.py:245:    headers = client._redirect_headers(request, origin, \"GET\")\n./tests/client/test_headers.py:255:    headers = client._redirect_headers(request, origin, \"GET\")\n./tests/client/test_headers.py:267:    headers = client._redirect_headers(request, url, \"GET\")\n./tests/client/test_headers.py:279:    headers = client._redirect_headers(request, url, \"GET\")\n./tests/client/test_headers.py:291:    headers = client._redirect_headers(request, url, \"GET\")\n./tests/conftest.py:69:    elif scope[\"path\"].startswith(\"/echo_headers\"):\n./tests/conftest.py:70:        await echo_headers(scope, receive, send)\n./tests/conftest.py:163:async def echo_headers(scope: Scope, receive: Receive, send: Send) -\u003e None:\n./tests/client/test_properties.py:25:def test_client_headers():\n./tests/models/test_requests.py:68:def test_headers():\n./tests/models/test_headers.py:6:def test_headers():\n./tests/models/test_headers.py:53:def test_copy_headers_method():\n./tests/models/test_headers.py:60:def test_copy_headers_init():\n./tests/models/test_headers.py:66:def test_headers_insert_retains_ordering():\n./tests/models/test_headers.py:72:def test_headers_insert_appends_if_new():\n./tests/models/test_headers.py:78:def test_headers_insert_removes_all_existing():\n./tests/models/test_headers.py:84:def test_headers_delete_removes_all_existing():\n./tests/models/test_headers.py:90:def test_headers_dict_repr():\n./tests/models/test_headers.py:98:def test_headers_encoding_in_repr():\n./tests/models/test_headers.py:106:def test_headers_list_repr():\n./tests/models/test_headers.py:116:def test_headers_decode_ascii():\n./tests/models/test_headers.py:120:    raw_headers = [(b\"Custom\", b\"Example\")]\n./tests/models/test_headers.py:121:    headers = httpx.Headers(raw_headers)\n./tests/models/test_headers.py:126:def test_headers_decode_utf_8():\n./tests/models/test_headers.py:130:    raw_headers = [(b\"Custom\", \"Code point: ☃\".encode(\"utf-8\"))]\n./tests/models/test_headers.py:131:    headers = httpx.Headers(raw_headers)\n./tests/models/test_headers.py:136:def test_headers_decode_iso_8859_1():\n./tests/models/test_headers.py:140:    raw_headers = [(b\"Custom\", \"Code point: ÿ\".encode(\"iso-8859-1\"))]\n./tests/models/test_headers.py:141:    headers = httpx.Headers(raw_headers)\n./tests/models/test_headers.py:146:def test_headers_decode_explicit_encoding():\n./tests/models/test_headers.py:151:    raw_headers = [(b\"Custom\", \"Code point: ☃\".encode(\"utf-8\"))]\n./tests/models/test_headers.py:152:    headers = httpx.Headers(raw_headers)\n./tests/models/test_headers.py:158:def test_multiple_headers():\n./tests/models/test_headers.py:170:def test_sensitive_headers(header):\n./tests/models/test_headers.py:187:def test_obfuscate_sensitive_headers(headers, output):\n./tests/test_wsgi.py:21:        response_headers = [\n./tests/test_wsgi.py:25:        start_response(status, response_headers)\n./tests/test_wsgi.py:39:    response_headers = [\n./tests/test_wsgi.py:43:    start_response(status, response_headers)\n./tests/test_wsgi.py:53:    response_headers = [(\"Content-Type\", \"text/plain\")]\n./tests/test_wsgi.py:55:    start_response(status, response_headers)\n./tests/test_wsgi.py:75:    response_headers = [\n./tests/test_wsgi.py:83:        start_response(status, response_headers, exc_info)\n./tests/models/test_responses.py:879:def test_link_headers(headers, expected):\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "content": [
+        {
+          "type": "text",
+          "text": "Now let me read the key sections of `_client.py` — the `BaseClient.__init__` and the `headers` property setter, plus `_merge_headers`:"
+        },
+        {
+          "type": "tool_use",
+          "id": "tooluse_naAzTQuTtiqvxdykID7yY6",
+          "name": "read_file",
+          "input": {
+            "end": 440,
+            "path": "httpx/_client.py",
+            "start": 188
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "input_tokens": 7509,
+      "output_tokens": 131,
+      "tool_calls": [
+        {
+          "name": "read_file",
+          "input": {
+            "end": 440,
+            "path": "httpx/_client.py",
+            "start": 188
+          },
+          "result": "188\tclass BaseClient:\n189\t    def __init__(\n190\t        self,\n191\t        *,\n192\t        auth: AuthTypes | None = None,\n193\t        params: QueryParamTypes | None = None,\n194\t        headers: HeaderTypes | None = None,\n195\t        cookies: CookieTypes | None = None,\n196\t        timeout: TimeoutTypes = DEFAULT_TIMEOUT_CONFIG,\n197\t        follow_redirects: bool = False,\n198\t        max_redirects: int = DEFAULT_MAX_REDIRECTS,\n199\t        event_hooks: None | (typing.Mapping[str, list[EventHook]]) = None,\n200\t        base_url: URL | str = \"\",\n201\t        trust_env: bool = True,\n202\t        default_encoding: str | typing.Callable[[bytes], str] = \"utf-8\",\n203\t    ) -\u003e None:\n204\t        event_hooks = {} if event_hooks is None else event_hooks\n205\t\n206\t        self._base_url = self._enforce_trailing_slash(URL(base_url))\n207\t\n208\t        self._auth = self._build_auth(auth)\n209\t        self._params = QueryParams(params)\n210\t        self.headers = Headers(headers)\n211\t        self._cookies = Cookies(cookies)\n212\t        self._timeout = Timeout(timeout)\n213\t        self.follow_redirects = follow_redirects\n214\t        self.max_redirects = max_redirects\n215\t        self._event_hooks = {\n216\t            \"request\": list(event_hooks.get(\"request\", [])),\n217\t            \"response\": list(event_hooks.get(\"response\", [])),\n218\t        }\n219\t        self._trust_env = trust_env\n220\t        self._default_encoding = default_encoding\n221\t        self._state = ClientState.UNOPENED\n222\t\n223\t    @property\n224\t    def is_closed(self) -\u003e bool:\n225\t        \"\"\"\n226\t        Check if the client being closed\n227\t        \"\"\"\n228\t        return self._state == ClientState.CLOSED\n229\t\n230\t    @property\n231\t    def trust_env(self) -\u003e bool:\n232\t        return self._trust_env\n233\t\n234\t    def _enforce_trailing_slash(self, url: URL) -\u003e URL:\n235\t        if url.raw_path.endswith(b\"/\"):\n236\t            return url\n237\t        return url.copy_with(raw_path=url.raw_path + b\"/\")\n238\t\n239\t    def _get_proxy_map(\n240\t        self, proxy: ProxyTypes | None, allow_env_proxies: bool\n241\t    ) -\u003e dict[str, Proxy | None]:\n242\t        if proxy is None:\n243\t            if allow_env_proxies:\n244\t                return {\n245\t                    key: None if url is None else Proxy(url=url)\n246\t                    for key, url in get_environment_proxies().items()\n247\t                }\n248\t            return {}\n249\t        else:\n250\t            proxy = Proxy(url=proxy) if isinstance(proxy, (str, URL)) else proxy\n251\t            return {\"all://\": proxy}\n252\t\n253\t    @property\n254\t    def timeout(self) -\u003e Timeout:\n255\t        return self._timeout\n256\t\n257\t    @timeout.setter\n258\t    def timeout(self, timeout: TimeoutTypes) -\u003e None:\n259\t        self._timeout = Timeout(timeout)\n260\t\n261\t    @property\n262\t    def event_hooks(self) -\u003e dict[str, list[EventHook]]:\n263\t        return self._event_hooks\n264\t\n265\t    @event_hooks.setter\n266\t    def event_hooks(self, event_hooks: dict[str, list[EventHook]]) -\u003e None:\n267\t        self._event_hooks = {\n268\t            \"request\": list(event_hooks.get(\"request\", [])),\n269\t            \"response\": list(event_hooks.get(\"response\", [])),\n270\t        }\n271\t\n272\t    @property\n273\t    def auth(self) -\u003e Auth | None:\n274\t        \"\"\"\n275\t        Authentication class used when none is passed at the request-level.\n276\t\n277\t        See also [Authentication][0].\n278\t\n279\t        [0]: /quickstart/#authentication\n280\t        \"\"\"\n281\t        return self._auth\n282\t\n283\t    @auth.setter\n284\t    def auth(self, auth: AuthTypes) -\u003e None:\n285\t        self._auth = self._build_auth(auth)\n286\t\n287\t    @property\n288\t    def base_url(self) -\u003e URL:\n289\t        \"\"\"\n290\t        Base URL to use when sending requests with relative URLs.\n291\t        \"\"\"\n292\t        return self._base_url\n293\t\n294\t    @base_url.setter\n295\t    def base_url(self, url: URL | str) -\u003e None:\n296\t        self._base_url = self._enforce_trailing_slash(URL(url))\n297\t\n298\t    @property\n299\t    def headers(self) -\u003e Headers:\n300\t        \"\"\"\n301\t        HTTP headers to include when sending requests.\n302\t        \"\"\"\n303\t        return self._headers\n304\t\n305\t    @headers.setter\n306\t    def headers(self, headers: HeaderTypes) -\u003e None:\n307\t        client_headers = Headers(\n308\t            {\n309\t                b\"Accept\": b\"*/*\",\n310\t                b\"Accept-Encoding\": ACCEPT_ENCODING.encode(\"ascii\"),\n311\t                b\"Connection\": b\"keep-alive\",\n312\t                b\"User-Agent\": USER_AGENT.encode(\"ascii\"),\n313\t            }\n314\t        )\n315\t        client_headers.update(headers)\n316\t        self._headers = client_headers\n317\t\n318\t    @property\n319\t    def cookies(self) -\u003e Cookies:\n320\t        \"\"\"\n321\t        Cookie values to include when sending requests.\n322\t        \"\"\"\n323\t        return self._cookies\n324\t\n325\t    @cookies.setter\n326\t    def cookies(self, cookies: CookieTypes) -\u003e None:\n327\t        self._cookies = Cookies(cookies)\n328\t\n329\t    @property\n330\t    def params(self) -\u003e QueryParams:\n331\t        \"\"\"\n332\t        Query parameters to include in the URL when sending requests.\n333\t        \"\"\"\n334\t        return self._params\n335\t\n336\t    @params.setter\n337\t    def params(self, params: QueryParamTypes) -\u003e None:\n338\t        self._params = QueryParams(params)\n339\t\n340\t    def build_request(\n341\t        self,\n342\t        method: str,\n343\t        url: URL | str,\n344\t        *,\n345\t        content: RequestContent | None = None,\n346\t        data: RequestData | None = None,\n347\t        files: RequestFiles | None = None,\n348\t        json: typing.Any | None = None,\n349\t        params: QueryParamTypes | None = None,\n350\t        headers: HeaderTypes | None = None,\n351\t        cookies: CookieTypes | None = None,\n352\t        timeout: TimeoutTypes | UseClientDefault = USE_CLIENT_DEFAULT,\n353\t        extensions: RequestExtensions | None = None,\n354\t    ) -\u003e Request:\n355\t        \"\"\"\n356\t        Build and return a request instance.\n357\t\n358\t        * The `params`, `headers` and `cookies` arguments\n359\t        are merged with any values set on the client.\n360\t        * The `url` argument is merged with any `base_url` set on the client.\n361\t\n362\t        See also: [Request instances][0]\n363\t\n364\t        [0]: /advanced/clients/#request-instances\n365\t        \"\"\"\n366\t        url = self._merge_url(url)\n367\t        headers = self._merge_headers(headers)\n368\t        cookies = self._merge_cookies(cookies)\n369\t        params = self._merge_queryparams(params)\n370\t        extensions = {} if extensions is None else extensions\n371\t        if \"timeout\" not in extensions:\n372\t            timeout = (\n373\t                self.timeout\n374\t                if isinstance(timeout, UseClientDefault)\n375\t                else Timeout(timeout)\n376\t            )\n377\t            extensions = dict(**extensions, timeout=timeout.as_dict())\n378\t        return Request(\n379\t            method,\n380\t            url,\n381\t            content=content,\n382\t            data=data,\n383\t            files=files,\n384\t            json=json,\n385\t            params=params,\n386\t            headers=headers,\n387\t            cookies=cookies,\n388\t            extensions=extensions,\n389\t        )\n390\t\n391\t    def _merge_url(self, url: URL | str) -\u003e URL:\n392\t        \"\"\"\n393\t        Merge a URL argument together with any 'base_url' on the client,\n394\t        to create the URL used for the outgoing request.\n395\t        \"\"\"\n396\t        merge_url = URL(url)\n397\t        if merge_url.is_relative_url:\n398\t            # To merge URLs we always append to the base URL. To get this\n399\t            # behaviour correct we always ensure the base URL ends in a '/'\n400\t            # separator, and strip any leading '/' from the merge URL.\n401\t            #\n402\t            # So, eg...\n403\t            #\n404\t            # \u003e\u003e\u003e client = Client(base_url=\"https://www.example.com/subpath\")\n405\t            # \u003e\u003e\u003e client.base_url\n406\t            # URL('https://www.example.com/subpath/')\n407\t            # \u003e\u003e\u003e client.build_request(\"GET\", \"/path\").url\n408\t            # URL('https://www.example.com/subpath/path')\n409\t            merge_raw_path = self.base_url.raw_path + merge_url.raw_path.lstrip(b\"/\")\n410\t            return self.base_url.copy_with(raw_path=merge_raw_path)\n411\t        return merge_url\n412\t\n413\t    def _merge_cookies(self, cookies: CookieTypes | None = None) -\u003e CookieTypes | None:\n414\t        \"\"\"\n415\t        Merge a cookies argument together with any cookies on the client,\n416\t        to create the cookies used for the outgoing request.\n417\t        \"\"\"\n418\t        if cookies or self.cookies:\n419\t            merged_cookies = Cookies(self.cookies)\n420\t            merged_cookies.update(cookies)\n421\t            return merged_cookies\n422\t        return cookies\n423\t\n424\t    def _merge_headers(self, headers: HeaderTypes | None = None) -\u003e HeaderTypes | None:\n425\t        \"\"\"\n426\t        Merge a headers argument together with any headers on the client,\n427\t        to create the headers used for the outgoing request.\n428\t        \"\"\"\n429\t        merged_headers = Headers(self.headers)\n430\t        merged_headers.update(headers)\n431\t        return merged_headers\n432\t\n433\t    def _merge_queryparams(\n434\t        self, params: QueryParamTypes | None = None\n435\t    ) -\u003e QueryParamTypes | None:\n436\t        \"\"\"\n437\t        Merge a queryparams argument together with any queryparams on the client,\n438\t        to create the queryparams used for the outgoing request.\n439\t        \"\"\"\n440\t        if params or self.params:\n",
+          "is_error": false
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "content": [
+        {
+          "type": "text",
+          "text": "That's everything needed. Here is the complete picture:\n\n---\n\n## Where to make the change\n\n**File:** `httpx/_client.py`\n**Method:** `headers` setter on `BaseClient` — lines **305–316**\n\n```python\n@headers.setter\ndef headers(self, headers: HeaderTypes) -\u003e None:\n    client_headers = Headers(\n        {\n            b\"Accept\": b\"*/*\",\n            b\"Accept-Encoding\": ACCEPT_ENCODING.encode(\"ascii\"),\n            b\"Connection\": b\"keep-alive\",\n            b\"User-Agent\": USER_AGENT.encode(\"ascii\"),\n        }\n    )\n    client_headers.update(headers)\n    self._headers = client_headers\n```\n\nThis setter is the **single place** where the client's default headers are assembled. Every outgoing request goes through `build_request` → `_merge_headers`, which starts from `self.headers` (i.e. `self._headers`), so anything added here is automatically included in every request.\n\n---\n\n## Minimal edit\n\nAdd your new header to the dictionary literal inside the setter:\n\n```python\n@headers.setter\ndef headers(self, headers: HeaderTypes) -\u003e None:\n    client_headers = Headers(\n        {\n            b\"Accept\": b\"*/*\",\n            b\"Accept-Encoding\": ACCEPT_ENCODING.encode(\"ascii\"),\n            b\"Connection\": b\"keep-alive\",\n            b\"User-Agent\": USER_AGENT.encode(\"ascii\"),\n            b\"X-My-Header\": b\"my-value\",   # ← add your header here\n        }\n    )\n    client_headers.update(headers)\n    self._headers = client_headers\n```\n\n---\n\n## Why this is the right place\n\n| Call chain | Role |\n|---|---|\n| `Client.get/post/…` | calls `build_request` |\n| `build_request` | calls `_merge_headers(per_request_headers)` |\n| `_merge_headers` | starts from `Headers(self.headers)` and overlays per-request headers |\n| `headers` setter | **builds `self.headers`** from the hardcoded defaults dict + any headers passed to the constructor |\n\nBecause `_merge_headers` seeds itself from `self.headers`, any header you add to the defaults dict in the setter will be present on every outgoing request, and can still be overridden on a per-request basis (since `merged_headers.update(headers)` runs after)."
+        }
+      ],
+      "stop_reason": "end_turn",
+      "input_tokens": 10475,
+      "output_tokens": 587
+    }
+  ],
+  "total_input_tokens": 24800,
+  "total_output_tokens": 1113,
+  "tool_call_count": 7,
+  "turns_to_answer": 5,
+  "wall_clock_ms": 26253,
+  "retries": 0
+}
