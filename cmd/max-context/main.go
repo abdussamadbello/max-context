@@ -60,6 +60,23 @@ func run(cfg *config.Config) error {
 	if len(args) >= 1 && args[0] == "bench" {
 		return runBench(cfg, args[1:])
 	}
+	// CLI access to the MCP tools (one-shot, read-only; JSON to stdout).
+	if len(args) >= 1 {
+		switch args[0] {
+		case "tool":
+			return runToolGeneric(cfg, args[1:])
+		case "query":
+			return runQueryCmd(cfg, args[1:])
+		case "def":
+			return runDefCmd(cfg, args[1:])
+		case "calls":
+			return runCallsCmd(cfg, args[1:])
+		case "impact":
+			return runImpactCmd(cfg, args[1:])
+		case "arch":
+			return runArchCmd(cfg, args[1:])
+		}
+	}
 	switch {
 	case cfg.Index:
 		return runIndex(cfg)
