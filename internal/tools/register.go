@@ -14,7 +14,7 @@ func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot st
 	h.Register("query_codebase", QueryCodebaseHandler(database, q, projectRoot))
 	h.Register("get_call_chain", GetCallChainHandler(database))
 	h.Register("get_impact", GetImpactHandler(store, projectRoot))
-	h.Register("get_architecture", GetArchitectureHandler(projectRoot))
+	h.Register("get_architecture", GetArchitectureHandler(database, projectRoot))
 
 	return []mcp.ToolSchema{
 		{
@@ -48,9 +48,10 @@ func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot st
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"function_name": map[string]string{"type": "string", "description": "Name of the function to trace"},
-					"direction":     map[string]interface{}{"type": "string", "description": "Traversal direction", "enum": []string{"callers", "callees", "both"}, "default": "both"},
-					"depth":         map[string]interface{}{"type": "integer", "description": "Max recursion depth (1-5)", "default": 2},
+					"function_name":  map[string]string{"type": "string", "description": "Name of the function to trace"},
+					"direction":      map[string]interface{}{"type": "string", "description": "Traversal direction", "enum": []string{"callers", "callees", "both"}, "default": "both"},
+					"depth":          map[string]interface{}{"type": "integer", "description": "Max recursion depth (1-5)", "default": 2},
+					"min_confidence": map[string]interface{}{"type": "string", "description": "Only traverse call edges at or above this resolution confidence. Set 'interface-dispatch' to ALSO follow interface methods to concrete implementations (low-confidence, off by default).", "enum": []string{"interface-dispatch", "name-global", "receiver-typed", "same-package", "same-file"}},
 				},
 				"required": []string{"function_name"},
 			},
@@ -66,7 +67,7 @@ func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot st
 					"depth":          map[string]interface{}{"type": "integer", "description": "Max recursion depth (1-5)", "default": 2},
 					"direction":      map[string]interface{}{"type": "string", "description": "callers (blast radius), callees (dependencies), or both", "enum": []string{"callers", "callees", "both"}, "default": "callers"},
 					"include_tests":  map[string]interface{}{"type": "boolean", "description": "Include test files in results", "default": true},
-					"min_confidence": map[string]interface{}{"type": "string", "description": "Only traverse call edges at or above this resolution confidence. Use to exclude lower-confidence guesses from the blast radius.", "enum": []string{"name-global", "receiver-typed", "same-package", "same-file"}},
+					"min_confidence": map[string]interface{}{"type": "string", "description": "Only traverse call edges at or above this resolution confidence. Use to exclude lower-confidence guesses from the blast radius. Set 'interface-dispatch' to ALSO fan out through interface methods to concrete implementations (low-confidence, off by default).", "enum": []string{"interface-dispatch", "name-global", "receiver-typed", "same-package", "same-file"}},
 				},
 			},
 		},

@@ -86,6 +86,7 @@ func GetDefinitionHandler(database *sql.DB) mcp.ToolHandler {
 					"Pick the one in the relevant module; no further keyword search needed.", a.Symbol, len(hits))
 			}
 		}
+		attachStaleness(payload, database)
 		b, _ := json.Marshal(payload)
 		return []mcp.ContentItem{{Type: "text", Text: string(b)}}, nil
 	}

@@ -93,14 +93,19 @@ func runIndex(cfg *config.Config) error {
 	if err := indexer.Index(ctx, cfg.ProjectRoot, database, q); err != nil {
 		return err
 	}
+	// A clean full index clears any prior per-file failures and stamps the time.
+	artifacts.ClearAllIndexErrors(database)
+	artifacts.SetLastFullIndex(database, time.Now())
 	dir := filepath.Join(cfg.ProjectRoot, ".max-context")
 	_ = artifacts.WriteSummary(dir, database)
 	_ = artifacts.WriteArchitecture(dir, database)
 	var totalFuncs, totalFiles int
 	_ = database.QueryRow("SELECT COUNT(*) FROM functions").Scan(&totalFuncs)
 	_ = database.QueryRow("SELECT COUNT(DISTINCT file_path) FROM functions").Scan(&totalFiles)
+	h := artifacts.ReadIndexHealth(database)
 	_ = artifacts.WriteStatus(dir, &artifacts.Status{
-		Healthy: true, LastFullIndex: time.Now(), TotalFunctions: totalFuncs, TotalFiles: totalFiles, Version: version,
+		Healthy: h.Healthy, LastFullIndex: h.LastFullIndex, LastIncrementalIndex: h.LastIncrementalIndex,
+		TotalFunctions: totalFuncs, TotalFiles: totalFiles, Version: version,
 	})
 	fmt.Fprintf(os.Stdout, "Index complete.\n")
 	return nil
@@ -121,6 +126,32 @@ func runStatus(cfg *config.Config) error {
 	}
 	fmt.Fprintf(os.Stdout, "healthy: %v\nfunctions: %d\nfiles: %d\nlast_full: %v\n",
 		s.Healthy, s.TotalFunctions, s.TotalFiles, s.LastFullIndex)
+
+	// Pull live staleness from the DB so failed-file counts and the last
+	// incremental update show up even when status.json predates them.
+	database, derr := db.Open(cfg.DBPath)
+	if derr != nil {
+		return nil
+	}
+	defer database.Close()
+	h := artifacts.ReadIndexHealth(database)
+	if !h.LastIncrementalIndex.IsZero() {
+		fmt.Fprintf(os.Stdout, "last_incremental: %v\n", h.LastIncrementalIndex)
+	}
+	fmt.Fprintf(os.Stdout, "failed_files: %d\n", h.FailedFiles)
+	if h.FailedFiles > 0 {
+		fmt.Fprintf(os.Stdout, "WARNING: %d file(s) failed to index since the last clean build; results may be stale — run --reindex.\n", h.FailedFiles)
+		rows, qerr := database.Query("SELECT file_path, error FROM index_errors ORDER BY file_path")
+		if qerr == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var fp, msg string
+				if rows.Scan(&fp, &msg) == nil {
+					fmt.Fprintf(os.Stdout, "  - %s: %s\n", fp, msg)
+				}
+			}
+		}
+	}
 	return nil
 }
 

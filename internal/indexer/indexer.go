@@ -16,6 +16,10 @@ const batchSize = 500
 
 // RunWorker consumes paths from ch and reindexes each file. Empty string means full reindex (Phase 4: .reindex-queue).
 func RunWorker(ctx context.Context, root string, database *sql.DB, q *db.Queries, ch <-chan string) {
+	// One delta-maintained resolver reused across incremental reindexes; a full
+	// reindex invalidates it (it rewrites every row), so the next IndexFile
+	// rebuilds it once and then maintains it per-file.
+	cache := NewResolverCache()
 	for {
 		select {
 		case <-ctx.Done():
@@ -25,19 +29,38 @@ func RunWorker(ctx context.Context, root string, database *sql.DB, q *db.Queries
 				return
 			}
 			if path == "" {
-				_ = Index(ctx, root, database, q)
+				if err := Index(ctx, root, database, q); err != nil {
+					// Surface, don't swallow: a failed full index left a stale or empty
+					// index that tools must be able to warn about.
+					fmt.Fprintf(os.Stderr, "max-context: full index failed: %v\n", err)
+					artifacts.RecordIndexError(database, "", err.Error())
+				} else {
+					artifacts.ClearAllIndexErrors(database)
+					artifacts.SetLastFullIndex(database, time.Now())
+				}
+				cache.Invalidate() // full reindex rewrote everything; rebuild lazily
 				dir := filepath.Join(root, ".max-context")
 				_ = artifacts.WriteSummary(dir, database)
 				_ = artifacts.WriteArchitecture(dir, database)
 				var totalFuncs, totalFiles int
 				_ = database.QueryRow("SELECT COUNT(*) FROM functions").Scan(&totalFuncs)
 				_ = database.QueryRow("SELECT COUNT(DISTINCT file_path) FROM functions").Scan(&totalFiles)
+				h := artifacts.ReadIndexHealth(database)
 				_ = artifacts.WriteStatus(dir, &artifacts.Status{
-					Healthy: true, LastFullIndex: time.Now(), TotalFunctions: totalFuncs, TotalFiles: totalFiles, Version: "0.1.0",
+					Healthy: h.Healthy, LastFullIndex: h.LastFullIndex, LastIncrementalIndex: h.LastIncrementalIndex,
+					TotalFunctions: totalFuncs, TotalFiles: totalFiles, Version: "0.1.0",
 				})
 				continue
 			}
-			_ = IndexFile(ctx, root, path, database, q)
+			if err := IndexFile(ctx, root, path, database, q, cache); err != nil {
+				// Surface the failure so it shows up in staleness; a bad single-file
+				// reindex must not silently leave the index out of date.
+				fmt.Fprintf(os.Stderr, "max-context: index %s failed: %v\n", path, err)
+				artifacts.RecordIndexError(database, path, err.Error())
+			} else {
+				artifacts.ClearIndexError(database, path)
+				artifacts.SetLastIncrementalIndex(database, time.Now())
+			}
 		}
 	}
 }
@@ -176,6 +199,9 @@ func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries) er
 		if err := insertCall(tx, resolver, c, callerID, fileToPkg[c.FilePath]); err != nil {
 			return err
 		}
+		if err := insertInterfaceDispatchEdges(tx, resolver, c, callerID); err != nil {
+			return err
+		}
 	}
 
 	for _, imp := range allImports {
@@ -277,12 +303,57 @@ func nullStr(s string) interface{} {
 	return s
 }
 
-// IndexFile reindexes a single file (incremental). Call after file change.
-func IndexFile(ctx context.Context, root string, relPath string, database *sql.DB, q *db.Queries) error {
+// insertInterfaceDispatchEdges emits a low-confidence 'interface-dispatch' edge
+// from the caller to each concrete implementation of an interface-method call —
+// e.g. n.Send() where n is statically an interface — so get_impact can fan out
+// to implementations on request. No-op for non-interface receivers, so the
+// default call graph is unchanged. Called alongside the primary insertCall.
+func insertInterfaceDispatchEdges(tx *sql.Tx, resolver *Resolver, c CallRecord, callerID int64) error {
+	if c.ReceiverKind != "var" || c.ReceiverType == "" {
+		return nil
+	}
+	for _, id := range resolver.interfaceMethodImpls(c.ReceiverType, c.CalleeName) {
+		if _, err := tx.Exec(
+			"INSERT INTO calls (caller_id, callee_id, callee_name, file_path, line, resolution, receiver_name) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			callerID, id, c.CalleeName, c.FilePath, c.Line, resInterfaceDispatch, nullStr(c.ReceiverName),
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// IndexFile reindexes a single file (incremental). Call after a file change.
+//
+// An optional *ResolverCache (the worker passes one) keeps a delta-maintained
+// resolver across calls so the per-file cost is O(changed file) instead of
+// O(repo); callers that pass no cache (or a nil one) get a fresh full-scan
+// resolver each call, identical in behavior.
+func IndexFile(ctx context.Context, root string, relPath string, database *sql.DB, q *db.Queries, caches ...*ResolverCache) (retErr error) {
+	var cache *ResolverCache
+	if len(caches) > 0 {
+		cache = caches[0]
+	}
+	// If anything fails after we touch the cached resolver, the transaction rolls
+	// back but the in-memory delta does not — drop the cache so the next call
+	// rebuilds it from a consistent DB.
+	defer func() {
+		if retErr != nil {
+			cache.Invalidate()
+		}
+	}()
+
 	fullPath := filepath.Join(root, relPath)
-	content, err := os.ReadFile(fullPath)
-	if err != nil {
-		return err
+	content, readErr := os.ReadFile(fullPath)
+	deleted := false
+	if readErr != nil {
+		if !os.IsNotExist(readErr) {
+			return readErr
+		}
+		// File removed on disk: treat as a deletion — drop its rows (and clear the
+		// cross-file edges into it) instead of erroring, which previously left the
+		// deleted file's symbols and dangling edges in the index forever.
+		deleted = true
 	}
 
 	tx, err := database.Begin()
@@ -292,6 +363,22 @@ func IndexFile(ctx context.Context, root string, relPath string, database *sql.D
 	defer func() { _ = tx.Rollback() }()
 
 	path := filepath.ToSlash(relPath)
+
+	// Cross-file edges from OTHER files may reference this file's functions via
+	// calls.callee_id. With foreign_keys=ON, deleting those functions while the
+	// edges still point at them violates the FK and rolls back the whole reindex
+	// (silently, since RunWorker discarded the error) — so edits to widely-called
+	// files never reached the index. Null those references and mark them 'stale';
+	// reresolveStaleEdges re-resolves them below, once this file's new functions
+	// are in place (or leaves them unresolved if the target is gone). Must run
+	// before the DELETE FROM functions so the subquery still sees the old rows.
+	if _, err := tx.Exec(
+		"UPDATE calls SET callee_id = NULL, resolution = ? WHERE callee_id IN (SELECT id FROM functions WHERE file_path = ?)",
+		resStale, path,
+	); err != nil {
+		return err
+	}
+
 	// Delete calls before functions: calls.caller_id/callee_id reference
 	// functions(id), so with foreign_keys=ON the edges must go first.
 	for _, sql := range []string{
@@ -307,6 +394,19 @@ func IndexFile(ctx context.Context, root string, relPath string, database *sql.D
 		if _, err := tx.Exec(sql, path); err != nil {
 			return err
 		}
+	}
+
+	// A deleted file has nothing to parse or reinsert. Refresh the resolver to
+	// reflect the removal, re-resolve the edges that pointed into it, commit.
+	if deleted {
+		resolver, err := resolverForIndexFile(tx, cache, path, true)
+		if err != nil {
+			return err
+		}
+		if err := reresolveStaleEdges(ctx, tx, root, resolver); err != nil {
+			return err
+		}
+		return tx.Commit()
 	}
 
 	res, err := ParseFile(ctx, relPath, content)
@@ -371,10 +471,11 @@ func IndexFile(ctx context.Context, root string, relPath string, database *sql.D
 		}
 	}
 
-	// Build the resolver from the full functions table (this file's rows were
-	// just reinserted in the same tx), so same-package and receiver-typed
-	// lookups see definitions in other files too.
-	resolver, err := NewResolver(tx)
+	// Resolve against the full functions table (this file's rows were just
+	// reinserted in the same tx), so same-package and receiver-typed lookups see
+	// definitions in other files too. Cold: full scan; warm cache: this file's
+	// delta applied to the retained resolver.
+	resolver, err := resolverForIndexFile(tx, cache, path, false)
 	if err != nil {
 		return err
 	}
@@ -387,6 +488,15 @@ func IndexFile(ctx context.Context, root string, relPath string, database *sql.D
 		if err := insertCall(tx, resolver, c, callerID, filePkg); err != nil {
 			return err
 		}
+		if err := insertInterfaceDispatchEdges(tx, resolver, c, callerID); err != nil {
+			return err
+		}
+	}
+
+	// Re-resolve edges from other files that pointed into this file (nulled +
+	// marked 'stale' above) now that this file's new functions exist.
+	if err := reresolveStaleEdges(ctx, tx, root, resolver); err != nil {
+		return err
 	}
 
 	for _, imp := range res.Imports {
@@ -403,4 +513,142 @@ func IndexFile(ctx context.Context, root string, relPath string, database *sql.D
 	// the commit flips data + FTS atomically — no separate post-commit rebuild and
 	// no window where a concurrent query sees an empty FTS index.
 	return tx.Commit()
+}
+
+// resolverForIndexFile returns the resolver to use for an incremental reindex of
+// path. With no cache (or a cold one) it builds a fresh full-scan resolver and
+// warms the cache; with a warm cache it applies just this file's delta
+// (removeFile to reflect the DELETE, addFileFromDB to reflect the new rows —
+// skipped for a deletion), keeping per-file cost O(changed file).
+func resolverForIndexFile(tx *sql.Tx, cache *ResolverCache, path string, deleted bool) (*Resolver, error) {
+	if cache == nil || cache.r == nil {
+		r, err := NewResolver(tx)
+		if err != nil {
+			return nil, err
+		}
+		if cache != nil {
+			cache.r = r
+		}
+		return r, nil
+	}
+	cache.r.removeFile(path)
+	if !deleted {
+		if err := cache.r.addFileFromDB(tx, path); err != nil {
+			return nil, err
+		}
+	}
+	return cache.r, nil
+}
+
+// reresolveStaleEdges re-resolves call edges marked 'stale' — their callee lived
+// in a file just reindexed (or deleted), so their callee_id was nulled to avoid
+// an FK violation. For each distinct caller file holding stale edges it re-parses
+// the file (the file itself was not edited, so its stored line numbers still
+// match) to recover the call-site receiver context the calls table doesn't
+// store, resolves each call against the rebuilt resolver, and writes the new
+// callee_id + marker back. Edges whose target was renamed or deleted become
+// unresolved — never a dangling id and never a stale confidence claim.
+func reresolveStaleEdges(ctx context.Context, tx *sql.Tx, root string, resolver *Resolver) error {
+	rows, err := tx.Query("SELECT DISTINCT file_path FROM calls WHERE resolution = ?", resStale)
+	if err != nil {
+		return err
+	}
+	var files []string
+	for rows.Next() {
+		var f string
+		if err := rows.Scan(&f); err != nil {
+			rows.Close()
+			return err
+		}
+		files = append(files, f)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, f := range files {
+		if err := reresolveStaleEdgesInFile(ctx, tx, root, resolver, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// staleResolved is a re-resolution result for one call site (callee id 0 = no link).
+type staleResolved struct {
+	id     int64
+	marker string
+}
+
+// reresolveStaleEdgesInFile re-resolves the stale edges originating in caller
+// file f. It parses f once, resolves every call against the current resolver,
+// keys results by (line, callee_name), then updates each stale row in f. A file
+// that no longer parses (or whose call site vanished) leaves its stale edges
+// unresolved.
+func reresolveStaleEdgesInFile(ctx context.Context, tx *sql.Tx, root string, resolver *Resolver, f string) error {
+	parsed := map[string]staleResolved{}
+	if content, readErr := os.ReadFile(filepath.Join(root, filepath.FromSlash(f))); readErr == nil {
+		if res, perr := ParseFile(ctx, f, content); perr == nil {
+			pkg := ""
+			for _, fn := range res.Functions {
+				if fn.Package != "" {
+					pkg = fn.Package
+					break
+				}
+			}
+			for _, c := range res.Calls {
+				key := staleKey(c.Line, c.CalleeName)
+				if _, seen := parsed[key]; seen {
+					continue
+				}
+				id, marker := resolver.ResolveCall(c, pkg, c.FilePath)
+				parsed[key] = staleResolved{id: id, marker: marker}
+			}
+		}
+	}
+
+	type staleRow struct {
+		id   int64
+		line int
+		name string
+	}
+	srows, err := tx.Query("SELECT id, line, callee_name FROM calls WHERE resolution = ? AND file_path = ?", resStale, f)
+	if err != nil {
+		return err
+	}
+	var staleRows []staleRow
+	for srows.Next() {
+		var row staleRow
+		if err := srows.Scan(&row.id, &row.line, &row.name); err != nil {
+			srows.Close()
+			return err
+		}
+		staleRows = append(staleRows, row)
+	}
+	srows.Close()
+	if err := srows.Err(); err != nil {
+		return err
+	}
+
+	for _, row := range staleRows {
+		marker := resUnresolved
+		var calleeArg interface{}
+		if r, ok := parsed[staleKey(row.line, row.name)]; ok {
+			marker = r.marker
+			if r.id != 0 {
+				calleeArg = r.id
+			}
+		}
+		if _, err := tx.Exec("UPDATE calls SET callee_id = ?, resolution = ? WHERE id = ?", calleeArg, marker, row.id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// staleKey identifies a call site within a file by line and callee name, for
+// matching re-parsed calls back to their stored edge rows.
+func staleKey(line int, name string) string {
+	return fmt.Sprintf("%d\x00%s", line, name)
 }

@@ -3,11 +3,16 @@ package setup
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
 const MarkerStart = "<!-- max-context start -->"
 const MarkerEnd = "<!-- max-context end -->"
+
+// gitignoreEntry keeps the per-project index DB and artifacts under
+// .max-context/ out of version control.
+const gitignoreEntry = ".max-context/"
 
 var cliTargets = []string{"claude-code", "vscode", "codex", "antigravity", "cursor", "windsurf", "all"}
 
@@ -22,6 +27,8 @@ func Run(projectRoot string, target string) error {
 	if !ok {
 		return fmt.Errorf("unknown setup target: %q", target)
 	}
+	// Regardless of CLI target, keep the index out of version control.
+	_ = ensureGitignore(projectRoot)
 	if target == "all" {
 		for _, t := range cliTargets {
 			if t == "all" {
@@ -64,4 +71,23 @@ func appendWithMarkers(filePath, content string) error {
 
 func ensureDir(dir string) error {
 	return os.MkdirAll(dir, 0755)
+}
+
+// ensureGitignore appends gitignoreEntry to the project's .gitignore unless
+// .max-context is already ignored. Creates the file if absent. Idempotent.
+func ensureGitignore(root string) error {
+	path := filepath.Join(root, ".gitignore")
+	existing, _ := os.ReadFile(path)
+	for _, line := range strings.Split(string(existing), "\n") {
+		switch strings.TrimSpace(line) {
+		case ".max-context/", ".max-context", "/.max-context/", "/.max-context":
+			return nil // already ignored in some accepted form
+		}
+	}
+	s := string(existing)
+	if s != "" && !strings.HasSuffix(s, "\n") {
+		s += "\n"
+	}
+	s += gitignoreEntry + "\n"
+	return os.WriteFile(path, []byte(s), 0644)
 }

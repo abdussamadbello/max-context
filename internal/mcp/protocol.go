@@ -12,7 +12,8 @@ const CodeInvalidParams = -32602
 const CodeInternalError = -32603
 const CodeIndexNotReady = -32001
 const CodeResourceNotFound = -32002
-const CodeIndexBusy = -32003 // index data present but FTS transiently unavailable (rebuilding/locked) — retry, don't reindex
+const CodeIndexBusy = -32003   // index data present but FTS transiently unavailable (rebuilding/locked) — retry, don't reindex
+const CodeQuerySyntax = -32004 // the search query was not valid FTS5 syntax — simplify it, don't retry verbatim or reindex
 
 type JSONRPCRequest struct {
 	JSONRPC string          `json:"jsonrpc"`
