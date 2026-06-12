@@ -244,7 +244,7 @@ func assertStopUnresolved(t *testing.T, database *sql.DB, when string) {
 }
 
 // openIndexDB opens + migrates a fresh index DB under root and prepares queries.
-func openIndexDB(t *testing.T, root string) (*sql.DB, *db.Queries) {
+func openIndexDB(t testing.TB, root string) (*sql.DB, *db.Queries) {
 	t.Helper()
 	database, err := db.Open(filepath.Join(root, ".max-context", "index.db"))
 	if err != nil {

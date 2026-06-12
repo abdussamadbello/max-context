@@ -31,31 +31,62 @@ var goBuiltins = map[string]bool{
 	"min": true, "max": true, "clear": true,
 }
 
-// funcDef is one indexed function row, as needed for resolution.
+// funcDef is one indexed function row, as needed for resolution. name/kind/
+// retType are carried so a file's contributions can be removed incrementally
+// (delta maintenance) without re-querying the whole table.
 type funcDef struct {
 	id       int64
 	file     string
 	pkg      string
 	recvType string // "" for plain funcs
+	name     string
+	kind     string
+	retType  string
 }
+
+// kv2 is a (2-string key, value) provenance entry for the field/global type maps.
+type kv2 struct {
+	key [2]string
+	val string
+}
+
+// classBase is a (class, base) provenance entry for inheritance edges.
+type classBase struct{ class, base string }
 
 // Resolver resolves a call's callee to a specific function id using local,
 // deterministic scope rules (package membership, receiver type, imports, plus
-// 9a return-type inference and 9b field/global types). It is built from the
-// functions and type maps already written in the current transaction, so ids
-// and metadata exist before resolution runs.
+// 9a return-type inference and 9b field/global types).
+//
+// It supports incremental delta maintenance: addFileFromDB and removeFile keep
+// the derived indexes in sync as single files change, so a cached resolver in
+// the worker need not be rebuilt from full table scans on every save (which was
+// O(repo) per keystroke). The derived lookups are identical to a fresh full
+// rebuild — only the build cost differs — which the equivalence test guards.
 type Resolver struct {
 	byPkgName  map[[2]string][]funcDef // (package, name)      -> defs (plain funcs)
 	byRecvName map[[2]string][]funcDef // (receiverType, name) -> defs (methods)
 	byName     map[string][]funcDef    // name                 -> defs (legacy fallback)
 	byTopName  map[string][]funcDef    // name -> top-level (non-method) defs, for cross-file import resolution
 
-	returnType map[[2]string]string // (package, funcName)   -> bare return type (9a)
-	fieldType  map[[2]string]string // (structType, field)   -> bare field type (9b)
-	globalType map[[2]string]string // (package, varName)    -> bare var type (9b)
-	classNames map[string]bool      // type names declared as a class/struct
-	bases      map[string][]string  // class name -> base class names (inheritance)
-	repoRoots  map[string]bool      // first path segment of every indexed file — the repo's own package roots, to gate absolute imports (stdlib/3rd-party roots are absent)
+	returnType map[[2]string]string // (package, funcName) -> bare return type (9a)
+
+	// Conflict-tracked type maps keep ALL distinct values per key with refcounts;
+	// a lookup yields a type only when exactly one distinct value remains (the
+	// "ambiguous -> no link" rule), and refcounts let one file's rows be removed
+	// without losing a value another file still provides.
+	fieldType  map[[2]string]map[string]int // (structType, field) -> fieldType -> refcount (9b)
+	globalType map[[2]string]map[string]int // (package, varName)  -> varType  -> refcount (9b)
+	classRefs  map[string]int               // class/struct name -> refcount
+	bases      map[string][]string          // class name -> base class names (inheritance, multiset)
+	repoRoots  map[string]int               // repo package root -> refcount, to gate absolute imports
+
+	// Per-file provenance, replayed by removeFile to undo a file's contributions.
+	fileFuncs   map[string][]funcDef
+	fileFields  map[string][]kv2
+	filePkgVars map[string][]kv2
+	fileClasses map[string][]string
+	fileBases   map[string][]classBase
+	fileRoots   map[string][]string
 }
 
 // rowQuerier is satisfied by *sql.DB and *sql.Tx.
@@ -63,22 +94,50 @@ type rowQuerier interface {
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 }
 
+// ResolverCache holds a delta-maintained *Resolver reused across incremental
+// reindexes so a single-file change costs O(changed file), not O(repo). The
+// worker owns one; it is invalidated on full reindex (and on any error that may
+// have left the in-memory resolver inconsistent with the DB) and rebuilt lazily.
+type ResolverCache struct {
+	r *Resolver
+}
+
+// NewResolverCache returns an empty (cold) cache; the next IndexFile builds it.
+func NewResolverCache() *ResolverCache { return &ResolverCache{} }
+
+// Invalidate drops the cached resolver so the next use rebuilds from a full scan.
+func (c *ResolverCache) Invalidate() {
+	if c != nil {
+		c.r = nil
+	}
+}
+
+func newEmptyResolver() *Resolver {
+	return &Resolver{
+		byPkgName:   map[[2]string][]funcDef{},
+		byRecvName:  map[[2]string][]funcDef{},
+		byName:      map[string][]funcDef{},
+		byTopName:   map[string][]funcDef{},
+		returnType:  map[[2]string]string{},
+		fieldType:   map[[2]string]map[string]int{},
+		globalType:  map[[2]string]map[string]int{},
+		classRefs:   map[string]int{},
+		bases:       map[string][]string{},
+		repoRoots:   map[string]int{},
+		fileFuncs:   map[string][]funcDef{},
+		fileFields:  map[string][]kv2{},
+		filePkgVars: map[string][]kv2{},
+		fileClasses: map[string][]string{},
+		fileBases:   map[string][]classBase{},
+		fileRoots:   map[string][]string{},
+	}
+}
+
 // NewResolver builds the resolution indexes from every function and type map
 // currently in the database (read within the caller's transaction so
-// freshly-inserted rows are visible).
+// freshly-inserted rows are visible). This is the cold/full build.
 func NewResolver(q rowQuerier) (*Resolver, error) {
-	r := &Resolver{
-		byPkgName:  map[[2]string][]funcDef{},
-		byRecvName: map[[2]string][]funcDef{},
-		byName:     map[string][]funcDef{},
-		byTopName:  map[string][]funcDef{},
-		returnType: map[[2]string]string{},
-		fieldType:  map[[2]string]string{},
-		globalType: map[[2]string]string{},
-		classNames: map[string]bool{},
-		bases:      map[string][]string{},
-		repoRoots:  map[string]bool{},
-	}
+	r := newEmptyResolver()
 
 	rows, err := q.Query("SELECT id, name, file_path, kind, receiver_type, package, return_type FROM functions")
 	if err != nil {
@@ -87,32 +146,14 @@ func NewResolver(q rowQuerier) (*Resolver, error) {
 	defer rows.Close()
 	for rows.Next() {
 		var (
-			id                         int64
-			name, file, kind           string
-			recvType, pkg, returnT     sql.NullString
+			id                     int64
+			name, file, kind       string
+			recvType, pkg, returnT sql.NullString
 		)
 		if err := rows.Scan(&id, &name, &file, &kind, &recvType, &pkg, &returnT); err != nil {
 			return nil, err
 		}
-		d := funcDef{id: id, file: file, pkg: pkg.String, recvType: recvType.String}
-		// Record repo package roots so absolute imports can be gated (a name from
-		// "urllib.parse"/"node:fs" has a root absent here -> not linked). Two forms:
-		//   - first dir segment of a nested file: "httpx/_utils.py" -> "httpx"
-		//   - module basename of a top-level file: "utils.py" -> "utils"
-		// (flat repos import a sibling as `from utils import f`).
-		for _, root := range fileRepoRoots(file) {
-			r.repoRoots[root] = true
-		}
-		r.byName[name] = append(r.byName[name], d)
-		if kind == "method" && recvType.Valid && recvType.String != "" {
-			r.byRecvName[[2]string{recvType.String, name}] = append(r.byRecvName[[2]string{recvType.String, name}], d)
-		} else {
-			r.byPkgName[[2]string{pkg.String, name}] = append(r.byPkgName[[2]string{pkg.String, name}], d)
-			r.byTopName[name] = append(r.byTopName[name], d)
-			if returnT.Valid && returnT.String != "" {
-				r.returnType[[2]string{pkg.String, name}] = returnT.String
-			}
-		}
+		r.addFunc(funcDef{id: id, file: file, pkg: pkg.String, recvType: recvType.String, name: name, kind: kind, retType: returnT.String})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -133,20 +174,298 @@ func NewResolver(q rowQuerier) (*Resolver, error) {
 	return r, nil
 }
 
+// addFileFromDB adds a single file's contributions to the resolver by reading
+// only that file's rows (indexed by file_path), so an incremental update costs
+// O(rows in the file) rather than O(repo). Call after removeFile(file) and after
+// the file's new rows have been written in the current transaction.
+func (r *Resolver) addFileFromDB(q rowQuerier, file string) error {
+	frows, err := q.Query("SELECT id, name, kind, receiver_type, package, return_type FROM functions WHERE file_path = ?", file)
+	if err != nil {
+		return err
+	}
+	for frows.Next() {
+		var (
+			id              int64
+			name, kind      string
+			recv, pkg, retT sql.NullString
+		)
+		if err := frows.Scan(&id, &name, &kind, &recv, &pkg, &retT); err != nil {
+			frows.Close()
+			return err
+		}
+		r.addFunc(funcDef{id: id, file: file, pkg: pkg.String, recvType: recv.String, name: name, kind: kind, retType: retT.String})
+	}
+	frows.Close()
+	if err := frows.Err(); err != nil {
+		return err
+	}
+
+	if err := scanRows(q, "SELECT struct_type, field_name, field_type FROM struct_fields WHERE file_path = ?", file, func(rows *sql.Rows) error {
+		var st, fn, ft string
+		if err := rows.Scan(&st, &fn, &ft); err != nil {
+			return err
+		}
+		r.addFieldType(file, [2]string{st, fn}, ft)
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := scanRows(q, "SELECT name, var_type, package FROM package_vars WHERE file_path = ?", file, func(rows *sql.Rows) error {
+		var name, vt string
+		var pkg sql.NullString
+		if err := rows.Scan(&name, &vt, &pkg); err != nil {
+			return err
+		}
+		r.addGlobalType(file, [2]string{pkg.String, name}, vt)
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := scanRows(q, "SELECT name FROM types WHERE file_path = ? AND kind IN ('class','struct','type')", file, func(rows *sql.Rows) error {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return err
+		}
+		r.addClass(file, name)
+		return nil
+	}); err != nil {
+		return err
+	}
+	return scanRows(q, "SELECT class_name, base_name FROM class_bases WHERE file_path = ?", file, func(rows *sql.Rows) error {
+		var cls, base string
+		if err := rows.Scan(&cls, &base); err != nil {
+			return err
+		}
+		r.addBase(file, cls, base)
+		return nil
+	})
+}
+
+// scanRows runs a single-arg query and applies fn to each row, tolerating an
+// absent table (partially-migrated DB) by treating it as empty.
+func scanRows(q rowQuerier, query, arg string, fn func(*sql.Rows) error) error {
+	rows, err := q.Query(query, arg)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	for rows.Next() {
+		if err := fn(rows); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+// removeFile undoes every contribution a file previously added, by replaying its
+// recorded provenance. After this the resolver is exactly as if the file had
+// never been indexed.
+func (r *Resolver) removeFile(file string) {
+	for _, d := range r.fileFuncs[file] {
+		removeDefByID(r.byName, d.name, d.id)
+		if d.kind == "method" && d.recvType != "" {
+			removeDefByID2(r.byRecvName, [2]string{d.recvType, d.name}, d.id)
+		} else {
+			key := [2]string{d.pkg, d.name}
+			removeDefByID2(r.byPkgName, key, d.id)
+			removeDefByID(r.byTopName, d.name, d.id)
+			r.recomputeReturnType(key)
+		}
+	}
+	delete(r.fileFuncs, file)
+
+	for _, root := range r.fileRoots[file] {
+		if r.repoRoots[root]--; r.repoRoots[root] <= 0 {
+			delete(r.repoRoots, root)
+		}
+	}
+	delete(r.fileRoots, file)
+
+	for _, e := range r.fileFields[file] {
+		decSet(r.fieldType, e.key, e.val)
+	}
+	delete(r.fileFields, file)
+
+	for _, e := range r.filePkgVars[file] {
+		decSet(r.globalType, e.key, e.val)
+	}
+	delete(r.filePkgVars, file)
+
+	for _, name := range r.fileClasses[file] {
+		if r.classRefs[name]--; r.classRefs[name] <= 0 {
+			delete(r.classRefs, name)
+		}
+	}
+	delete(r.fileClasses, file)
+
+	for _, cb := range r.fileBases[file] {
+		removeStrOnce(r.bases, cb.class, cb.base)
+	}
+	delete(r.fileBases, file)
+}
+
+// addFunc indexes one function definition and records its provenance.
+func (r *Resolver) addFunc(d funcDef) {
+	r.byName[d.name] = append(r.byName[d.name], d)
+	if d.kind == "method" && d.recvType != "" {
+		key := [2]string{d.recvType, d.name}
+		r.byRecvName[key] = append(r.byRecvName[key], d)
+	} else {
+		key := [2]string{d.pkg, d.name}
+		r.byPkgName[key] = append(r.byPkgName[key], d)
+		r.byTopName[d.name] = append(r.byTopName[d.name], d)
+		r.recomputeReturnType(key)
+	}
+	// Record repo package roots so absolute imports can be gated (a name from
+	// "urllib.parse"/"node:fs" has a root absent here -> not linked).
+	for _, root := range fileRepoRoots(d.file) {
+		r.repoRoots[root]++
+		r.fileRoots[d.file] = append(r.fileRoots[d.file], root)
+	}
+	r.fileFuncs[d.file] = append(r.fileFuncs[d.file], d)
+}
+
+// recomputeReturnType refreshes returnType[key] from the current defs at key
+// (first def carrying a return type wins), so a removed/added def can't leave a
+// stale entry. Bounded by the (tiny) number of same-keyed defs.
+func (r *Resolver) recomputeReturnType(key [2]string) {
+	delete(r.returnType, key)
+	for _, d := range r.byPkgName[key] {
+		if d.retType != "" {
+			r.returnType[key] = d.retType
+			return
+		}
+	}
+}
+
+func (r *Resolver) addFieldType(file string, key [2]string, ft string) {
+	s := r.fieldType[key]
+	if s == nil {
+		s = map[string]int{}
+		r.fieldType[key] = s
+	}
+	s[ft]++
+	r.fileFields[file] = append(r.fileFields[file], kv2{key, ft})
+}
+
+func (r *Resolver) addGlobalType(file string, key [2]string, vt string) {
+	s := r.globalType[key]
+	if s == nil {
+		s = map[string]int{}
+		r.globalType[key] = s
+	}
+	s[vt]++
+	r.filePkgVars[file] = append(r.filePkgVars[file], kv2{key, vt})
+}
+
+func (r *Resolver) addClass(file, name string) {
+	r.classRefs[name]++
+	r.fileClasses[file] = append(r.fileClasses[file], name)
+}
+
+func (r *Resolver) addBase(file, class, base string) {
+	r.bases[class] = append(r.bases[class], base)
+	r.fileBases[file] = append(r.fileBases[file], classBase{class, base})
+}
+
+// isClassName reports whether name is currently declared as a class/struct.
+func (r *Resolver) isClassName(name string) bool { return r.classRefs[name] > 0 }
+
+// fieldTypeOf returns the field's type when exactly one distinct type is known
+// for (structType, field); ambiguous (conflicting) keys yield no link.
+func (r *Resolver) fieldTypeOf(key [2]string) (string, bool) { return soleValue(r.fieldType[key]) }
+
+// globalTypeOf is fieldTypeOf for package-level vars (package, varName).
+func (r *Resolver) globalTypeOf(key [2]string) (string, bool) { return soleValue(r.globalType[key]) }
+
+func soleValue(s map[string]int) (string, bool) {
+	if len(s) != 1 {
+		return "", false
+	}
+	for v := range s {
+		return v, true
+	}
+	return "", false
+}
+
+func removeDefByID(m map[string][]funcDef, key string, id int64) {
+	defs, ok := m[key]
+	if !ok {
+		return
+	}
+	filtered := defs[:0]
+	for _, d := range defs {
+		if d.id != id {
+			filtered = append(filtered, d)
+		}
+	}
+	if len(filtered) == 0 {
+		delete(m, key)
+	} else {
+		m[key] = filtered
+	}
+}
+
+func removeDefByID2(m map[[2]string][]funcDef, key [2]string, id int64) {
+	defs, ok := m[key]
+	if !ok {
+		return
+	}
+	filtered := defs[:0]
+	for _, d := range defs {
+		if d.id != id {
+			filtered = append(filtered, d)
+		}
+	}
+	if len(filtered) == 0 {
+		delete(m, key)
+	} else {
+		m[key] = filtered
+	}
+}
+
+func decSet(m map[[2]string]map[string]int, key [2]string, val string) {
+	s := m[key]
+	if s == nil {
+		return
+	}
+	if s[val]--; s[val] <= 0 {
+		delete(s, val)
+	}
+	if len(s) == 0 {
+		delete(m, key)
+	}
+}
+
+func removeStrOnce(m map[string][]string, key, val string) {
+	vs := m[key]
+	for i, v := range vs {
+		if v == val {
+			vs = append(vs[:i], vs[i+1:]...)
+			if len(vs) == 0 {
+				delete(m, key)
+			} else {
+				m[key] = vs
+			}
+			return
+		}
+	}
+}
+
 // loadClassBases populates the class→bases inheritance map, enabling resolution
 // of calls to inherited methods (self.<inherited>()).
 func (r *Resolver) loadClassBases(q rowQuerier) error {
-	rows, err := q.Query("SELECT class_name, base_name FROM class_bases")
+	rows, err := q.Query("SELECT class_name, base_name, file_path FROM class_bases")
 	if err != nil {
 		return nil // table may be absent on a partially-migrated DB; tolerate
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var cls, base string
-		if err := rows.Scan(&cls, &base); err != nil {
+		var cls, base, file string
+		if err := rows.Scan(&cls, &base, &file); err != nil {
 			return err
 		}
-		r.bases[cls] = append(r.bases[cls], base)
+		r.addBase(file, cls, base)
 	}
 	return rows.Err()
 }
@@ -155,72 +474,55 @@ func (r *Resolver) loadClassBases(q rowQuerier) error {
 // bound by `x = Cls()` can be typed to Cls (the constructor case in languages
 // where construction looks like a call, e.g. Python/TS without `new`).
 func (r *Resolver) loadClassNames(q rowQuerier) error {
-	rows, err := q.Query("SELECT DISTINCT name FROM types WHERE kind IN ('class','struct','type')")
+	rows, err := q.Query("SELECT name, file_path FROM types WHERE kind IN ('class','struct','type')")
 	if err != nil {
 		return nil // types table always exists post-migration; tolerate absence
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
+		var name, file string
+		if err := rows.Scan(&name, &file); err != nil {
 			return err
 		}
-		r.classNames[name] = true
+		r.addClass(file, name)
 	}
 	return rows.Err()
 }
 
 // loadFieldTypes populates fieldType from struct_fields. A (structType, field)
-// with conflicting types across files is dropped (ambiguous) to avoid wrong links.
+// with conflicting types across files yields no link (handled at lookup via the
+// distinct-value set).
 func (r *Resolver) loadFieldTypes(q rowQuerier) error {
-	rows, err := q.Query("SELECT struct_type, field_name, field_type FROM struct_fields")
+	rows, err := q.Query("SELECT struct_type, field_name, field_type, file_path FROM struct_fields")
 	if err != nil {
 		// struct_fields may not exist on a partially-migrated DB; treat as empty.
 		return nil
 	}
 	defer rows.Close()
-	conflict := map[[2]string]bool{}
 	for rows.Next() {
-		var st, fn, ft string
-		if err := rows.Scan(&st, &fn, &ft); err != nil {
+		var st, fn, ft, file string
+		if err := rows.Scan(&st, &fn, &ft, &file); err != nil {
 			return err
 		}
-		key := [2]string{st, fn}
-		if prev, ok := r.fieldType[key]; ok && prev != ft {
-			conflict[key] = true
-			continue
-		}
-		r.fieldType[key] = ft
-	}
-	for key := range conflict {
-		delete(r.fieldType, key)
+		r.addFieldType(file, [2]string{st, fn}, ft)
 	}
 	return rows.Err()
 }
 
 // loadGlobalTypes populates globalType from package_vars (same conflict rule).
 func (r *Resolver) loadGlobalTypes(q rowQuerier) error {
-	rows, err := q.Query("SELECT name, var_type, package FROM package_vars")
+	rows, err := q.Query("SELECT name, var_type, package, file_path FROM package_vars")
 	if err != nil {
 		return nil
 	}
 	defer rows.Close()
-	conflict := map[[2]string]bool{}
 	for rows.Next() {
-		var name, vt string
+		var name, vt, file string
 		var pkg sql.NullString
-		if err := rows.Scan(&name, &vt, &pkg); err != nil {
+		if err := rows.Scan(&name, &vt, &pkg, &file); err != nil {
 			return err
 		}
-		key := [2]string{pkg.String, name}
-		if prev, ok := r.globalType[key]; ok && prev != vt {
-			conflict[key] = true
-			continue
-		}
-		r.globalType[key] = vt
-	}
-	for key := range conflict {
-		delete(r.globalType, key)
+		r.addGlobalType(file, [2]string{pkg.String, name}, vt)
 	}
 	return rows.Err()
 }
@@ -259,7 +561,7 @@ func (r *Resolver) methodOnType(recvType, name string) (int64, bool) {
 // match a repo package root — so a name imported from a stdlib/3rd-party module
 // (urllib.parse, node:fs, lodash) is never linked to a same-named local symbol.
 func (r *Resolver) importInRepo(root string) bool {
-	return root == "" || r.repoRoots[root]
+	return root == "" || r.repoRoots[root] > 0
 }
 
 // fileRepoRoots returns the import-namespace roots a file contributes: the first
@@ -376,7 +678,7 @@ func (t typedReceiverStrategy) resolveTyped(r *Resolver, c CallRecord, scope, fi
 		//   (a) callee is a class/struct -> x is an instance of that class
 		//       (constructor call: Python `Conn()`, TS without `new`),
 		//   (b) callee is a function -> x is its declared return type.
-		if r.classNames[c.ReceiverFromCallee] {
+		if r.isClassName(c.ReceiverFromCallee) {
 			if id, ok := r.methodOnType(c.ReceiverFromCallee, c.CalleeName); ok {
 				return id, resReceiverTyped
 			}
@@ -392,7 +694,7 @@ func (t typedReceiverStrategy) resolveTyped(r *Resolver, c CallRecord, scope, fi
 	case "field":
 		// base.field.M() where base's type is known. Look up the field's type,
 		// then the method on that type. (Go struct field; TS/Python this/self field.)
-		if ft, ok := r.fieldType[[2]string{c.ReceiverType, c.ReceiverField}]; ok {
+		if ft, ok := r.fieldTypeOf([2]string{c.ReceiverType, c.ReceiverField}); ok {
 			if id, ok := r.methodOnType(ft, c.CalleeName); ok {
 				return id, resReceiverTyped
 			}
@@ -401,7 +703,7 @@ func (t typedReceiverStrategy) resolveTyped(r *Resolver, c CallRecord, scope, fi
 
 	case "maybe-global":
 		// x.M() where x had no local binding — try a scope-level var.
-		if vt, ok := r.globalType[[2]string{scope, c.ReceiverName}]; ok {
+		if vt, ok := r.globalTypeOf([2]string{scope, c.ReceiverName}); ok {
 			if id, ok := r.methodOnType(vt, c.CalleeName); ok {
 				return id, resReceiverTyped
 			}
@@ -422,7 +724,7 @@ func (t typedReceiverStrategy) resolveTyped(r *Resolver, c CallRecord, scope, fi
 		}
 		// Constructor call: a bare call whose name is a known class/struct (e.g.
 		// Python/TS `Conn()`). Classified, not a missed function edge.
-		if r.classNames[c.CalleeName] {
+		if r.isClassName(c.CalleeName) {
 			return 0, resConstructor
 		}
 		// Same-scope plain function; a single match is expected, ambiguity -> unresolved.

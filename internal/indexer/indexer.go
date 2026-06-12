@@ -16,6 +16,10 @@ const batchSize = 500
 
 // RunWorker consumes paths from ch and reindexes each file. Empty string means full reindex (Phase 4: .reindex-queue).
 func RunWorker(ctx context.Context, root string, database *sql.DB, q *db.Queries, ch <-chan string) {
+	// One delta-maintained resolver reused across incremental reindexes; a full
+	// reindex invalidates it (it rewrites every row), so the next IndexFile
+	// rebuilds it once and then maintains it per-file.
+	cache := NewResolverCache()
 	for {
 		select {
 		case <-ctx.Done():
@@ -34,6 +38,7 @@ func RunWorker(ctx context.Context, root string, database *sql.DB, q *db.Queries
 					artifacts.ClearAllIndexErrors(database)
 					artifacts.SetLastFullIndex(database, time.Now())
 				}
+				cache.Invalidate() // full reindex rewrote everything; rebuild lazily
 				dir := filepath.Join(root, ".max-context")
 				_ = artifacts.WriteSummary(dir, database)
 				_ = artifacts.WriteArchitecture(dir, database)
@@ -47,7 +52,7 @@ func RunWorker(ctx context.Context, root string, database *sql.DB, q *db.Queries
 				})
 				continue
 			}
-			if err := IndexFile(ctx, root, path, database, q); err != nil {
+			if err := IndexFile(ctx, root, path, database, q, cache); err != nil {
 				// Surface the failure so it shows up in staleness; a bad single-file
 				// reindex must not silently leave the index out of date.
 				fmt.Fprintf(os.Stderr, "max-context: index %s failed: %v\n", path, err)
@@ -295,8 +300,26 @@ func nullStr(s string) interface{} {
 	return s
 }
 
-// IndexFile reindexes a single file (incremental). Call after file change.
-func IndexFile(ctx context.Context, root string, relPath string, database *sql.DB, q *db.Queries) error {
+// IndexFile reindexes a single file (incremental). Call after a file change.
+//
+// An optional *ResolverCache (the worker passes one) keeps a delta-maintained
+// resolver across calls so the per-file cost is O(changed file) instead of
+// O(repo); callers that pass no cache (or a nil one) get a fresh full-scan
+// resolver each call, identical in behavior.
+func IndexFile(ctx context.Context, root string, relPath string, database *sql.DB, q *db.Queries, caches ...*ResolverCache) (retErr error) {
+	var cache *ResolverCache
+	if len(caches) > 0 {
+		cache = caches[0]
+	}
+	// If anything fails after we touch the cached resolver, the transaction rolls
+	// back but the in-memory delta does not — drop the cache so the next call
+	// rebuilds it from a consistent DB.
+	defer func() {
+		if retErr != nil {
+			cache.Invalidate()
+		}
+	}()
+
 	fullPath := filepath.Join(root, relPath)
 	content, readErr := os.ReadFile(fullPath)
 	deleted := false
@@ -350,10 +373,10 @@ func IndexFile(ctx context.Context, root string, relPath string, database *sql.D
 		}
 	}
 
-	// A deleted file has nothing to parse or reinsert. Build the resolver against
-	// the now-current tables, re-resolve the edges that pointed into it, commit.
+	// A deleted file has nothing to parse or reinsert. Refresh the resolver to
+	// reflect the removal, re-resolve the edges that pointed into it, commit.
 	if deleted {
-		resolver, err := NewResolver(tx)
+		resolver, err := resolverForIndexFile(tx, cache, path, true)
 		if err != nil {
 			return err
 		}
@@ -425,10 +448,11 @@ func IndexFile(ctx context.Context, root string, relPath string, database *sql.D
 		}
 	}
 
-	// Build the resolver from the full functions table (this file's rows were
-	// just reinserted in the same tx), so same-package and receiver-typed
-	// lookups see definitions in other files too.
-	resolver, err := NewResolver(tx)
+	// Resolve against the full functions table (this file's rows were just
+	// reinserted in the same tx), so same-package and receiver-typed lookups see
+	// definitions in other files too. Cold: full scan; warm cache: this file's
+	// delta applied to the retained resolver.
+	resolver, err := resolverForIndexFile(tx, cache, path, false)
 	if err != nil {
 		return err
 	}
@@ -463,6 +487,31 @@ func IndexFile(ctx context.Context, root string, relPath string, database *sql.D
 	// the commit flips data + FTS atomically — no separate post-commit rebuild and
 	// no window where a concurrent query sees an empty FTS index.
 	return tx.Commit()
+}
+
+// resolverForIndexFile returns the resolver to use for an incremental reindex of
+// path. With no cache (or a cold one) it builds a fresh full-scan resolver and
+// warms the cache; with a warm cache it applies just this file's delta
+// (removeFile to reflect the DELETE, addFileFromDB to reflect the new rows —
+// skipped for a deletion), keeping per-file cost O(changed file).
+func resolverForIndexFile(tx *sql.Tx, cache *ResolverCache, path string, deleted bool) (*Resolver, error) {
+	if cache == nil || cache.r == nil {
+		r, err := NewResolver(tx)
+		if err != nil {
+			return nil, err
+		}
+		if cache != nil {
+			cache.r = r
+		}
+		return r, nil
+	}
+	cache.r.removeFile(path)
+	if !deleted {
+		if err := cache.r.addFileFromDB(tx, path); err != nil {
+			return nil, err
+		}
+	}
+	return cache.r, nil
 }
 
 // reresolveStaleEdges re-resolves call edges marked 'stale' — their callee lived
