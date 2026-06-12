@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/maxcontext/max-context/internal/mcp"
 )
@@ -12,6 +13,10 @@ type getCallChainArgs struct {
 	FunctionName string `json:"function_name"`
 	Direction    string `json:"direction"`
 	Depth        *int   `json:"depth"`
+	// MinConfidence, when set, restricts traversal to edges at or above the given
+	// resolution confidence. Like get_impact, the low-confidence interface-dispatch
+	// fan-out is excluded by default and included only at a low min_confidence.
+	MinConfidence string `json:"min_confidence"`
 }
 
 type callChainNode struct {
@@ -57,7 +62,7 @@ func GetCallChainHandler(database *sql.DB) mcp.ToolHandler {
 		}
 
 		if direction == "callers" || direction == "both" {
-			callers, err := queryCallChain(database, a.FunctionName, depth, "callers")
+			callers, err := queryCallChain(database, a.FunctionName, depth, "callers", a.MinConfidence)
 			if err != nil {
 				return nil, &mcp.RPCError{Code: mcp.CodeInternalError, Message: fmt.Sprintf("callers query failed: %v", err)}
 			}
@@ -65,7 +70,7 @@ func GetCallChainHandler(database *sql.DB) mcp.ToolHandler {
 		}
 
 		if direction == "callees" || direction == "both" {
-			callees, err := queryCallChain(database, a.FunctionName, depth, "callees")
+			callees, err := queryCallChain(database, a.FunctionName, depth, "callees", a.MinConfidence)
 			if err != nil {
 				return nil, &mcp.RPCError{Code: mcp.CodeInternalError, Message: fmt.Sprintf("callees query failed: %v", err)}
 			}
@@ -78,7 +83,22 @@ func GetCallChainHandler(database *sql.DB) mcp.ToolHandler {
 	}
 }
 
-func queryCallChain(database *sql.DB, functionName string, depth int, direction string) ([]callChainNode, error) {
+func queryCallChain(database *sql.DB, functionName string, depth int, direction, minConfidence string) ([]callChainNode, error) {
+	// edgeFilter gates which edges the walk may traverse by resolution confidence.
+	// Default EXCLUDES the low-confidence interface-dispatch fan-out (so default
+	// behavior is unchanged); a low min_confidence opts it in, a high one excludes
+	// it along with other weak edges. Mirrors get_impact.
+	edgeFilter := " AND e.resolution != 'interface-dispatch'"
+	var filterArgs []interface{}
+	if markers := edgeMarkersAtOrAbove(minConfidence); markers != nil {
+		ph := make([]string, len(markers))
+		for i, m := range markers {
+			ph[i] = "?"
+			filterArgs = append(filterArgs, m)
+		}
+		edgeFilter = " AND e.resolution IN (" + strings.Join(ph, ",") + ")"
+	}
+
 	var query string
 	if direction == "callers" {
 		// Who calls this function? (upstream). resolution is the confidence of
@@ -92,7 +112,7 @@ func queryCallChain(database *sql.DB, functionName string, depth int, direction 
 				FROM chain c
 				JOIN calls e ON e.callee_id = c.id
 				JOIN functions f ON f.id = e.caller_id
-				WHERE c.depth < ?
+				WHERE c.depth < ?` + edgeFilter + `
 			)
 			SELECT DISTINCT name, file_path, line, depth, resolution FROM chain
 			WHERE depth > 0
@@ -109,7 +129,7 @@ func queryCallChain(database *sql.DB, functionName string, depth int, direction 
 				FROM chain c
 				JOIN calls e ON e.caller_id = c.id
 				LEFT JOIN functions f ON f.id = e.callee_id
-				WHERE c.depth < ?
+				WHERE c.depth < ?` + edgeFilter + `
 			)
 			SELECT DISTINCT name, file_path, line, depth, resolution FROM chain
 			WHERE depth > 0
@@ -117,7 +137,9 @@ func queryCallChain(database *sql.DB, functionName string, depth int, direction 
 		`
 	}
 
-	rows, err := database.Query(query, functionName, depth)
+	// Arg order: base-case name, recursive depth, then the edge-filter markers.
+	args := append([]interface{}{functionName, depth}, filterArgs...)
+	rows, err := database.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}

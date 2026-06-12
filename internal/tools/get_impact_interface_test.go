@@ -117,4 +117,43 @@ func Notify(n Notifier) {
 	if got, _ := impactedHas("receiver-typed"); got {
 		t.Errorf("at high confidence: Notify should be excluded")
 	}
+
+	// get_call_chain gates interface-dispatch the same way: callers of Email.Send
+	// include the interface caller Notify only at low confidence.
+	cc := GetCallChainHandler(database)
+	callChainHasNotify := func(minConfidence string) bool {
+		args := map[string]interface{}{"function_name": "Send", "direction": "callers"}
+		if minConfidence != "" {
+			args["min_confidence"] = minConfidence
+		}
+		raw, _ := json.Marshal(args)
+		resp, err := cc(json.RawMessage(raw))
+		if err != nil {
+			t.Fatalf("get_call_chain(%q): %v", minConfidence, err)
+		}
+		items := resp.([]mcp.ContentItem)
+		var out struct {
+			Callers []struct {
+				Name string `json:"name"`
+			} `json:"callers"`
+		}
+		if err := json.Unmarshal([]byte(items[0].Text), &out); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		for _, n := range out.Callers {
+			if n.Name == "Notify" {
+				return true
+			}
+		}
+		return false
+	}
+	if !callChainHasNotify("interface-dispatch") {
+		t.Errorf("get_call_chain at low confidence: expected Notify caller via interface dispatch")
+	}
+	if callChainHasNotify("") {
+		t.Errorf("get_call_chain at default: Notify should be excluded (interface dispatch is opt-in)")
+	}
+	if callChainHasNotify("receiver-typed") {
+		t.Errorf("get_call_chain at high confidence: Notify should be excluded")
+	}
 }

@@ -127,7 +127,12 @@ now idempotently adds `.max-context/` to the project `.gitignore`.
   embedded interface methods are not expanded.
 - **Embedding / semantic search.** Search is lexical (FTS5 BM25 + sanitized
   tokens); there is no embedding-based semantic retrieval.
-- **`get_call_chain` interface edges.** Unlike `get_impact`, `get_call_chain`
-  does not gate interface-dispatch edges behind a confidence threshold; they
-  appear labeled by `resolution`. Gating there was left out of scope (the plan
-  marked it optional).
+
+## Follow-up
+
+`get_call_chain` now gates interface-dispatch edges behind `min_confidence`
+exactly like `get_impact`: a new `min_confidence` parameter (same enum, including
+`interface-dispatch`) excludes the low-confidence interface fan-out by default and
+includes it only when set low. Covered by the interface fixture test, which
+asserts the interface caller appears in `get_call_chain` callers only at low
+confidence.
