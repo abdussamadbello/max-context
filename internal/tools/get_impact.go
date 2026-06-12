@@ -75,10 +75,12 @@ type impactStats struct {
 }
 
 type impactResponse struct {
-	Changed         []changedFile  `json:"changed"`
-	Impacted        []impactedNode `json:"impacted"`
-	UnresolvedFiles []string       `json:"unresolved_files"`
-	Stats           impactStats    `json:"stats"`
+	Changed          []changedFile          `json:"changed"`
+	Impacted         []impactedNode         `json:"impacted"`
+	UnresolvedFiles  []string               `json:"unresolved_files"`
+	Stats            impactStats            `json:"stats"`
+	Staleness        map[string]interface{} `json:"staleness"`
+	StalenessWarning string                 `json:"staleness_warning,omitempty"`
 }
 
 // GetImpactHandler returns the MCP tool handler. The store provides SymbolsInFile and
@@ -162,6 +164,7 @@ func GetImpactHandler(store db.Store, projectRoot string) mcp.ToolHandler {
 			breakdown[n.ViaResolution]++
 		}
 
+		staleObj, staleWarn := stalenessInfo(store.DB())
 		resp := impactResponse{
 			Changed:         changed,
 			Impacted:        impacted,
@@ -174,6 +177,8 @@ func GetImpactHandler(store db.Store, projectRoot string) mcp.ToolHandler {
 				Truncated:           truncated,
 				ResolutionBreakdown: breakdown,
 			},
+			Staleness:        staleObj,
+			StalenessWarning: staleWarn,
 		}
 		b, _ := json.Marshal(resp)
 		return []mcp.ContentItem{{Type: "text", Text: string(b)}}, nil

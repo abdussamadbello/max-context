@@ -72,6 +72,7 @@ func GetCallChainHandler(database *sql.DB) mcp.ToolHandler {
 			result["callees"] = callees
 		}
 
+		attachStaleness(result, database)
 		b, _ := json.Marshal(result)
 		return []mcp.ContentItem{{Type: "text", Text: string(b)}}, nil
 	}

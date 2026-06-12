@@ -25,19 +25,37 @@ func RunWorker(ctx context.Context, root string, database *sql.DB, q *db.Queries
 				return
 			}
 			if path == "" {
-				_ = Index(ctx, root, database, q)
+				if err := Index(ctx, root, database, q); err != nil {
+					// Surface, don't swallow: a failed full index left a stale or empty
+					// index that tools must be able to warn about.
+					fmt.Fprintf(os.Stderr, "max-context: full index failed: %v\n", err)
+					artifacts.RecordIndexError(database, "", err.Error())
+				} else {
+					artifacts.ClearAllIndexErrors(database)
+					artifacts.SetLastFullIndex(database, time.Now())
+				}
 				dir := filepath.Join(root, ".max-context")
 				_ = artifacts.WriteSummary(dir, database)
 				_ = artifacts.WriteArchitecture(dir, database)
 				var totalFuncs, totalFiles int
 				_ = database.QueryRow("SELECT COUNT(*) FROM functions").Scan(&totalFuncs)
 				_ = database.QueryRow("SELECT COUNT(DISTINCT file_path) FROM functions").Scan(&totalFiles)
+				h := artifacts.ReadIndexHealth(database)
 				_ = artifacts.WriteStatus(dir, &artifacts.Status{
-					Healthy: true, LastFullIndex: time.Now(), TotalFunctions: totalFuncs, TotalFiles: totalFiles, Version: "0.1.0",
+					Healthy: h.Healthy, LastFullIndex: h.LastFullIndex, LastIncrementalIndex: h.LastIncrementalIndex,
+					TotalFunctions: totalFuncs, TotalFiles: totalFiles, Version: "0.1.0",
 				})
 				continue
 			}
-			_ = IndexFile(ctx, root, path, database, q)
+			if err := IndexFile(ctx, root, path, database, q); err != nil {
+				// Surface the failure so it shows up in staleness; a bad single-file
+				// reindex must not silently leave the index out of date.
+				fmt.Fprintf(os.Stderr, "max-context: index %s failed: %v\n", path, err)
+				artifacts.RecordIndexError(database, path, err.Error())
+			} else {
+				artifacts.ClearIndexError(database, path)
+				artifacts.SetLastIncrementalIndex(database, time.Now())
+			}
 		}
 	}
 }

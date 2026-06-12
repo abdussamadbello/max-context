@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const schemaVersion = 6
+const schemaVersion = 7
 
 // Migrate ensures the database schema is at the current version, running
 // migrations if needed. Call after Open.
@@ -77,6 +77,7 @@ var migrations = map[int]func(*sql.Tx) error{
 	4: migrationV4,
 	5: migrationV5,
 	6: migrationV6,
+	7: migrationV7,
 }
 
 func migrationV1(tx *sql.Tx) error {
@@ -383,5 +384,22 @@ func migrationV6(tx *sql.Tx) error {
 		return err
 	}
 	_, err = tx.Exec("INSERT INTO types_fts(types_fts) VALUES('rebuild')")
+	return err
+}
+
+// migrationV7 adds index_errors, recording per-file indexing failures so they
+// surface as staleness in tool responses and --status instead of being silently
+// swallowed by the background worker (which previously did `_ = IndexFile(...)`).
+// file_path is the PRIMARY KEY so a retry replaces the prior failure and a clean
+// reindex deletes the row; the sentinel '<full-index>' records a whole-repo
+// index failure. Pure additive metadata; empty on a healthy index.
+func migrationV7(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		CREATE TABLE IF NOT EXISTS index_errors (
+			file_path TEXT PRIMARY KEY,
+			error     TEXT NOT NULL,
+			timestamp INTEGER NOT NULL
+		);
+	`)
 	return err
 }

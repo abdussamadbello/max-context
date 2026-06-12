@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"database/sql"
 	"encoding/json"
 	"path/filepath"
 
@@ -12,7 +13,7 @@ type getArchitectureArgs struct {
 	Focus string `json:"focus"`
 }
 
-func GetArchitectureHandler(projectRoot string) mcp.ToolHandler {
+func GetArchitectureHandler(database *sql.DB, projectRoot string) mcp.ToolHandler {
 	dir := filepath.Join(projectRoot, ".max-context")
 	return func(args json.RawMessage) (interface{}, error) {
 		summary, err := artifacts.ReadSummary(dir)
@@ -23,6 +24,12 @@ func GetArchitectureHandler(projectRoot string) mcp.ToolHandler {
 		text := summary
 		if arch != "" {
 			text = summary + "\n\n" + arch
+		}
+		// get_architecture returns prose (not JSON), so surface staleness as an
+		// inline warning line when the index is unhealthy — keeping the text shape
+		// backward compatible.
+		if _, warning := stalenessInfo(database); warning != "" {
+			text += "\n\n[staleness] " + warning
 		}
 		return []mcp.ContentItem{{Type: "text", Text: text}}, nil
 	}

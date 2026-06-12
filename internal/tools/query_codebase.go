@@ -211,6 +211,7 @@ func QueryCodebaseHandler(database *sql.DB, q *db.Queries, projectRoot string) m
 					"commit to an answer with what you have."
 			}
 		}
+		attachStaleness(payload, database)
 		b, _ := json.Marshal(payload)
 		return []mcp.ContentItem{{Type: "text", Text: string(b)}}, nil
 	}

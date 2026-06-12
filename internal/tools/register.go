@@ -14,7 +14,7 @@ func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot st
 	h.Register("query_codebase", QueryCodebaseHandler(database, q, projectRoot))
 	h.Register("get_call_chain", GetCallChainHandler(database))
 	h.Register("get_impact", GetImpactHandler(store, projectRoot))
-	h.Register("get_architecture", GetArchitectureHandler(projectRoot))
+	h.Register("get_architecture", GetArchitectureHandler(database, projectRoot))
 
 	return []mcp.ToolSchema{
 		{
