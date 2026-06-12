@@ -155,3 +155,53 @@ func TestIndexDocFileLeavesResolverCacheWarm(t *testing.T) {
 		t.Error("IndexDocFile must not rebuild or invalidate the resolver cache")
 	}
 }
+
+// TestFullIndexDeterministic: with the parallel parse pool, two consecutive
+// full indexes of the same tree must produce identical row ordering — results
+// are aggregated by scan position, not completion order.
+func TestFullIndexDeterministic(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	writeFile(t, root, "a.go", "package app\n\nfunc A() { B() }\n")
+	writeFile(t, root, "b.go", "package app\n\nfunc B() { C() }\n")
+	writeFile(t, root, "c.go", "package app\n\nfunc C() {}\n")
+	writeFile(t, root, "d/d.go", "package d\n\nfunc D() {}\n")
+
+	database, q := docsTestDB(t)
+
+	snapshot := func() []string {
+		t.Helper()
+		rows, err := database.Query(`SELECT name, file_path, start_line FROM functions ORDER BY id`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rows.Close()
+		var out []string
+		for rows.Next() {
+			var name, fp string
+			var line int
+			if err := rows.Scan(&name, &fp, &line); err != nil {
+				t.Fatal(err)
+			}
+			out = append(out, name+"|"+fp)
+		}
+		return out
+	}
+
+	if err := Index(ctx, root, database, q); err != nil {
+		t.Fatal(err)
+	}
+	first := snapshot()
+	if err := Index(ctx, root, database, q); err != nil {
+		t.Fatal(err)
+	}
+	second := snapshot()
+	if len(first) == 0 || len(first) != len(second) {
+		t.Fatalf("snapshots: %d vs %d rows", len(first), len(second))
+	}
+	for i := range first {
+		if first[i] != second[i] {
+			t.Fatalf("row %d differs: %q vs %q", i, first[i], second[i])
+		}
+	}
+}

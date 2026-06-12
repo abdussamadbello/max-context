@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -180,7 +182,49 @@ func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries, op
 		return err
 	}
 
-	// Collect all results
+	// Parse files on a worker pool: tree-sitter parsing is CPU-bound and
+	// per-file independent (each Parse call creates its own parser; the
+	// compiled-query cache is mutex-protected). Results land in a slice
+	// indexed by file position, then aggregate in scan order below, so the
+	// output is byte-identical to the old sequential loop. All DB work stays
+	// on this goroutine.
+	parsed := make([]*ParseResult, len(files))
+	jobs := make(chan int)
+	var wg sync.WaitGroup
+	workers := runtime.NumCPU()
+	if workers > len(files) {
+		workers = len(files)
+	}
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range jobs {
+				if ctx.Err() != nil {
+					continue
+				}
+				content, err := os.ReadFile(filepath.Join(root, files[i]))
+				if err != nil {
+					continue
+				}
+				res, err := ParseFile(ctx, files[i], content)
+				if err != nil {
+					continue
+				}
+				parsed[i] = res
+			}
+		}()
+	}
+	for i := range files {
+		jobs <- i
+	}
+	close(jobs)
+	wg.Wait()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// Aggregate in scan order.
 	var allFuncs []FuncRecord
 	var allCalls []CallRecord
 	var allTypes []TypeRecord
@@ -189,21 +233,8 @@ func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries, op
 	var allPackageVars []PackageVarRecord
 	var allClassBases []ClassBaseRecord
 
-	for i, relPath := range files {
-		if i%100 == 0 && i > 0 {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
-		}
-		fullPath := filepath.Join(root, relPath)
-		content, err := os.ReadFile(fullPath)
-		if err != nil {
-			continue
-		}
-		res, err := ParseFile(ctx, relPath, content)
-		if err != nil {
+	for _, res := range parsed {
+		if res == nil {
 			continue
 		}
 		allFuncs = append(allFuncs, res.Functions...)
