@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.maxcontext/max-context",
+  "description": "Codebase index MCP server: tree-sitter symbols, call graph, change-impact analysis, and full-text search over code and docs — local, no embeddings, no API keys.",
+  "repository": {
+    "url": "https://github.com/maxcontext/max-context",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@maxcontext/cli",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
