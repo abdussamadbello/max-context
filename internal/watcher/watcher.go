@@ -4,13 +4,21 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
 
+	"github.com/maxcontext/max-context/internal/indexer"
 	"github.com/maxcontext/max-context/pkg/treesitter"
 )
+
+// isDockerfileBase reports whether a basename is a Dockerfile (which has no
+// extension for the exts map to match).
+func isDockerfileBase(base string) bool {
+	return base == "Dockerfile" || strings.HasPrefix(base, "Dockerfile.")
+}
 
 const debounceMs = 500
 
@@ -53,6 +61,11 @@ func New(root string, reindexCh chan<- string, opts ...*Options) (*Watcher, erro
 	}
 	exts := make(map[string]bool)
 	for _, ext := range extList {
+		exts[ext] = true
+	}
+	// Always watch document files (markdown/yaml/json/...): they index as plain
+	// text regardless of any language restriction on code files.
+	for ext := range indexer.DocExtensions {
 		exts[ext] = true
 	}
 	return &Watcher{
@@ -147,7 +160,7 @@ func (w *Watcher) handle(ev fsnotify.Event) {
 		return
 	}
 	ext := filepath.Ext(ev.Name)
-	if !w.exts[ext] {
+	if !w.exts[ext] && !isDockerfileBase(base) {
 		return
 	}
 	w.debounce(rel)

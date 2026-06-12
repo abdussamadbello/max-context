@@ -30,6 +30,9 @@ type Scanner struct {
 	Includes []string
 	// MaxFileSize skips files larger than this many bytes (0 = unlimited).
 	MaxFileSize int64
+	// IncludeDocs admits non-code document files (DocKindForPath) alongside
+	// source files. Off by default so existing callers keep code-only scans.
+	IncludeDocs bool
 }
 
 // IgnoreMatcher matches paths against gitignore-style rules.
@@ -221,6 +224,12 @@ func (s *Scanner) Scan() ([]string, error) {
 		ext := filepath.Ext(path)
 		if extSet[ext] {
 			if _, ok := treesitter.LanguageForExt(ext); ok {
+				out = append(out, rel)
+				return nil
+			}
+		}
+		if s.IncludeDocs {
+			if _, ok := DocKindForPath(rel); ok {
 				out = append(out, rel)
 			}
 		}

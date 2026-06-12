@@ -3,6 +3,7 @@ package tools
 import (
 	"database/sql"
 	"encoding/json"
+	"path/filepath"
 
 	"github.com/maxcontext/max-context/internal/db"
 	"github.com/maxcontext/max-context/internal/mcp"
@@ -125,6 +126,35 @@ func QueryCodebaseHandler(database *sql.DB, q *db.Queries, projectRoot string) m
 			}
 		}
 
+		if scope == "all" || scope == "docs" {
+			// Document search is best-effort, like types. In "all", docs are appended
+			// AFTER code results and capped low: bm25 ranks are not comparable across
+			// FTS tables, and code must stay the primary answer surface.
+			docLimit := limit
+			if scope == "all" && docLimit > 3 {
+				docLimit = 3
+			}
+			rows, err := ftsSearch(q.SearchDocuments, a.Query, docLimit)
+			if err == nil && rows != nil {
+				for rows.Next() {
+					var id int64
+					var filePath string
+					var title, kind, snippet sql.NullString
+					var rank float64
+					if rows.Scan(&id, &filePath, &title, &kind, &snippet, &rank) == nil {
+						name := title.String
+						if name == "" {
+							name = filepath.Base(filePath)
+						}
+						results = append(results, searchResult{
+							File: filePath, Kind: "document", Name: name, Snippet: truncateSnippet(snippet.String),
+						})
+					}
+				}
+				rows.Close()
+			}
+		}
+
 		// Constrained query expansion: when no results came back, surface candidate
 		// names from the index that substring-match the user's query terms. The LLM
 		// can re-issue a query with one of these to land on a real symbol.
@@ -228,6 +258,11 @@ func exactNameMatches(query string, results []searchResult) []searchResult {
 	terms := splitTerms(query)
 	var exact []searchResult
 	for _, r := range results {
+		// A document titled exactly like the query must never trigger the
+		// "definitive, stop searching" path reserved for symbol definitions.
+		if r.Kind == "document" {
+			continue
+		}
 		for _, t := range terms {
 			if equalFold(r.Name, t) {
 				exact = append(exact, r)

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+	"unicode/utf8"
 
 	"github.com/maxcontext/max-context/internal/artifacts"
 	"github.com/maxcontext/max-context/internal/db"
@@ -100,6 +101,18 @@ func RunWorker(ctx context.Context, root string, database *sql.DB, q *db.Queries
 			if o.skipsFile(root, path, excl) {
 				continue
 			}
+			// Documents take a dedicated path: no parser, no resolver, and — critically —
+			// no ResolverCache invalidation on failure.
+			if _, isDoc := DocKindForPath(path); isDoc {
+				if err := IndexDocFile(ctx, root, path, database); err != nil {
+					fmt.Fprintf(os.Stderr, "max-context: index %s failed: %v\n", path, err)
+					artifacts.RecordIndexError(database, path, err.Error())
+				} else {
+					artifacts.ClearIndexError(database, path)
+					artifacts.SetLastIncrementalIndex(database, time.Now())
+				}
+				continue
+			}
 			if err := IndexFile(ctx, root, path, database, q, cache); err != nil {
 				// Surface the failure so it shows up in staleness; a bad single-file
 				// reindex must not silently leave the index out of date.
@@ -124,10 +137,21 @@ func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries, op
 		exclude, include, extensions, maxFileSize = o.Exclude, o.Include, o.Extensions, o.MaxFileSize
 	}
 	ignore, _ := NewIgnoreMatcherWithExtra(root, exclude)
-	sc := &Scanner{Root: root, Ignore: ignore, Extensions: extensions, Includes: include, MaxFileSize: maxFileSize}
-	files, err := sc.Scan()
+	sc := &Scanner{Root: root, Ignore: ignore, Extensions: extensions, Includes: include, MaxFileSize: maxFileSize, IncludeDocs: true}
+	scanned, err := sc.Scan()
 	if err != nil {
 		return fmt.Errorf("scan: %w", err)
+	}
+
+	// Documents are indexed as plain text; only code files go through the
+	// parser and resolver below.
+	var files, docFiles []string
+	for _, rel := range scanned {
+		if _, ok := DocKindForPath(rel); ok {
+			docFiles = append(docFiles, rel)
+		} else {
+			files = append(files, rel)
+		}
 	}
 
 	tx, err := database.Begin()
@@ -150,6 +174,9 @@ func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries, op
 		return err
 	}
 	if _, err := tx.Exec("DELETE FROM file_summaries"); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM documents"); err != nil {
 		return err
 	}
 
@@ -270,12 +297,61 @@ func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries, op
 		}
 	}
 
+	// Documents: whole-file plain-text rows; FTS maintained by the V8 triggers
+	// in the same transaction.
+	for _, rel := range docFiles {
+		if err := insertDocument(tx, root, rel); err != nil {
+			return err
+		}
+	}
+
 	// FTS is maintained by sync triggers (schema V6) inside this transaction, so
 	// the commit flips data + FTS atomically — no separate post-commit rebuild and
 	// no window where a concurrent query sees an empty FTS index.
 	return tx.Commit()
 }
 
+// insertDocument reads one non-code file and writes its documents row. Unreadable
+// or non-UTF-8 files are skipped silently — never an index failure.
+func insertDocument(tx *sql.Tx, root, relPath string) error {
+	kind, ok := DocKindForPath(relPath)
+	if !ok {
+		return nil
+	}
+	content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relPath)))
+	if err != nil || !utf8.Valid(content) {
+		return nil
+	}
+	_, err = tx.Exec(
+		"INSERT INTO documents (file_path, title, kind, content) VALUES (?, ?, ?, ?)",
+		filepath.ToSlash(relPath), docTitle(relPath, content), kind, string(content),
+	)
+	return err
+}
+
+// IndexDocFile reindexes a single non-code document (incremental). A missing
+// file is treated as a deletion. Documents never touch the parser, the call
+// graph, or the worker's ResolverCache — a doc change must not invalidate the
+// delta-maintained resolver or re-resolve any call edges.
+func IndexDocFile(ctx context.Context, root, relPath string, database *sql.DB) error {
+	if _, ok := DocKindForPath(relPath); !ok {
+		return nil
+	}
+	tx, err := database.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	path := filepath.ToSlash(relPath)
+	if _, err := tx.Exec("DELETE FROM documents WHERE file_path = ?", path); err != nil {
+		return err
+	}
+	if err := insertDocument(tx, root, relPath); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
 
 // insertFunction writes one function row including the resolution metadata
 // (kind, receiver_type, package) used by the scope resolver.

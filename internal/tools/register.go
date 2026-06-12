@@ -30,13 +30,13 @@ func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot st
 		},
 		{
 			Name:        "query_codebase",
-			Description: "Fuzzy/keyword search of the indexed codebase for functions and types. Returns terse ranked results plus answer_status and recommended_next_action. For overloaded exact names, canonical type/class definitions outrank same-named methods/properties. For 'where is X defined?' prefer get_definition; for dependency/usage questions prefer get_impact or get_call_chain. One or two queries is usually enough.",
+			Description: "Fuzzy/keyword search of the indexed codebase for functions, types, and docs/config files (markdown, YAML, JSON, proto, GraphQL, SQL, Dockerfiles). Returns terse ranked results plus answer_status and recommended_next_action. For overloaded exact names, canonical type/class definitions outrank same-named methods/properties. For 'where is X defined?' prefer get_definition; for dependency/usage questions prefer get_impact or get_call_chain. One or two queries is usually enough.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"query":       map[string]string{"type": "string", "description": "Search query (keywords or function/type name)"},
 					"max_results": map[string]interface{}{"type": "integer", "description": "Max results to return (1-50)", "default": 3},
-					"scope":       map[string]interface{}{"type": "string", "description": "Restrict search scope", "enum": []string{"all", "functions", "types", "files"}, "default": "all"},
+					"scope":       map[string]interface{}{"type": "string", "description": "Restrict search scope. 'docs' searches non-code files (markdown, YAML, JSON, proto, GraphQL, SQL, Dockerfiles) only.", "enum": []string{"all", "functions", "types", "files", "docs"}, "default": "all"},
 					"file_filter": map[string]interface{}{"type": "string", "description": "Glob pattern to filter by file path (e.g. 'src/**/*.ts')"},
 				},
 				"required": []string{"query"},

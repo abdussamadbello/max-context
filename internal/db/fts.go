@@ -15,10 +15,19 @@ func RebuildTypesFTS(db *sql.DB) error {
 	return err
 }
 
-// RebuildAllFTS runs both FTS rebuilds.
+// RebuildDocumentsFTS repopulates the documents_fts index from the documents table.
+func RebuildDocumentsFTS(db *sql.DB) error {
+	_, err := db.Exec("INSERT INTO documents_fts(documents_fts) VALUES('rebuild')")
+	return err
+}
+
+// RebuildAllFTS runs all FTS rebuilds.
 func RebuildAllFTS(db *sql.DB) error {
 	if err := RebuildFunctionsFTS(db); err != nil {
 		return err
 	}
-	return RebuildTypesFTS(db)
+	if err := RebuildTypesFTS(db); err != nil {
+		return err
+	}
+	return RebuildDocumentsFTS(db)
 }
