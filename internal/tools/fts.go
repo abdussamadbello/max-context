@@ -27,6 +27,104 @@ func ftsSearch(stmt *sql.Stmt, rawQuery string, limit int) (*sql.Rows, error) {
 	return stmt.Query(sanitized, limit)
 }
 
+// ftsSearchPrebuilt runs an already-built FTS5 MATCH expression (from
+// expandFTSQuery) with no sanitization fallback. Expansion is best-effort: a
+// syntax error degrades to an empty result set, never an error.
+func ftsSearchPrebuilt(stmt *sql.Stmt, query string, limit int) (*sql.Rows, error) {
+	rows, err := stmt.Query(query, limit)
+	if err != nil {
+		if isFTSSyntaxError(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return rows, nil
+}
+
+// splitIdentifier splits a compound identifier into lowercase word parts:
+// camelCase ("getUserByID" -> get, user, by, id — acronym runs handled, so
+// "HTTPServer" -> http, server), snake_case, and digit->letter boundaries.
+// Parts shorter than 2 characters are dropped. Returns nil when the token
+// doesn't usefully split (fewer than 2 parts).
+func splitIdentifier(tok string) []string {
+	runes := []rune(tok)
+	var parts []string
+	var cur []rune
+	flush := func() {
+		if len(cur) >= 2 {
+			parts = append(parts, strings.ToLower(string(cur)))
+		}
+		cur = nil
+	}
+	isUpper := func(r rune) bool { return r >= 'A' && r <= 'Z' }
+	isLower := func(r rune) bool { return r >= 'a' && r <= 'z' }
+	isDigit := func(r rune) bool { return r >= '0' && r <= '9' }
+	for i, r := range runes {
+		if r == '_' {
+			flush()
+			continue
+		}
+		if i > 0 {
+			prev := runes[i-1]
+			switch {
+			case isUpper(r) && (isLower(prev) || isDigit(prev)):
+				// wordEnd|NewWord
+				flush()
+			case isUpper(prev) && isUpper(r) && i+1 < len(runes) && isLower(runes[i+1]):
+				// acronym run ends: HTTP|Server
+				flush()
+			case isLower(r) && isDigit(prev):
+				// digit run ends: html5|parser (letters after digits start a word;
+				// digits stay attached to the word before them: "html5")
+				flush()
+			}
+		}
+		cur = append(cur, r)
+	}
+	flush()
+	if len(parts) < 2 {
+		return nil
+	}
+	return parts
+}
+
+// expandFTSQuery rewrites a query so compound identifiers also match their
+// word parts: each splittable token becomes ("getUserByID" OR ("get" "user"
+// "by" "id")); other tokens stay quoted; groups are ANDed. Returns "" when no
+// token splits — there is nothing the plain sanitized query didn't already
+// try. Used only as a zero-results fallback so default ranking stays exact.
+func expandFTSQuery(q string) string {
+	tokens := tokenizeFTS(q)
+	if len(tokens) == 0 {
+		return ""
+	}
+	anySplit := false
+	var b strings.Builder
+	for i, tok := range tokens {
+		if i > 0 {
+			b.WriteByte(' ')
+		}
+		parts := splitIdentifier(tok)
+		if parts == nil {
+			b.WriteString(`"` + tok + `"`)
+			continue
+		}
+		anySplit = true
+		b.WriteString(`("` + tok + `" OR (`)
+		for j, p := range parts {
+			if j > 0 {
+				b.WriteByte(' ')
+			}
+			b.WriteString(`"` + p + `"`)
+		}
+		b.WriteString(`))`)
+	}
+	if !anySplit {
+		return ""
+	}
+	return b.String()
+}
+
 // classifyFTSError maps a search failure to the right RPC error. A syntax error
 // (should be rare now that ftsSearch sanitizes) tells the agent to simplify the
 // query — NOT CodeIndexBusy, which made it retry the same broken query in a loop.

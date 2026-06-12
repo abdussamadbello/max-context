@@ -397,3 +397,53 @@ func TestQueryCodebase_DocsScope(t *testing.T) {
 		t.Error("document title match must not produce a definitive answer_status")
 	}
 }
+
+// TestQueryCodebase_ExpansionFallback: a compound-identifier query that
+// AND-matches nothing must retry with the identifier split into word parts
+// and flag the response with expanded_query.
+func TestQueryCodebase_ExpansionFallback(t *testing.T) {
+	dir := t.TempDir()
+	database, err := db.Open(filepath.Join(dir, "exp.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	if err := db.Migrate(database); err != nil {
+		t.Fatal(err)
+	}
+	q, err := db.PrepareQueries(database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer q.Close()
+
+	// Docstring holds the split words, never the compound token, so the raw
+	// query "fetchUserProfile" matches nothing but its expansion does.
+	if _, err := q.InsertFunction.Exec("LoadAccount", "account.go", 1, 10, "go", 1, "", "fetch user profile from the store", "LoadAccount()"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.RebuildAllFTS(database); err != nil {
+		t.Fatal(err)
+	}
+
+	h := QueryCodebaseHandler(database, q, "")
+	resp, err := h(json.RawMessage(`{"query":"fetchUserProfile"}`))
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	var out struct {
+		Results []struct {
+			Name string `json:"name"`
+		} `json:"results"`
+		ExpandedQuery bool `json:"expanded_query"`
+	}
+	if err := json.Unmarshal([]byte(resp.([]mcp.ContentItem)[0].Text), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Results) != 1 || out.Results[0].Name != "LoadAccount" {
+		t.Fatalf("expansion fallback results = %+v", out.Results)
+	}
+	if !out.ExpandedQuery {
+		t.Error("expanded_query flag missing")
+	}
+}

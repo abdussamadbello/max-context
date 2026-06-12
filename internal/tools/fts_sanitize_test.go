@@ -124,3 +124,47 @@ func TestClassifyFTSError(t *testing.T) {
 		t.Errorf("busy error (data present) mapped to %d, want CodeIndexBusy %d", e.Code, mcp.CodeIndexBusy)
 	}
 }
+
+func TestSplitIdentifier(t *testing.T) {
+	cases := []struct {
+		in   string
+		want []string
+	}{
+		{"getUserByID", []string{"get", "user", "by", "id"}},
+		{"snake_case_name", []string{"snake", "case", "name"}},
+		{"HTTPServer", []string{"http", "server"}},
+		{"parseHTML5Doc", []string{"parse", "html5", "doc"}},
+		{"plain", nil}, // single word: no useful split
+		{"ID", nil},    // too short to split
+		{"aB", nil},    // parts under 2 chars dropped -> fewer than 2 parts
+	}
+	for _, c := range cases {
+		got := splitIdentifier(c.in)
+		if len(got) != len(c.want) {
+			t.Errorf("splitIdentifier(%q) = %v, want %v", c.in, got, c.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Errorf("splitIdentifier(%q) = %v, want %v", c.in, got, c.want)
+				break
+			}
+		}
+	}
+}
+
+func TestExpandFTSQuery(t *testing.T) {
+	if got := expandFTSQuery("getUserByID"); got != `("getUserByID" OR ("get" "user" "by" "id"))` {
+		t.Errorf("expandFTSQuery(getUserByID) = %s", got)
+	}
+	if got := expandFTSQuery("getUserByID handler"); got != `("getUserByID" OR ("get" "user" "by" "id")) "handler"` {
+		t.Errorf("expandFTSQuery(two tokens) = %s", got)
+	}
+	// Nothing splits -> "" (the plain sanitized query already tried this).
+	if got := expandFTSQuery("plain words only"); got != "" {
+		t.Errorf("expandFTSQuery(plain) = %q, want empty", got)
+	}
+	if got := expandFTSQuery("!!!"); got != "" {
+		t.Errorf("expandFTSQuery(no tokens) = %q, want empty", got)
+	}
+}

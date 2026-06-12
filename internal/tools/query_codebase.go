@@ -69,89 +69,114 @@ func QueryCodebaseHandler(database *sql.DB, q *db.Queries, projectRoot string) m
 			scope = "all"
 		}
 
-		var results []searchResult
-
-		if scope == "all" || scope == "functions" {
-			rows, err := ftsSearch(q.SearchFunctions, a.Query, limit)
-			if err != nil {
-				return nil, classifyFTSError(database, err)
+		// search runs all in-scope FTS lookups for one query string; prebuilt
+		// queries (the expansion fallback) skip the raw-then-sanitize logic.
+		search := func(query string, prebuilt bool) ([]searchResult, error) {
+			fts := ftsSearch
+			if prebuilt {
+				fts = ftsSearchPrebuilt
 			}
-			for rows != nil && rows.Next() {
-				var id int64
-				var name, filePath string
-				var startLine, endLine int
-				var language string
-				var fnKind sql.NullString
-				var exported int
-				var code, docstring, signature, snippet sql.NullString
-				var rank float64
-				if rows.Scan(&id, &name, &filePath, &startLine, &endLine, &language, &fnKind, &exported, &code, &docstring, &signature, &snippet, &rank) == nil {
-					kind := "function"
-					if fnKind.Valid && fnKind.String == "method" {
-						kind = "method"
-					}
-					r := searchResult{
-						File: filePath, Line: startLine, Kind: kind, Name: name, Snippet: truncateSnippet(snippet.String),
-					}
-					annotateSearchResult(&r)
-					results = append(results, r)
+			var out []searchResult
+			if scope == "all" || scope == "functions" {
+				rows, err := fts(q.SearchFunctions, query, limit)
+				if err != nil {
+					return out, err
 				}
-			}
-			if rows != nil {
-				rows.Close()
-			}
-		}
-		if scope == "all" || scope == "types" {
-			// Types search is best-effort: a failure here never fails the whole
-			// call (functions results may already be present). ftsSearch applies the
-			// same raw-then-sanitized fallback.
-			rows, err := ftsSearch(q.SearchTypes, a.Query, limit)
-			if err == nil && rows != nil {
-				for rows.Next() {
+				for rows != nil && rows.Next() {
 					var id int64
-					var name, filePath, kind string
-					var definition string
+					var name, filePath string
+					var startLine, endLine int
+					var language string
+					var fnKind sql.NullString
 					var exported int
-					var snippet sql.NullString
+					var code, docstring, signature, snippet sql.NullString
 					var rank float64
-					if rows.Scan(&id, &name, &filePath, &kind, &definition, &exported, &snippet, &rank) == nil {
+					if rows.Scan(&id, &name, &filePath, &startLine, &endLine, &language, &fnKind, &exported, &code, &docstring, &signature, &snippet, &rank) == nil {
+						kind := "function"
+						if fnKind.Valid && fnKind.String == "method" {
+							kind = "method"
+						}
 						r := searchResult{
-							File: filePath, Kind: "type/" + kind, Name: name, Snippet: truncateSnippet(snippet.String),
+							File: filePath, Line: startLine, Kind: kind, Name: name, Snippet: truncateSnippet(snippet.String),
 						}
 						annotateSearchResult(&r)
-						results = append(results, r)
+						out = append(out, r)
 					}
 				}
-				rows.Close()
+				if rows != nil {
+					rows.Close()
+				}
 			}
+			if scope == "all" || scope == "types" {
+				// Types search is best-effort: a failure here never fails the whole
+				// call (functions results may already be present). ftsSearch applies the
+				// same raw-then-sanitized fallback.
+				rows, err := fts(q.SearchTypes, query, limit)
+				if err == nil && rows != nil {
+					for rows.Next() {
+						var id int64
+						var name, filePath, kind string
+						var definition string
+						var exported int
+						var snippet sql.NullString
+						var rank float64
+						if rows.Scan(&id, &name, &filePath, &kind, &definition, &exported, &snippet, &rank) == nil {
+							r := searchResult{
+								File: filePath, Kind: "type/" + kind, Name: name, Snippet: truncateSnippet(snippet.String),
+							}
+							annotateSearchResult(&r)
+							out = append(out, r)
+						}
+					}
+					rows.Close()
+				}
+			}
+			if scope == "all" || scope == "docs" {
+				// Document search is best-effort, like types. In "all", docs are appended
+				// AFTER code results and capped low: bm25 ranks are not comparable across
+				// FTS tables, and code must stay the primary answer surface.
+				docLimit := limit
+				if scope == "all" && docLimit > 3 {
+					docLimit = 3
+				}
+				rows, err := fts(q.SearchDocuments, query, docLimit)
+				if err == nil && rows != nil {
+					for rows.Next() {
+						var id int64
+						var filePath string
+						var title, kind, snippet sql.NullString
+						var rank float64
+						if rows.Scan(&id, &filePath, &title, &kind, &snippet, &rank) == nil {
+							name := title.String
+							if name == "" {
+								name = filepath.Base(filePath)
+							}
+							out = append(out, searchResult{
+								File: filePath, Kind: "document", Name: name, Snippet: truncateSnippet(snippet.String),
+							})
+						}
+					}
+					rows.Close()
+				}
+			}
+			return out, nil
 		}
 
-		if scope == "all" || scope == "docs" {
-			// Document search is best-effort, like types. In "all", docs are appended
-			// AFTER code results and capped low: bm25 ranks are not comparable across
-			// FTS tables, and code must stay the primary answer surface.
-			docLimit := limit
-			if scope == "all" && docLimit > 3 {
-				docLimit = 3
-			}
-			rows, err := ftsSearch(q.SearchDocuments, a.Query, docLimit)
-			if err == nil && rows != nil {
-				for rows.Next() {
-					var id int64
-					var filePath string
-					var title, kind, snippet sql.NullString
-					var rank float64
-					if rows.Scan(&id, &filePath, &title, &kind, &snippet, &rank) == nil {
-						name := title.String
-						if name == "" {
-							name = filepath.Base(filePath)
-						}
-						results = append(results, searchResult{
-							File: filePath, Kind: "document", Name: name, Snippet: truncateSnippet(snippet.String),
-						})
-					}
+		results, err := search(a.Query, false)
+		if err != nil {
+			return nil, classifyFTSError(database, err)
+		}
+
+		// Identifier-splitting fallback: a query like "getUserByID handler" that
+		// AND-matched nothing retries with compound tokens expanded to their word
+		// parts. Fallback-only, so default ranking stays exact-match.
+		expandedQuery := false
+		if len(results) == 0 {
+			if exp := expandFTSQuery(a.Query); exp != "" {
+				if expResults, expErr := search(exp, true); expErr == nil && len(expResults) > 0 {
+					results = expResults
+					expandedQuery = true
 				}
-				rows.Close()
 			}
 		}
 
@@ -216,6 +241,11 @@ func QueryCodebaseHandler(database *sql.DB, q *db.Queries, projectRoot string) m
 					payload["recommended_next_action"] = actionCallImpactOrChain
 				}
 			}
+		}
+		if expandedQuery {
+			// Observable signal that results came from the identifier-splitting
+			// retry, not an exact match of the original query.
+			payload["expanded_query"] = true
 		}
 		if len(suggestions) > 0 {
 			payload["suggestions"] = suggestions
