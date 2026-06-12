@@ -5,8 +5,35 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
+
+// topLevelDir returns the first path segment ("internal/db/x.go" -> "internal").
+func topLevelDir(p string) string {
+	if i := strings.IndexByte(p, '/'); i > 0 {
+		return p[:i]
+	}
+	return p
+}
+
+// topFilesByScore returns the n highest-scoring files, deterministically.
+func topFilesByScore(scores map[string]float64, n int) []string {
+	files := make([]string, 0, len(scores))
+	for f := range scores {
+		files = append(files, f)
+	}
+	sort.Slice(files, func(a, b int) bool {
+		if scores[files[a]] != scores[files[b]] {
+			return scores[files[a]] > scores[files[b]]
+		}
+		return files[a] < files[b]
+	})
+	if len(files) > n {
+		files = files[:n]
+	}
+	return files
+}
 
 // WriteArchitecture generates .max-context/architecture.md from the database.
 func WriteArchitecture(dir string, database *sql.DB) error {
@@ -32,8 +59,21 @@ func WriteArchitecture(dir string, database *sql.DB) error {
 		rows.Close()
 	}
 
-	// Directory map (top-level dirs with file counts)
+	// PageRank over the call graph drives the ranked sections below: which
+	// functions the codebase structurally depends on, which directories carry
+	// that weight, and which files' imports matter most. Also makes the output
+	// deterministic (the old map iteration produced random section order).
+	ranked, rankErr := PageRankFunctions(database)
+	fileScores := FileScores(ranked)
+
+	// Directory map: top-level dirs with symbol counts, ordered by aggregate
+	// PageRank weight (structural importance), not name or map order.
 	b.WriteString("\n## Directory map\n\n")
+	type dirEntry struct {
+		name    string
+		symbols int
+		score   float64
+	}
 	dirRows, err := database.Query(`
 		SELECT file_path, COUNT(*) as cnt FROM functions
 		GROUP BY file_path
@@ -44,50 +84,61 @@ func WriteArchitecture(dir string, database *sql.DB) error {
 			var p string
 			var cnt int
 			if dirRows.Scan(&p, &cnt) == nil {
-				parts := strings.Split(p, "/")
-				if len(parts) > 0 {
-					top := parts[0]
-					dirCounts[top] += cnt
-				}
+				dirCounts[topLevelDir(p)] += cnt
 			}
 		}
 		dirRows.Close()
+		dirScores := make(map[string]float64)
+		for f, s := range fileScores {
+			dirScores[topLevelDir(f)] += s
+		}
+		var dirs []dirEntry
 		for d, n := range dirCounts {
-			b.WriteString(fmt.Sprintf("- %s/: %d symbols\n", d, n))
+			dirs = append(dirs, dirEntry{name: d, symbols: n, score: dirScores[d]})
 		}
-	}
-
-	// High-connectivity functions (most called)
-	b.WriteString("\n## High-connectivity functions\n\n")
-	callRows, err := database.Query(`
-		SELECT f.name, f.file_path, COUNT(*) as call_count
-		FROM calls c JOIN functions f ON f.id = c.callee_id
-		GROUP BY c.callee_id ORDER BY call_count DESC LIMIT 10
-	`)
-	if err == nil {
-		for callRows.Next() {
-			var name, path string
-			var n int
-			if callRows.Scan(&name, &path, &n) == nil {
-				b.WriteString(fmt.Sprintf("- %s (%s): %d callers\n", name, path, n))
+		sort.Slice(dirs, func(a, b int) bool {
+			if dirs[a].score != dirs[b].score {
+				return dirs[a].score > dirs[b].score
 			}
+			return dirs[a].name < dirs[b].name
+		})
+		for _, d := range dirs {
+			b.WriteString(fmt.Sprintf("- %s/: %d symbols\n", d.name, d.symbols))
 		}
-		callRows.Close()
 	}
 
-	// Module dependencies (imports)
+	// Key functions: top PageRank — the symbols the call graph converges on.
+	b.WriteString("\n## Key functions (PageRank)\n\n")
+	if rankErr == nil {
+		for i, f := range ranked {
+			if i >= 15 {
+				break
+			}
+			b.WriteString(fmt.Sprintf("- %s (%s)\n", f.Name, f.FilePath))
+		}
+	}
+
+	// Module dependencies: imports of the highest-ranked files (instead of an
+	// arbitrary LIMIT 30 over the whole imports table).
 	b.WriteString("\n## Module dependencies\n\n")
-	impRows, err := database.Query(`
-		SELECT file_path, imported_path FROM imports LIMIT 30
-	`)
-	if err == nil {
-		for impRows.Next() {
-			var from, to string
-			if impRows.Scan(&from, &to) == nil {
-				b.WriteString(fmt.Sprintf("- %s -> %s\n", from, to))
+	depLines := 0
+	for _, file := range topFilesByScore(fileScores, 10) {
+		impRows, err := database.Query(
+			`SELECT DISTINCT imported_path FROM imports WHERE file_path = ? ORDER BY imported_path LIMIT 5`, file)
+		if err != nil {
+			continue
+		}
+		for impRows.Next() && depLines < 30 {
+			var to string
+			if impRows.Scan(&to) == nil {
+				b.WriteString(fmt.Sprintf("- %s -> %s\n", file, to))
+				depLines++
 			}
 		}
 		impRows.Close()
+		if depLines >= 30 {
+			break
+		}
 	}
 
 	p := filepath.Join(dir, "architecture.md")
