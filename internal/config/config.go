@@ -5,7 +5,15 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+
+	"github.com/maxcontext/max-context/pkg/treesitter"
 )
+
+// DefaultMaxFileSize caps indexed files when config.json sets no maxFileSize.
+const DefaultMaxFileSize int64 = 1 << 20 // 1 MB
+
+// DefaultWatchDebounceMs is the watcher debounce when config.json sets none.
+const DefaultWatchDebounceMs = 500
 
 // Flags holds CLI flag values.
 type Flags struct {
@@ -34,19 +42,19 @@ func (f *Flags) Register(fs *flag.FlagSet) {
 // Config is the merged configuration (flags + optional config file).
 type Config struct {
 	Flags
-	ProjectRoot    string
-	DBPath         string
-	Verbose        bool
-	ConfigFile     *ConfigFile
+	ProjectRoot string
+	DBPath      string
+	Verbose     bool
+	ConfigFile  *ConfigFile
 }
 
 // ConfigFile is the optional .max-context/config.json structure.
 type ConfigFile struct {
-	Languages      []string `json:"languages"`
-	Include        []string `json:"include"`
-	Exclude        []string `json:"exclude"`
-	WatchDebounceMs int     `json:"watchDebounceMs"`
-	MaxFileSize    int64    `json:"maxFileSize"`
+	Languages       []string `json:"languages"`
+	Include         []string `json:"include"`
+	Exclude         []string `json:"exclude"`
+	WatchDebounceMs int      `json:"watchDebounceMs"`
+	MaxFileSize     int64    `json:"maxFileSize"`
 }
 
 // Load merges flags with optional .max-context/config.json and returns Config.
@@ -73,4 +81,55 @@ func Load(projectRoot string, f *Flags) (*Config, error) {
 		}
 	}
 	return cfg, nil
+}
+
+// EffectiveMaxFileSize returns the configured maxFileSize, or DefaultMaxFileSize.
+func (c *Config) EffectiveMaxFileSize() int64 {
+	if c.ConfigFile != nil && c.ConfigFile.MaxFileSize > 0 {
+		return c.ConfigFile.MaxFileSize
+	}
+	return DefaultMaxFileSize
+}
+
+// EffectiveDebounceMs returns the configured watchDebounceMs, or DefaultWatchDebounceMs.
+func (c *Config) EffectiveDebounceMs() int {
+	if c.ConfigFile != nil && c.ConfigFile.WatchDebounceMs > 0 {
+		return c.ConfigFile.WatchDebounceMs
+	}
+	return DefaultWatchDebounceMs
+}
+
+// LanguageExtensions maps the configured language names to file extensions.
+// An empty/absent languages list returns nil, meaning all supported languages.
+func (c *Config) LanguageExtensions() []string {
+	if c.ConfigFile == nil || len(c.ConfigFile.Languages) == 0 {
+		return nil
+	}
+	seen := make(map[string]bool)
+	var exts []string
+	for _, lang := range c.ConfigFile.Languages {
+		for _, e := range treesitter.ExtensionsForLang(lang) {
+			if !seen[e] {
+				seen[e] = true
+				exts = append(exts, e)
+			}
+		}
+	}
+	return exts
+}
+
+// IncludeGlobs returns the configured include patterns (nil = include everything).
+func (c *Config) IncludeGlobs() []string {
+	if c.ConfigFile == nil {
+		return nil
+	}
+	return c.ConfigFile.Include
+}
+
+// ExcludeGlobs returns the configured exclude patterns.
+func (c *Config) ExcludeGlobs() []string {
+	if c.ConfigFile == nil {
+		return nil
+	}
+	return c.ConfigFile.Exclude
 }

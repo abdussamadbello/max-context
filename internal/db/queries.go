@@ -9,6 +9,7 @@ import (
 type Queries struct {
 	SearchFunctions       *sql.Stmt
 	SearchTypes           *sql.Stmt
+	SearchDocuments       *sql.Stmt
 	GetCallersOf          *sql.Stmt
 	GetCalleesOf          *sql.Stmt
 	InsertFunction        *sql.Stmt
@@ -56,6 +57,20 @@ func PrepareQueries(db *sql.DB) (*Queries, error) {
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("prepare SearchTypes: %w", err)
+	}
+
+	q.SearchDocuments, err = db.Prepare(`
+		SELECT d.id, d.file_path, d.title, d.kind,
+		       snippet(documents_fts, 2, '»', '«', '...', 30) AS snippet,
+		       bm25(documents_fts, 5.0, 3.0, 1.0) AS rank
+		FROM documents_fts
+		JOIN documents d ON d.id = documents_fts.rowid
+		WHERE documents_fts MATCH ?
+		ORDER BY rank
+		LIMIT ?
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("prepare SearchDocuments: %w", err)
 	}
 
 	q.GetCallersOf, err = db.Prepare(`
@@ -157,7 +172,7 @@ func PrepareQueries(db *sql.DB) (*Queries, error) {
 // Close closes all prepared statements.
 func (q *Queries) Close() error {
 	for _, stmt := range []*sql.Stmt{
-		q.SearchFunctions, q.SearchTypes, q.GetCallersOf, q.GetCalleesOf,
+		q.SearchFunctions, q.SearchTypes, q.SearchDocuments, q.GetCallersOf, q.GetCalleesOf,
 		q.InsertFunction, q.InsertCall, q.InsertType, q.InsertImport,
 		q.InsertFileSummary, q.InsertChange,
 		q.DeleteFunctionsByFile, q.DeleteCallsByFile, q.DeleteTypesByFile, q.DeleteImportsByFile, q.DeleteFileSummary,

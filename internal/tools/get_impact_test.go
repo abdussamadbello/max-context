@@ -94,7 +94,7 @@ func TestGetImpact_FromHEAD_DefaultCallers(t *testing.T) {
 		t.Fatalf("unexpected response shape: %+v", resp)
 	}
 	var out struct {
-		Changed  []struct {
+		Changed []struct {
 			File    string   `json:"file"`
 			Symbols []string `json:"symbols"`
 		} `json:"changed"`

@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const schemaVersion = 7
+const schemaVersion = 8
 
 // Migrate ensures the database schema is at the current version, running
 // migrations if needed. Call after Open.
@@ -78,6 +78,7 @@ var migrations = map[int]func(*sql.Tx) error{
 	5: migrationV5,
 	6: migrationV6,
 	7: migrationV7,
+	8: migrationV8,
 }
 
 func migrationV1(tx *sql.Tx) error {
@@ -400,6 +401,50 @@ func migrationV7(tx *sql.Tx) error {
 			error     TEXT NOT NULL,
 			timestamp INTEGER NOT NULL
 		);
+	`)
+	return err
+}
+
+// migrationV8 adds plain-text document indexing: non-code files (markdown,
+// YAML, JSON, TOML, proto, GraphQL, SQL, XML, Dockerfiles) stored whole in
+// `documents` and searched via an external-content FTS5 table, so
+// query_codebase can answer schema/config/docs questions the code index is
+// blind to. Same self-maintaining trigger pattern as migrationV6: the
+// 'delete' command form keeps the external-content index consistent on
+// delete/update, and every mutation updates FTS inside the same transaction.
+func migrationV8(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		CREATE TABLE IF NOT EXISTS documents (
+			id        INTEGER PRIMARY KEY AUTOINCREMENT,
+			file_path TEXT NOT NULL,
+			title     TEXT,
+			kind      TEXT NOT NULL,
+			content   TEXT NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_documents_file ON documents(file_path);
+
+		CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
+			title,
+			file_path,
+			content,
+			content='documents',
+			content_rowid='id'
+		);
+
+		CREATE TRIGGER IF NOT EXISTS documents_ai AFTER INSERT ON documents BEGIN
+			INSERT INTO documents_fts(rowid, title, file_path, content)
+			VALUES (new.id, new.title, new.file_path, new.content);
+		END;
+		CREATE TRIGGER IF NOT EXISTS documents_ad AFTER DELETE ON documents BEGIN
+			INSERT INTO documents_fts(documents_fts, rowid, title, file_path, content)
+			VALUES ('delete', old.id, old.title, old.file_path, old.content);
+		END;
+		CREATE TRIGGER IF NOT EXISTS documents_au AFTER UPDATE ON documents BEGIN
+			INSERT INTO documents_fts(documents_fts, rowid, title, file_path, content)
+			VALUES ('delete', old.id, old.title, old.file_path, old.content);
+			INSERT INTO documents_fts(rowid, title, file_path, content)
+			VALUES (new.id, new.title, new.file_path, new.content);
+		END;
 	`)
 	return err
 }

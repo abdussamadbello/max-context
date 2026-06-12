@@ -1,5 +1,10 @@
 # Maximum Context
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![Go 1.22+](https://img.shields.io/badge/Go-1.22+-00ADD8.svg)](./go.mod)
+[![GitHub Release](https://img.shields.io/github/v/release/maxcontext/max-context)](https://github.com/maxcontext/max-context/releases)
+[![MCP](https://img.shields.io/badge/MCP-stdio-8A2BE2.svg)](https://modelcontextprotocol.io)
+
 Maximum Context is a **Go-based MCP (Model Context Protocol) server** that gives AI coding assistants deep, always-current awareness of a codebase. It indexes a project's structure, symbols, dependencies, and architecture, then exposes that knowledge through a focused, **decisive MCP tool interface**.
 
 ## Why max-context
@@ -60,6 +65,24 @@ Pick one:
 > - **Windows:** add the install directory to your user PATH (Settings → Environment Variables), or use the PowerShell one-liner printed by `make install-path`.
 > - The install script defaults to `~/.local/bin`; set `MAX_CONTEXT_INSTALL_DIR` to override.
 
+## Add to your editor (one click)
+
+With the binary on your PATH, these deeplinks register the MCP server in one click
+(see [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) — link formats drift, verify at release time):
+
+- **Cursor:** [`Add max-context to Cursor`](https://cursor.com/en/install-mcp?name=max-context&config=eyJjb21tYW5kIjoibWF4LWNvbnRleHQifQ%3D%3D)
+- **VS Code:** [`Add max-context to VS Code`](vscode:mcp/install?%7B%22name%22%3A%22max-context%22%2C%22command%22%3A%22max-context%22%7D)
+
+Or add it manually to any MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "max-context": { "command": "max-context", "args": [] }
+  }
+}
+```
+
 ## Quick Start
 
 ```bash
@@ -104,6 +127,49 @@ After installing `max-context` and ensuring it’s on your PATH:
 | `--watch` | Start only the file watcher |
 | `--version` | Print version and exit |
 | `setup <cli>` | Generate config for claude-code, vscode, codex, antigravity, cursor, windsurf, or all |
+| `query` / `def` / `calls` / `impact` / `arch` / `tool` | One-shot CLI access to the MCP tools (below) |
+
+## CLI tool access
+
+Every MCP tool is also a one-shot subcommand that prints the same JSON to
+stdout — handy for shell scripts, hooks, and code-executing agents that prefer
+a CLI over MCP tool definitions:
+
+```bash
+max-context query "resolver cache" -n 5 -scope docs   # query_codebase
+max-context def IndexFile                              # get_definition
+max-context calls Migrate -direction callers -depth 3  # get_call_chain
+max-context impact -from-git main..HEAD                # get_impact
+max-context arch                                       # get_architecture
+max-context tool get_call_chain --json '{"function_name":"Migrate"}'  # generic form
+```
+
+Global flags go before the subcommand (`max-context -project /repo query …`).
+Build the index first with `max-context --index`.
+
+## Configuration (`.max-context/config.json`)
+
+Optional per-project settings, all keys optional:
+
+```json
+{
+  "languages": ["go", "typescript"],
+  "include": ["src/*.go"],
+  "exclude": ["generated/"],
+  "watchDebounceMs": 500,
+  "maxFileSize": 1048576
+}
+```
+
+- **languages** — restrict indexing to these languages (default: all supported). Accepts names or aliases (`ts`, `py`, `golang`, …).
+- **include** — index only files matching at least one glob (full relative path, or basename for patterns without `/`). No `**` support.
+- **exclude** — extra gitignore-style exclude patterns on top of `.gitignore`/`.contextignore`.
+- **watchDebounceMs** — file-watcher debounce (default 500).
+- **maxFileSize** — skip files larger than this many bytes (default 1 MB).
+
+Non-code files (markdown, YAML, JSON, TOML, proto, GraphQL, SQL, XML, Dockerfiles)
+are indexed as plain-text documents regardless of `languages`, searchable via
+`query_codebase` with `scope: "docs"` (lock files are skipped automatically).
 
 ## Claude Code Plugin
 

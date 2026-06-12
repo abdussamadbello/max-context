@@ -303,3 +303,147 @@ func TestQueryCodebase_GenuinelyEmptyIsNotReady(t *testing.T) {
 		t.Errorf("empty index must be CodeIndexNotReady (%d), got %d", mcp.CodeIndexNotReady, rpcErr.Code)
 	}
 }
+
+// TestQueryCodebase_DocsScope verifies document search: scope "docs" returns
+// document hits with snippets, "all" appends docs after code results, and a
+// document title matching the query exactly never claims the definitive
+// stop-searching path.
+func TestQueryCodebase_DocsScope(t *testing.T) {
+	dir := t.TempDir()
+	database, err := db.Open(filepath.Join(dir, "docs.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	if err := db.Migrate(database); err != nil {
+		t.Fatal(err)
+	}
+	q, err := db.PrepareQueries(database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer q.Close()
+
+	if _, err := database.Exec(
+		`INSERT INTO documents (file_path, title, kind, content) VALUES (?,?,?,?)`,
+		"docs/deploy.md", "Deployment", "markdown", "Set the replica count in deploy.yaml before rollout."); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.InsertFunction.Exec("RolloutStatus", "deploy.go", 1, 10, "go", 1, "", "reports rollout progress", "RolloutStatus()"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.RebuildAllFTS(database); err != nil {
+		t.Fatal(err)
+	}
+
+	h := QueryCodebaseHandler(database, q, "")
+
+	// scope "docs": only the document comes back.
+	resp, err := h(json.RawMessage(`{"query":"replica count","scope":"docs"}`))
+	if err != nil {
+		t.Fatalf("docs scope: %v", err)
+	}
+	var out struct {
+		Results []struct {
+			File    string `json:"file"`
+			Kind    string `json:"kind"`
+			Name    string `json:"name"`
+			Snippet string `json:"snippet"`
+		} `json:"results"`
+		AnswerStatus string `json:"answer_status"`
+	}
+	if err := json.Unmarshal([]byte(resp.([]mcp.ContentItem)[0].Text), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Results) != 1 || out.Results[0].Kind != "document" || out.Results[0].File != "docs/deploy.md" {
+		t.Fatalf("docs scope results = %+v", out.Results)
+	}
+	if out.Results[0].Name != "Deployment" {
+		t.Errorf("doc name = %q, want title Deployment", out.Results[0].Name)
+	}
+	if out.Results[0].Snippet == "" {
+		t.Error("doc result should carry a snippet")
+	}
+
+	// scope "all": code first, then docs.
+	resp, err = h(json.RawMessage(`{"query":"rollout","max_results":10}`))
+	if err != nil {
+		t.Fatalf("all scope: %v", err)
+	}
+	if err := json.Unmarshal([]byte(resp.([]mcp.ContentItem)[0].Text), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Results) != 2 {
+		t.Fatalf("all scope results = %+v, want function + document", out.Results)
+	}
+	if out.Results[0].Kind == "document" || out.Results[1].Kind != "document" {
+		t.Errorf("docs must rank after code in 'all': %+v", out.Results)
+	}
+
+	// A document titled exactly like the query is never "definitive".
+	if _, err := database.Exec(
+		`INSERT INTO documents (file_path, title, kind, content) VALUES (?,?,?,?)`,
+		"docs/refs.md", "Rollout", "markdown", "Rollout details."); err != nil {
+		t.Fatal(err)
+	}
+	resp, err = h(json.RawMessage(`{"query":"Rollout","scope":"docs"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(resp.([]mcp.ContentItem)[0].Text), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.AnswerStatus == "definitive" {
+		t.Error("document title match must not produce a definitive answer_status")
+	}
+}
+
+// TestQueryCodebase_ExpansionFallback: a compound-identifier query that
+// AND-matches nothing must retry with the identifier split into word parts
+// and flag the response with expanded_query.
+func TestQueryCodebase_ExpansionFallback(t *testing.T) {
+	dir := t.TempDir()
+	database, err := db.Open(filepath.Join(dir, "exp.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	if err := db.Migrate(database); err != nil {
+		t.Fatal(err)
+	}
+	q, err := db.PrepareQueries(database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer q.Close()
+
+	// Docstring holds the split words, never the compound token, so the raw
+	// query "fetchUserProfile" matches nothing but its expansion does.
+	if _, err := q.InsertFunction.Exec("LoadAccount", "account.go", 1, 10, "go", 1, "", "fetch user profile from the store", "LoadAccount()"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.RebuildAllFTS(database); err != nil {
+		t.Fatal(err)
+	}
+
+	h := QueryCodebaseHandler(database, q, "")
+	resp, err := h(json.RawMessage(`{"query":"fetchUserProfile"}`))
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	var out struct {
+		Results []struct {
+			Name string `json:"name"`
+		} `json:"results"`
+		ExpandedQuery bool `json:"expanded_query"`
+	}
+	if err := json.Unmarshal([]byte(resp.([]mcp.ContentItem)[0].Text), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Results) != 1 || out.Results[0].Name != "LoadAccount" {
+		t.Fatalf("expansion fallback results = %+v", out.Results)
+	}
+	if !out.ExpandedQuery {
+		t.Error("expanded_query flag missing")
+	}
+}

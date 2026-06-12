@@ -15,8 +15,8 @@ import (
 	"github.com/smacker/go-tree-sitter/ruby"
 	"github.com/smacker/go-tree-sitter/rust"
 	"github.com/smacker/go-tree-sitter/swift"
-	ts "github.com/smacker/go-tree-sitter/typescript/typescript"
 	tsx "github.com/smacker/go-tree-sitter/typescript/tsx"
+	ts "github.com/smacker/go-tree-sitter/typescript/typescript"
 )
 
 // Lang identifies a tree-sitter language.
@@ -75,18 +75,18 @@ func LanguageForPath(path string) (Lang, bool) {
 }
 
 var langToSitter = map[Lang]*sitter.Language{
-	LangTypeScript:  ts.GetLanguage(),
-	LangTSX:         tsx.GetLanguage(),
+	LangTypeScript: ts.GetLanguage(),
+	LangTSX:        tsx.GetLanguage(),
 	LangJavaScript: javascript.GetLanguage(),
-	LangJSX:         javascript.GetLanguage(),
-	LangPython:      python.GetLanguage(),
-	LangGo:          golang.GetLanguage(),
-	LangRust:        rust.GetLanguage(),
-	LangJava:        java.GetLanguage(),
-	LangC:           c.GetLanguage(),
-	LangCpp:         cpp.GetLanguage(),
-	LangRuby:        ruby.GetLanguage(),
-	LangSwift:       swift.GetLanguage(),
+	LangJSX:        javascript.GetLanguage(),
+	LangPython:     python.GetLanguage(),
+	LangGo:         golang.GetLanguage(),
+	LangRust:       rust.GetLanguage(),
+	LangJava:       java.GetLanguage(),
+	LangC:          c.GetLanguage(),
+	LangCpp:        cpp.GetLanguage(),
+	LangRuby:       ruby.GetLanguage(),
+	LangSwift:      swift.GetLanguage(),
 }
 
 // Parse parses content with the given language and returns the syntax tree.
@@ -100,6 +100,41 @@ func Parse(ctx context.Context, content []byte, lang Lang) (*sitter.Tree, error)
 	defer p.Close()
 	p.SetLanguage(sitterLang)
 	return p.ParseCtx(ctx, nil, content)
+}
+
+// ExtensionsForLang returns the file extensions (with leading dot) for a
+// language name as written in .max-context/config.json "languages". Accepts
+// canonical names and common aliases, case-insensitively; unknown names
+// return nil.
+func ExtensionsForLang(name string) []string {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "typescript", "ts":
+		return []string{".ts", ".tsx"}
+	case "tsx":
+		return []string{".tsx"}
+	case "javascript", "js":
+		return []string{".js", ".jsx", ".mjs", ".cjs"}
+	case "jsx":
+		return []string{".jsx"}
+	case "python", "py":
+		return []string{".py", ".pyi"}
+	case "go", "golang":
+		return []string{".go"}
+	case "rust", "rs":
+		return []string{".rs"}
+	case "java":
+		return []string{".java"}
+	case "c":
+		return []string{".c", ".h"}
+	case "cpp", "c++", "cxx":
+		return []string{".cc", ".cpp", ".cxx", ".hh", ".hpp", ".hxx"}
+	case "ruby", "rb":
+		return []string{".rb"}
+	case "swift":
+		return []string{".swift"}
+	default:
+		return nil
+	}
 }
 
 // SupportedExtensions returns a list of file extensions that can be parsed.

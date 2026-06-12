@@ -4,28 +4,43 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
 
+	"github.com/maxcontext/max-context/internal/indexer"
 	"github.com/maxcontext/max-context/pkg/treesitter"
 )
 
-const debounceMs = 500
-
-type Watcher struct {
-	root     string
-	ignore   map[string]bool
-	exts     map[string]bool
-	w        *fsnotify.Watcher
-	ch       chan<- string
-	mu       sync.Mutex
-	pending  map[string]*time.Timer
-	done     chan struct{}
+// isDockerfileBase reports whether a basename is a Dockerfile (which has no
+// extension for the exts map to match).
+func isDockerfileBase(base string) bool {
+	return base == "Dockerfile" || strings.HasPrefix(base, "Dockerfile.")
 }
 
-func New(root string, reindexCh chan<- string) (*Watcher, error) {
+const debounceMs = 500
+
+// Options carries optional watcher configuration from .max-context/config.json.
+type Options struct {
+	DebounceMs int      // event debounce in milliseconds (0 = default 500)
+	Extensions []string // restrict to these file extensions (nil = all supported)
+}
+
+type Watcher struct {
+	root    string
+	ignore  map[string]bool
+	exts    map[string]bool
+	w       *fsnotify.Watcher
+	ch      chan<- string
+	delay   time.Duration
+	mu      sync.Mutex
+	pending map[string]*time.Timer
+	done    chan struct{}
+}
+
+func New(root string, reindexCh chan<- string, opts ...*Options) (*Watcher, error) {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
@@ -34,8 +49,23 @@ func New(root string, reindexCh chan<- string) (*Watcher, error) {
 		"node_modules": true, ".git": true, "dist": true, "build": true,
 		"vendor": true, "__pycache__": true, ".max-context": true,
 	}
+	delay := debounceMs * time.Millisecond
+	extList := treesitter.SupportedExtensions()
+	if len(opts) > 0 && opts[0] != nil {
+		if opts[0].DebounceMs > 0 {
+			delay = time.Duration(opts[0].DebounceMs) * time.Millisecond
+		}
+		if len(opts[0].Extensions) > 0 {
+			extList = opts[0].Extensions
+		}
+	}
 	exts := make(map[string]bool)
-	for _, ext := range treesitter.SupportedExtensions() {
+	for _, ext := range extList {
+		exts[ext] = true
+	}
+	// Always watch document files (markdown/yaml/json/...): they index as plain
+	// text regardless of any language restriction on code files.
+	for ext := range indexer.DocExtensions {
 		exts[ext] = true
 	}
 	return &Watcher{
@@ -44,6 +74,7 @@ func New(root string, reindexCh chan<- string) (*Watcher, error) {
 		exts:    exts,
 		w:       w,
 		ch:      reindexCh,
+		delay:   delay,
 		pending: make(map[string]*time.Timer),
 		done:    make(chan struct{}),
 	}, nil
@@ -129,7 +160,7 @@ func (w *Watcher) handle(ev fsnotify.Event) {
 		return
 	}
 	ext := filepath.Ext(ev.Name)
-	if !w.exts[ext] {
+	if !w.exts[ext] && !isDockerfileBase(base) {
 		return
 	}
 	w.debounce(rel)
@@ -139,10 +170,10 @@ func (w *Watcher) debounce(relPath string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if t, ok := w.pending[relPath]; ok {
-		t.Reset(debounceMs * time.Millisecond)
+		t.Reset(w.delay)
 		return
 	}
-	w.pending[relPath] = time.AfterFunc(debounceMs*time.Millisecond, func() {
+	w.pending[relPath] = time.AfterFunc(w.delay, func() {
 		w.mu.Lock()
 		delete(w.pending, relPath)
 		w.mu.Unlock()

@@ -60,6 +60,23 @@ func run(cfg *config.Config) error {
 	if len(args) >= 1 && args[0] == "bench" {
 		return runBench(cfg, args[1:])
 	}
+	// CLI access to the MCP tools (one-shot, read-only; JSON to stdout).
+	if len(args) >= 1 {
+		switch args[0] {
+		case "tool":
+			return runToolGeneric(cfg, args[1:])
+		case "query":
+			return runQueryCmd(cfg, args[1:])
+		case "def":
+			return runDefCmd(cfg, args[1:])
+		case "calls":
+			return runCallsCmd(cfg, args[1:])
+		case "impact":
+			return runImpactCmd(cfg, args[1:])
+		case "arch":
+			return runArchCmd(cfg, args[1:])
+		}
+	}
 	switch {
 	case cfg.Index:
 		return runIndex(cfg)
@@ -71,6 +88,24 @@ func run(cfg *config.Config) error {
 		return runWatch(cfg)
 	default:
 		return runMCPServer(cfg)
+	}
+}
+
+// indexerOptions maps the merged config onto indexing options.
+func indexerOptions(cfg *config.Config) *indexer.Options {
+	return &indexer.Options{
+		Extensions:  cfg.LanguageExtensions(),
+		Include:     cfg.IncludeGlobs(),
+		Exclude:     cfg.ExcludeGlobs(),
+		MaxFileSize: cfg.EffectiveMaxFileSize(),
+	}
+}
+
+// watcherOptions maps the merged config onto watcher options.
+func watcherOptions(cfg *config.Config) *watcher.Options {
+	return &watcher.Options{
+		DebounceMs: cfg.EffectiveDebounceMs(),
+		Extensions: cfg.LanguageExtensions(),
 	}
 }
 
@@ -90,7 +125,7 @@ func runIndex(cfg *config.Config) error {
 	}
 	defer q.Close()
 	ctx := context.Background()
-	if err := indexer.Index(ctx, cfg.ProjectRoot, database, q); err != nil {
+	if err := indexer.Index(ctx, cfg.ProjectRoot, database, q, indexerOptions(cfg)); err != nil {
 		return err
 	}
 	// A clean full index clears any prior per-file failures and stamps the time.
@@ -158,7 +193,7 @@ func runStatus(cfg *config.Config) error {
 // runWatch starts only the file watcher (no MCP server); blocks until process exits.
 func runWatch(cfg *config.Config) error {
 	reindexCh := make(chan string, 100)
-	w, err := watcher.New(cfg.ProjectRoot, reindexCh)
+	w, err := watcher.New(cfg.ProjectRoot, reindexCh, watcherOptions(cfg))
 	if err != nil {
 		return err
 	}
@@ -187,8 +222,8 @@ func runMCPServer(cfg *config.Config) error {
 
 	reindexCh := make(chan string, 100)
 	ctx := context.Background()
-	go indexer.RunWorker(ctx, cfg.ProjectRoot, database, q, reindexCh)
-	if watcher, err := watcher.New(cfg.ProjectRoot, reindexCh); err == nil {
+	go indexer.RunWorker(ctx, cfg.ProjectRoot, database, q, reindexCh, indexerOptions(cfg))
+	if watcher, err := watcher.New(cfg.ProjectRoot, reindexCh, watcherOptions(cfg)); err == nil {
 		_ = watcher.Start(ctx)
 	}
 

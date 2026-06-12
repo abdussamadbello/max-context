@@ -10,7 +10,7 @@ import (
 func (s *Server) handleMethod(req *JSONRPCRequest) *JSONRPCResponse {
 	switch req.Method {
 	case "initialize":
-		return s.handleInitialize(req.ID)
+		return s.handleInitialize(req.ID, req.Params)
 	case "initialized":
 		return &JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: nil}
 	case "tools/list":
@@ -30,9 +30,25 @@ func (s *Server) handleMethod(req *JSONRPCRequest) *JSONRPCResponse {
 	}
 }
 
-func (s *Server) handleInitialize(id interface{}) *JSONRPCResponse {
+// negotiateProtocolVersion echoes the client's requested version when the
+// server supports it; otherwise (or when the client sends none) it answers
+// with the newest supported version, per the spec's negotiation rule.
+func negotiateProtocolVersion(requested string) string {
+	for _, v := range SupportedProtocolVersions {
+		if v == requested {
+			return v
+		}
+	}
+	return SupportedProtocolVersions[0]
+}
+
+func (s *Server) handleInitialize(id interface{}, params json.RawMessage) *JSONRPCResponse {
+	var p InitializeParams
+	if len(params) > 0 {
+		_ = json.Unmarshal(params, &p)
+	}
 	res := InitializeResult{}
-	res.ProtocolVersion = ProtocolVersion
+	res.ProtocolVersion = negotiateProtocolVersion(p.ProtocolVersion)
 	res.Capabilities.Tools.ListChanged = false
 	res.Capabilities.Resources = &struct {
 		Subscribe   bool `json:"subscribe,omitempty"`
@@ -58,13 +74,33 @@ func (s *Server) handleToolsCall(id interface{}, params json.RawMessage) *JSONRP
 	}
 	result, err := s.handler.Call(p.Name, p.Arguments)
 	if err != nil {
-		if rpcErr, ok := err.(*RPCError); ok {
+		rpcErr, ok := err.(*RPCError)
+		if !ok {
+			rpcErr = &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("%v", err)}
+		}
+		// Unknown tool stays a protocol error per spec; everything else (bad
+		// params, index not ready/busy, query syntax, internal failures) is a
+		// tool-execution error the model should read and self-correct on.
+		if rpcErr.Code == CodeMethodNotFound {
 			return &JSONRPCResponse{JSONRPC: "2.0", ID: id, Error: rpcErr}
 		}
-		return &JSONRPCResponse{JSONRPC: "2.0", ID: id, Error: &RPCError{Code: CodeInternalError, Message: fmt.Sprintf("%v", err)}}
+		return &JSONRPCResponse{JSONRPC: "2.0", ID: id, Result: toolErrorResult(rpcErr)}
 	}
 	content, _ := result.([]ContentItem)
 	return &JSONRPCResponse{JSONRPC: "2.0", ID: id, Result: ToolsCallResult{Content: content}}
+}
+
+// toolErrorResult renders a handler error as an isError tool result. The text
+// is JSON ({"error":{"code":N,"message":"..."}}) so agents keep the error code
+// and the carefully tuned retry guidance the handlers attach to messages.
+func toolErrorResult(rpcErr *RPCError) ToolsCallResult {
+	body, _ := json.Marshal(map[string]interface{}{
+		"error": map[string]interface{}{"code": rpcErr.Code, "message": rpcErr.Message},
+	})
+	return ToolsCallResult{
+		IsError: true,
+		Content: []ContentItem{{Type: "text", Text: string(body)}},
+	}
 }
 
 func (s *Server) handleResourcesList(id interface{}, params json.RawMessage) *JSONRPCResponse {

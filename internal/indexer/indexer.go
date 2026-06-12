@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/maxcontext/max-context/internal/artifacts"
 	"github.com/maxcontext/max-context/internal/db"
@@ -14,8 +17,53 @@ import (
 
 const batchSize = 500
 
+// Options carries optional indexing configuration from .max-context/config.json.
+// A nil *Options means defaults everywhere (all supported languages, no
+// include/exclude, no size cap).
+type Options struct {
+	Extensions  []string // restrict to these file extensions (nil = all supported)
+	Include     []string // include globs (nil = everything)
+	Exclude     []string // extra exclude patterns (gitignore-style)
+	MaxFileSize int64    // skip files larger than this many bytes (0 = unlimited)
+}
+
+func optsOrNil(opts []*Options) *Options {
+	if len(opts) > 0 {
+		return opts[0]
+	}
+	return nil
+}
+
+// skipsFile reports whether an incrementally changed file should be ignored
+// per the configured include/exclude/size rules — mirroring what Scan() would
+// have excluded on a full index. excl is a matcher built from o.Exclude.
+// Deleted files are never skipped here: IndexFile must still process the
+// deletion to drop stale rows.
+func (o *Options) skipsFile(root, relPath string, excl *IgnoreMatcher) bool {
+	if o == nil {
+		return false
+	}
+	if excl != nil && excl.Match(relPath) {
+		return true
+	}
+	if len(o.Include) > 0 && !matchesAnyGlob(o.Include, relPath) {
+		return true
+	}
+	if o.MaxFileSize > 0 {
+		if info, err := os.Stat(filepath.Join(root, filepath.FromSlash(relPath))); err == nil && info.Size() > o.MaxFileSize {
+			return true
+		}
+	}
+	return false
+}
+
 // RunWorker consumes paths from ch and reindexes each file. Empty string means full reindex (Phase 4: .reindex-queue).
-func RunWorker(ctx context.Context, root string, database *sql.DB, q *db.Queries, ch <-chan string) {
+func RunWorker(ctx context.Context, root string, database *sql.DB, q *db.Queries, ch <-chan string, opts ...*Options) {
+	o := optsOrNil(opts)
+	var excl *IgnoreMatcher
+	if o != nil && len(o.Exclude) > 0 {
+		excl = &IgnoreMatcher{patterns: o.Exclude}
+	}
 	// One delta-maintained resolver reused across incremental reindexes; a full
 	// reindex invalidates it (it rewrites every row), so the next IndexFile
 	// rebuilds it once and then maintains it per-file.
@@ -29,7 +77,7 @@ func RunWorker(ctx context.Context, root string, database *sql.DB, q *db.Queries
 				return
 			}
 			if path == "" {
-				if err := Index(ctx, root, database, q); err != nil {
+				if err := Index(ctx, root, database, q, o); err != nil {
 					// Surface, don't swallow: a failed full index left a stale or empty
 					// index that tools must be able to warn about.
 					fmt.Fprintf(os.Stderr, "max-context: full index failed: %v\n", err)
@@ -52,6 +100,21 @@ func RunWorker(ctx context.Context, root string, database *sql.DB, q *db.Queries
 				})
 				continue
 			}
+			if o.skipsFile(root, path, excl) {
+				continue
+			}
+			// Documents take a dedicated path: no parser, no resolver, and — critically —
+			// no ResolverCache invalidation on failure.
+			if _, isDoc := DocKindForPath(path); isDoc {
+				if err := IndexDocFile(ctx, root, path, database); err != nil {
+					fmt.Fprintf(os.Stderr, "max-context: index %s failed: %v\n", path, err)
+					artifacts.RecordIndexError(database, path, err.Error())
+				} else {
+					artifacts.ClearIndexError(database, path)
+					artifacts.SetLastIncrementalIndex(database, time.Now())
+				}
+				continue
+			}
 			if err := IndexFile(ctx, root, path, database, q, cache); err != nil {
 				// Surface the failure so it shows up in staleness; a bad single-file
 				// reindex must not silently leave the index out of date.
@@ -66,12 +129,31 @@ func RunWorker(ctx context.Context, root string, database *sql.DB, q *db.Queries
 }
 
 // Index runs a full index of the project at root, using the given database and queries.
-func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries) error {
-	ignore, _ := NewIgnoreMatcher(root)
-	sc := &Scanner{Root: root, Ignore: ignore}
-	files, err := sc.Scan()
+func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries, opts ...*Options) error {
+	o := optsOrNil(opts)
+	var exclude []string
+	var include []string
+	var extensions []string
+	var maxFileSize int64
+	if o != nil {
+		exclude, include, extensions, maxFileSize = o.Exclude, o.Include, o.Extensions, o.MaxFileSize
+	}
+	ignore, _ := NewIgnoreMatcherWithExtra(root, exclude)
+	sc := &Scanner{Root: root, Ignore: ignore, Extensions: extensions, Includes: include, MaxFileSize: maxFileSize, IncludeDocs: true}
+	scanned, err := sc.Scan()
 	if err != nil {
 		return fmt.Errorf("scan: %w", err)
+	}
+
+	// Documents are indexed as plain text; only code files go through the
+	// parser and resolver below.
+	var files, docFiles []string
+	for _, rel := range scanned {
+		if _, ok := DocKindForPath(rel); ok {
+			docFiles = append(docFiles, rel)
+		} else {
+			files = append(files, rel)
+		}
 	}
 
 	tx, err := database.Begin()
@@ -96,8 +178,53 @@ func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries) er
 	if _, err := tx.Exec("DELETE FROM file_summaries"); err != nil {
 		return err
 	}
+	if _, err := tx.Exec("DELETE FROM documents"); err != nil {
+		return err
+	}
 
-	// Collect all results
+	// Parse files on a worker pool: tree-sitter parsing is CPU-bound and
+	// per-file independent (each Parse call creates its own parser; the
+	// compiled-query cache is mutex-protected). Results land in a slice
+	// indexed by file position, then aggregate in scan order below, so the
+	// output is byte-identical to the old sequential loop. All DB work stays
+	// on this goroutine.
+	parsed := make([]*ParseResult, len(files))
+	jobs := make(chan int)
+	var wg sync.WaitGroup
+	workers := runtime.NumCPU()
+	if workers > len(files) {
+		workers = len(files)
+	}
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range jobs {
+				if ctx.Err() != nil {
+					continue
+				}
+				content, err := os.ReadFile(filepath.Join(root, files[i]))
+				if err != nil {
+					continue
+				}
+				res, err := ParseFile(ctx, files[i], content)
+				if err != nil {
+					continue
+				}
+				parsed[i] = res
+			}
+		}()
+	}
+	for i := range files {
+		jobs <- i
+	}
+	close(jobs)
+	wg.Wait()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// Aggregate in scan order.
 	var allFuncs []FuncRecord
 	var allCalls []CallRecord
 	var allTypes []TypeRecord
@@ -106,21 +233,8 @@ func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries) er
 	var allPackageVars []PackageVarRecord
 	var allClassBases []ClassBaseRecord
 
-	for i, relPath := range files {
-		if i%100 == 0 && i > 0 {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
-		}
-		fullPath := filepath.Join(root, relPath)
-		content, err := os.ReadFile(fullPath)
-		if err != nil {
-			continue
-		}
-		res, err := ParseFile(ctx, relPath, content)
-		if err != nil {
+	for _, res := range parsed {
+		if res == nil {
 			continue
 		}
 		allFuncs = append(allFuncs, res.Functions...)
@@ -214,12 +328,61 @@ func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries) er
 		}
 	}
 
+	// Documents: whole-file plain-text rows; FTS maintained by the V8 triggers
+	// in the same transaction.
+	for _, rel := range docFiles {
+		if err := insertDocument(tx, root, rel); err != nil {
+			return err
+		}
+	}
+
 	// FTS is maintained by sync triggers (schema V6) inside this transaction, so
 	// the commit flips data + FTS atomically — no separate post-commit rebuild and
 	// no window where a concurrent query sees an empty FTS index.
 	return tx.Commit()
 }
 
+// insertDocument reads one non-code file and writes its documents row. Unreadable
+// or non-UTF-8 files are skipped silently — never an index failure.
+func insertDocument(tx *sql.Tx, root, relPath string) error {
+	kind, ok := DocKindForPath(relPath)
+	if !ok {
+		return nil
+	}
+	content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relPath)))
+	if err != nil || !utf8.Valid(content) {
+		return nil
+	}
+	_, err = tx.Exec(
+		"INSERT INTO documents (file_path, title, kind, content) VALUES (?, ?, ?, ?)",
+		filepath.ToSlash(relPath), docTitle(relPath, content), kind, string(content),
+	)
+	return err
+}
+
+// IndexDocFile reindexes a single non-code document (incremental). A missing
+// file is treated as a deletion. Documents never touch the parser, the call
+// graph, or the worker's ResolverCache — a doc change must not invalidate the
+// delta-maintained resolver or re-resolve any call edges.
+func IndexDocFile(ctx context.Context, root, relPath string, database *sql.DB) error {
+	if _, ok := DocKindForPath(relPath); !ok {
+		return nil
+	}
+	tx, err := database.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	path := filepath.ToSlash(relPath)
+	if _, err := tx.Exec("DELETE FROM documents WHERE file_path = ?", path); err != nil {
+		return err
+	}
+	if err := insertDocument(tx, root, relPath); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
 
 // insertFunction writes one function row including the resolution metadata
 // (kind, receiver_type, package) used by the scope resolver.

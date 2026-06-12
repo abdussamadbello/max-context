@@ -1,0 +1,13 @@
+.git
+.max-context
+bin
+dist
+node_modules
+npm-package/node_modules
+npm-package/bin
+benchmark/runs
+experiments
+testdata
+docs
+*.md
+!README.md

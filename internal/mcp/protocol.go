@@ -6,6 +6,12 @@ const ProtocolVersion = "2024-11-05"
 const ServerName = "max-context"
 const ServerVersion = "0.1.0"
 
+// SupportedProtocolVersions, newest first. The server echoes the client's
+// requested version when supported, otherwise answers with the newest one
+// (the negotiation rule from the MCP spec). Nothing in this server's feature
+// set (tools + resources over stdio) differs across these revisions.
+var SupportedProtocolVersions = []string{"2025-06-18", "2025-03-26", "2024-11-05"}
+
 const CodeParseError = -32700
 const CodeMethodNotFound = -32601
 const CodeInvalidParams = -32602
@@ -25,7 +31,7 @@ type JSONRPCRequest struct {
 type JSONRPCResponse struct {
 	JSONRPC string      `json:"jsonrpc"`
 	ID      interface{} `json:"id,omitempty"`
-	Result  interface{}  `json:"result,omitempty"`
+	Result  interface{} `json:"result,omitempty"`
 	Error   *RPCError   `json:"error,omitempty"`
 }
 
@@ -63,8 +69,8 @@ type Resource struct {
 }
 
 type ResourcesListResult struct {
-	Resources   []Resource `json:"resources"`
-	NextCursor  string     `json:"nextCursor,omitempty"`
+	Resources  []Resource `json:"resources"`
+	NextCursor string     `json:"nextCursor,omitempty"`
 }
 
 type ResourcesReadParams struct {
@@ -85,10 +91,24 @@ type ToolsListResult struct {
 	Tools []ToolSchema `json:"tools"`
 }
 
+// ToolAnnotations are the spec's behavior hints (2025-03-26+). Pointer bools
+// because the spec defaults are asymmetric (destructiveHint and openWorldHint
+// default to true when absent).
+type ToolAnnotations struct {
+	Title           string `json:"title,omitempty"`
+	ReadOnlyHint    *bool  `json:"readOnlyHint,omitempty"`
+	DestructiveHint *bool  `json:"destructiveHint,omitempty"`
+	IdempotentHint  *bool  `json:"idempotentHint,omitempty"`
+	OpenWorldHint   *bool  `json:"openWorldHint,omitempty"`
+}
+
 type ToolSchema struct {
-	Name        string      `json:"name"`
-	Description string      `json:"description"`
-	InputSchema interface{} `json:"inputSchema"`
+	Name         string           `json:"name"`
+	Title        string           `json:"title,omitempty"`
+	Description  string           `json:"description"`
+	InputSchema  interface{}      `json:"inputSchema"`
+	OutputSchema interface{}      `json:"outputSchema,omitempty"`
+	Annotations  *ToolAnnotations `json:"annotations,omitempty"`
 }
 
 type ToolsCallParams struct {
@@ -98,6 +118,16 @@ type ToolsCallParams struct {
 
 type ToolsCallResult struct {
 	Content []ContentItem `json:"content"`
+	// IsError marks a tool-execution failure (bad params, index not ready,
+	// query syntax) so the model can read the message and self-correct —
+	// per spec these are NOT protocol-level errors.
+	IsError bool `json:"isError,omitempty"`
+}
+
+// InitializeParams is the subset of the client's initialize params the server
+// negotiates on.
+type InitializeParams struct {
+	ProtocolVersion string `json:"protocolVersion"`
 }
 
 type ContentItem struct {

@@ -2,6 +2,7 @@
   "name": "@maxcontext/cli",
   "version": "0.1.0",
   "description": "Maximum Context — MCP server for codebase indexing and query",
+  "mcpName": "io.github.maxcontext/max-context",
   "bin": {
     "max-context": "./bin/max-context.js"
   },
