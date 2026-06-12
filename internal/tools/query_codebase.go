@@ -71,20 +71,11 @@ func QueryCodebaseHandler(database *sql.DB, q *db.Queries, projectRoot string) m
 		var results []searchResult
 
 		if scope == "all" || scope == "functions" {
-			rows, err := q.SearchFunctions.Query(a.Query, limit)
+			rows, err := ftsSearch(q.SearchFunctions, a.Query, limit)
 			if err != nil {
-				// Distinguish a genuinely-unbuilt index from a TRANSIENT failure (the
-				// FTS table being rebuilt by the background reindex worker, or a brief
-				// SQLite lock). Telling the agent "run /index-codebase first" when the
-				// index is merely mid-rebuild makes it loop on the same failing query
-				// (observed: E01 burned 7 turns this way). Probe the base table: if it
-				// has rows, the data is present — report a transient, retry-later error.
-				if indexHasFunctions(database) {
-					return nil, &mcp.RPCError{Code: mcp.CodeIndexBusy, Message: "index is rebuilding; retry this query shortly, or use get_definition/get_call_chain which are unaffected"}
-				}
-				return nil, &mcp.RPCError{Code: mcp.CodeIndexNotReady, Message: "index not ready: run /index-codebase first"}
+				return nil, classifyFTSError(database, err)
 			}
-			for rows.Next() {
+			for rows != nil && rows.Next() {
 				var id int64
 				var name, filePath string
 				var startLine, endLine int
@@ -105,11 +96,16 @@ func QueryCodebaseHandler(database *sql.DB, q *db.Queries, projectRoot string) m
 					results = append(results, r)
 				}
 			}
-			rows.Close()
+			if rows != nil {
+				rows.Close()
+			}
 		}
 		if scope == "all" || scope == "types" {
-			rows, err := q.SearchTypes.Query(a.Query, limit)
-			if err == nil {
+			// Types search is best-effort: a failure here never fails the whole
+			// call (functions results may already be present). ftsSearch applies the
+			// same raw-then-sanitized fallback.
+			rows, err := ftsSearch(q.SearchTypes, a.Query, limit)
+			if err == nil && rows != nil {
 				for rows.Next() {
 					var id int64
 					var name, filePath, kind string
