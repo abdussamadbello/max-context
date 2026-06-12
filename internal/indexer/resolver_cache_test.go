@@ -144,6 +144,83 @@ func (e *Engine) Halt() {}
 	}
 }
 
+// TestResolverCacheInterfaceDispatchEquivalent checks that the low-confidence
+// interface-dispatch edges produced incrementally (cached path) match a full
+// reindex — so the delta resolver's interface/implements bookkeeping stays in
+// sync across edits to interfaces, implementations, and callers.
+func TestResolverCacheInterfaceDispatchEquivalent(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+
+	writeFile(t, root, "notifier.go", `package notify
+
+type Notifier interface {
+	Send(msg string) error
+}
+`)
+	writeFile(t, root, "email.go", `package notify
+
+type Email struct{}
+
+func (e *Email) Send(msg string) error { return nil }
+`)
+	writeFile(t, root, "caller.go", `package notify
+
+func Notify(n Notifier) {
+	n.Send("hi")
+}
+`)
+
+	database, q := openIndexDB(t, root)
+	defer database.Close()
+	defer q.Close()
+	if err := Index(ctx, root, database, q); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	cache := NewResolverCache()
+	apply := func(rel, content string) {
+		writeFile(t, root, rel, content)
+		if err := IndexFile(ctx, root, rel, database, q, cache); err != nil {
+			t.Fatalf("IndexFile(%s): %v", rel, err)
+		}
+	}
+
+	// Add a second implementation incrementally (delta add of a concrete type that
+	// now also satisfies Notifier -> a new interface-dispatch edge must appear).
+	apply("sms.go", `package notify
+
+type SMS struct{}
+
+func (s *SMS) Send(msg string) error { return nil }
+`)
+	// Edit the caller (its interface-dispatch edges must be regenerated to BOTH impls).
+	apply("caller.go", `package notify
+
+func Notify(n Notifier) {
+	n.Send("hello")
+}
+`)
+
+	incremental := callGraphSnapshot(t, database)
+	if err := Index(ctx, root, database, q); err != nil {
+		t.Fatalf("final full Index: %v", err)
+	}
+	full := callGraphSnapshot(t, database)
+	if !reflect.DeepEqual(incremental, full) {
+		t.Errorf("incremental interface-dispatch graph != full reindex\nincremental:\n%s\nfull:\n%s",
+			joinLines(incremental), joinLines(full))
+	}
+	// Sanity: there ARE interface-dispatch edges to compare.
+	var n int
+	if err := database.QueryRow(`SELECT COUNT(*) FROM calls WHERE resolution='interface-dispatch'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n == 0 {
+		t.Error("expected interface-dispatch edges, found none")
+	}
+}
+
 func joinLines(s []string) string {
 	out := ""
 	for _, line := range s {

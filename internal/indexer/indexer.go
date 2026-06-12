@@ -199,6 +199,9 @@ func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries) er
 		if err := insertCall(tx, resolver, c, callerID, fileToPkg[c.FilePath]); err != nil {
 			return err
 		}
+		if err := insertInterfaceDispatchEdges(tx, resolver, c, callerID); err != nil {
+			return err
+		}
 	}
 
 	for _, imp := range allImports {
@@ -298,6 +301,26 @@ func nullStr(s string) interface{} {
 		return nil
 	}
 	return s
+}
+
+// insertInterfaceDispatchEdges emits a low-confidence 'interface-dispatch' edge
+// from the caller to each concrete implementation of an interface-method call —
+// e.g. n.Send() where n is statically an interface — so get_impact can fan out
+// to implementations on request. No-op for non-interface receivers, so the
+// default call graph is unchanged. Called alongside the primary insertCall.
+func insertInterfaceDispatchEdges(tx *sql.Tx, resolver *Resolver, c CallRecord, callerID int64) error {
+	if c.ReceiverKind != "var" || c.ReceiverType == "" {
+		return nil
+	}
+	for _, id := range resolver.interfaceMethodImpls(c.ReceiverType, c.CalleeName) {
+		if _, err := tx.Exec(
+			"INSERT INTO calls (caller_id, callee_id, callee_name, file_path, line, resolution, receiver_name) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			callerID, id, c.CalleeName, c.FilePath, c.Line, resInterfaceDispatch, nullStr(c.ReceiverName),
+		); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // IndexFile reindexes a single file (incremental). Call after a file change.
@@ -463,6 +486,9 @@ func IndexFile(ctx context.Context, root string, relPath string, database *sql.D
 			continue
 		}
 		if err := insertCall(tx, resolver, c, callerID, filePkg); err != nil {
+			return err
+		}
+		if err := insertInterfaceDispatchEdges(tx, resolver, c, callerID); err != nil {
 			return err
 		}
 	}

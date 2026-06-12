@@ -2,6 +2,7 @@ package indexer
 
 import (
 	"database/sql"
+	"regexp"
 )
 
 // Resolution markers, highest to lowest confidence. A non-empty calleeID is
@@ -19,6 +20,13 @@ const (
 	resNameGlobal      = "name-global"      // legacy global name lookup (non-Go / fallback)
 	resUnresolved      = "unresolved"       // Go-precise lookup attempted, no confident target
 	resStale           = "stale"            // edge previously resolved; its target file was reindexed (callee_id nulled), pending re-resolution within the same transaction
+
+	// resInterfaceDispatch is a LOW-confidence synthetic edge: a call through an
+	// interface method, fanned out to every concrete type whose method set
+	// satisfies the interface (name match). Imprecise by design (no arity/type
+	// check, may over-approximate), so get_impact excludes these by default and
+	// includes them only at low min_confidence.
+	resInterfaceDispatch = "interface-dispatch"
 )
 
 // goBuiltins are the predeclared functions that look like bare calls but are
@@ -80,13 +88,25 @@ type Resolver struct {
 	bases      map[string][]string          // class name -> base class names (inheritance, multiset)
 	repoRoots  map[string]int               // repo package root -> refcount, to gate absolute imports
 
+	// interfaceMethods maps an interface type name to its method-name set (Go:
+	// parsed from the type definition text). Used to fan interface-method calls
+	// out to concrete implementations.
+	interfaceMethods map[string]map[string]bool
+
+	// implCache memoizes (interfaceType, method) -> concrete method func ids;
+	// implDirty marks it stale after any method/interface change so it is rebuilt
+	// on the next lookup.
+	implCache map[[2]string][]int64
+	implDirty bool
+
 	// Per-file provenance, replayed by removeFile to undo a file's contributions.
-	fileFuncs   map[string][]funcDef
-	fileFields  map[string][]kv2
-	filePkgVars map[string][]kv2
-	fileClasses map[string][]string
-	fileBases   map[string][]classBase
-	fileRoots   map[string][]string
+	fileFuncs      map[string][]funcDef
+	fileFields     map[string][]kv2
+	filePkgVars    map[string][]kv2
+	fileClasses    map[string][]string
+	fileBases      map[string][]classBase
+	fileRoots      map[string][]string
+	fileInterfaces map[string][]string
 }
 
 // rowQuerier is satisfied by *sql.DB and *sql.Tx.
@@ -121,15 +141,19 @@ func newEmptyResolver() *Resolver {
 		returnType:  map[[2]string]string{},
 		fieldType:   map[[2]string]map[string]int{},
 		globalType:  map[[2]string]map[string]int{},
-		classRefs:   map[string]int{},
-		bases:       map[string][]string{},
-		repoRoots:   map[string]int{},
-		fileFuncs:   map[string][]funcDef{},
-		fileFields:  map[string][]kv2{},
-		filePkgVars: map[string][]kv2{},
-		fileClasses: map[string][]string{},
-		fileBases:   map[string][]classBase{},
-		fileRoots:   map[string][]string{},
+		classRefs:        map[string]int{},
+		bases:            map[string][]string{},
+		repoRoots:        map[string]int{},
+		interfaceMethods: map[string]map[string]bool{},
+		implCache:        map[[2]string][]int64{},
+		implDirty:        true,
+		fileFuncs:        map[string][]funcDef{},
+		fileFields:       map[string][]kv2{},
+		filePkgVars:      map[string][]kv2{},
+		fileClasses:      map[string][]string{},
+		fileBases:        map[string][]classBase{},
+		fileRoots:        map[string][]string{},
+		fileInterfaces:   map[string][]string{},
 	}
 }
 
@@ -169,6 +193,9 @@ func NewResolver(q rowQuerier) (*Resolver, error) {
 		return nil, err
 	}
 	if err := r.loadClassBases(q); err != nil {
+		return nil, err
+	}
+	if err := r.loadInterfaces(q); err != nil {
 		return nil, err
 	}
 	return r, nil
@@ -231,12 +258,23 @@ func (r *Resolver) addFileFromDB(q rowQuerier, file string) error {
 	}); err != nil {
 		return err
 	}
-	return scanRows(q, "SELECT class_name, base_name FROM class_bases WHERE file_path = ?", file, func(rows *sql.Rows) error {
+	if err := scanRows(q, "SELECT class_name, base_name FROM class_bases WHERE file_path = ?", file, func(rows *sql.Rows) error {
 		var cls, base string
 		if err := rows.Scan(&cls, &base); err != nil {
 			return err
 		}
 		r.addBase(file, cls, base)
+		return nil
+	}); err != nil {
+		return err
+	}
+	return scanRows(q, "SELECT name, definition FROM types WHERE file_path = ? AND definition LIKE 'interface%'", file, func(rows *sql.Rows) error {
+		var name string
+		var def sql.NullString
+		if err := rows.Scan(&name, &def); err != nil {
+			return err
+		}
+		r.addInterface(file, name, def.String)
 		return nil
 	})
 }
@@ -302,6 +340,15 @@ func (r *Resolver) removeFile(file string) {
 		removeStrOnce(r.bases, cb.class, cb.base)
 	}
 	delete(r.fileBases, file)
+
+	for _, name := range r.fileInterfaces[file] {
+		// Single-declaration assumption: an interface name lives in one file. If
+		// two files declared the same name, this drops the merged set (rare).
+		delete(r.interfaceMethods, name)
+	}
+	delete(r.fileInterfaces, file)
+
+	r.implDirty = true
 }
 
 // addFunc indexes one function definition and records its provenance.
@@ -323,6 +370,117 @@ func (r *Resolver) addFunc(d funcDef) {
 		r.fileRoots[d.file] = append(r.fileRoots[d.file], root)
 	}
 	r.fileFuncs[d.file] = append(r.fileFuncs[d.file], d)
+	if d.kind == "method" {
+		r.implDirty = true // a new/removed method changes which types satisfy interfaces
+	}
+}
+
+// addInterface records an interface's method-name set, parsed from its Go type
+// definition text (e.g. "interface {\n\tSend(...) error\n}"). Embedded
+// interfaces and non-method lines are ignored (documented imprecision).
+func (r *Resolver) addInterface(file, name, def string) {
+	methods := extractInterfaceMethods(def)
+	if len(methods) == 0 {
+		return
+	}
+	set := r.interfaceMethods[name]
+	if set == nil {
+		set = map[string]bool{}
+		r.interfaceMethods[name] = set
+	}
+	for _, m := range methods {
+		set[m] = true
+	}
+	r.fileInterfaces[file] = append(r.fileInterfaces[file], name)
+	r.implDirty = true
+}
+
+// loadInterfaces populates interface method sets from every interface type in
+// the DB (Go: definition begins with "interface").
+func (r *Resolver) loadInterfaces(q rowQuerier) error {
+	rows, err := q.Query("SELECT name, definition, file_path FROM types WHERE definition LIKE 'interface%'")
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name, file string
+		var def sql.NullString
+		if err := rows.Scan(&name, &def, &file); err != nil {
+			return err
+		}
+		r.addInterface(file, name, def.String)
+	}
+	return rows.Err()
+}
+
+// ifaceMethodRe matches a method declaration line inside a Go interface body:
+// an identifier at line start (after whitespace) immediately followed by '('.
+var ifaceMethodRe = regexp.MustCompile(`(?m)^\s*([A-Za-z_]\w*)\s*\(`)
+
+func extractInterfaceMethods(def string) []string {
+	var out []string
+	for _, m := range ifaceMethodRe.FindAllStringSubmatch(def, -1) {
+		out = append(out, m[1])
+	}
+	return out
+}
+
+// interfaceMethodImpls returns the concrete method func ids that satisfy calling
+// method on a value of interface type ifaceType. Empty when ifaceType is not a
+// known interface. Rebuilds the memo if a method/interface changed since last use.
+func (r *Resolver) interfaceMethodImpls(ifaceType, method string) []int64 {
+	if _, ok := r.interfaceMethods[ifaceType]; !ok {
+		return nil
+	}
+	if r.implDirty {
+		r.rebuildImplements()
+	}
+	return r.implCache[[2]string{ifaceType, method}]
+}
+
+// rebuildImplements recomputes the (interface, method) -> concrete-impl-ids memo.
+// A concrete type T satisfies interface I when every method name in I is present
+// in T's method set (name-only; no arity/type check — see resInterfaceDispatch).
+func (r *Resolver) rebuildImplements() {
+	r.implCache = map[[2]string][]int64{}
+	// Method-name set per concrete receiver type, from the method index.
+	typeMethods := map[string]map[string]bool{}
+	for key := range r.byRecvName {
+		t, m := key[0], key[1]
+		s := typeMethods[t]
+		if s == nil {
+			s = map[string]bool{}
+			typeMethods[t] = s
+		}
+		s[m] = true
+	}
+	for iface, mset := range r.interfaceMethods {
+		if len(mset) == 0 {
+			continue
+		}
+		for t, tm := range typeMethods {
+			if t == iface || !subsetKeys(mset, tm) {
+				continue
+			}
+			for m := range mset {
+				for _, d := range r.byRecvName[[2]string{t, m}] {
+					k := [2]string{iface, m}
+					r.implCache[k] = append(r.implCache[k], d.id)
+				}
+			}
+		}
+	}
+	r.implDirty = false
+}
+
+func subsetKeys(small, big map[string]bool) bool {
+	for k := range small {
+		if !big[k] {
+			return false
+		}
+	}
+	return true
 }
 
 // recomputeReturnType refreshes returnType[key] from the current defs at key

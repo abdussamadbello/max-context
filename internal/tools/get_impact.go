@@ -28,10 +28,11 @@ type getImpactArgs struct {
 // Linking markers only; classify-only/miss markers never produce a traversable
 // edge so they are absent here.
 var resolutionRank = map[string]int{
-	"same-file":      5,
-	"same-package":   4,
-	"receiver-typed": 3,
-	"name-global":    1,
+	"same-file":          5,
+	"same-package":       4,
+	"receiver-typed":     3,
+	"interface-dispatch": 2, // low-confidence interface fan-out; included only at low min_confidence
+	"name-global":        1,
 }
 
 // edgeMarkersAtOrAbove returns the resolution markers with confidence >= the
@@ -198,8 +199,11 @@ func queryImpact(database *sql.DB, seedIDs map[int64]string, depth int, directio
 	}
 
 	// edgeFilter restricts which edges the walk may traverse, by resolution
-	// confidence. Empty when no min_confidence was requested.
-	edgeFilter := ""
+	// confidence. With no min_confidence, the default EXCLUDES the low-confidence
+	// interface-dispatch fan-out (so default blast radius is unchanged); requesting
+	// a low min_confidence (e.g. "interface-dispatch") opts them in, while a high
+	// one excludes them along with other weak edges.
+	edgeFilter := " AND e.resolution != 'interface-dispatch'"
 	var filterArgs []interface{}
 	if markers := edgeMarkersAtOrAbove(minConfidence); markers != nil {
 		ph := make([]string, len(markers))
