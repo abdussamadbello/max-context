@@ -15,8 +15,8 @@ import (
 	"github.com/smacker/go-tree-sitter/ruby"
 	"github.com/smacker/go-tree-sitter/rust"
 	"github.com/smacker/go-tree-sitter/swift"
-	ts "github.com/smacker/go-tree-sitter/typescript/typescript"
 	tsx "github.com/smacker/go-tree-sitter/typescript/tsx"
+	ts "github.com/smacker/go-tree-sitter/typescript/typescript"
 )
 
 // Lang identifies a tree-sitter language.
@@ -75,18 +75,18 @@ func LanguageForPath(path string) (Lang, bool) {
 }
 
 var langToSitter = map[Lang]*sitter.Language{
-	LangTypeScript:  ts.GetLanguage(),
-	LangTSX:         tsx.GetLanguage(),
+	LangTypeScript: ts.GetLanguage(),
+	LangTSX:        tsx.GetLanguage(),
 	LangJavaScript: javascript.GetLanguage(),
-	LangJSX:         javascript.GetLanguage(),
-	LangPython:      python.GetLanguage(),
-	LangGo:          golang.GetLanguage(),
-	LangRust:        rust.GetLanguage(),
-	LangJava:        java.GetLanguage(),
-	LangC:           c.GetLanguage(),
-	LangCpp:         cpp.GetLanguage(),
-	LangRuby:        ruby.GetLanguage(),
-	LangSwift:       swift.GetLanguage(),
+	LangJSX:        javascript.GetLanguage(),
+	LangPython:     python.GetLanguage(),
+	LangGo:         golang.GetLanguage(),
+	LangRust:       rust.GetLanguage(),
+	LangJava:       java.GetLanguage(),
+	LangC:          c.GetLanguage(),
+	LangCpp:        cpp.GetLanguage(),
+	LangRuby:       ruby.GetLanguage(),
+	LangSwift:      swift.GetLanguage(),
 }
 
 // Parse parses content with the given language and returns the syntax tree.
@@ -102,7 +102,6 @@ func Parse(ctx context.Context, content []byte, lang Lang) (*sitter.Tree, error)
 	return p.ParseCtx(ctx, nil, content)
 }
 
-// SupportedExtensions returns a list of file extensions that can be parsed.
 // ExtensionsForLang returns the file extensions (with leading dot) for a
 // language name as written in .max-context/config.json "languages". Accepts
 // canonical names and common aliases, case-insensitively; unknown names
@@ -138,6 +137,7 @@ func ExtensionsForLang(name string) []string {
 	}
 }
 
+// SupportedExtensions returns a list of file extensions that can be parsed.
 func SupportedExtensions() []string {
 	return []string{
 		".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".pyi", ".go", ".rs",

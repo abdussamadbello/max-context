@@ -29,15 +29,15 @@ type Options struct {
 }
 
 type Watcher struct {
-	root     string
-	ignore   map[string]bool
-	exts     map[string]bool
-	w        *fsnotify.Watcher
-	ch       chan<- string
-	delay    time.Duration
-	mu       sync.Mutex
-	pending  map[string]*time.Timer
-	done     chan struct{}
+	root    string
+	ignore  map[string]bool
+	exts    map[string]bool
+	w       *fsnotify.Watcher
+	ch      chan<- string
+	delay   time.Duration
+	mu      sync.Mutex
+	pending map[string]*time.Timer
+	done    chan struct{}
 }
 
 func New(root string, reindexCh chan<- string, opts ...*Options) (*Watcher, error) {

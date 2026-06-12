@@ -7,6 +7,19 @@ import (
 	"github.com/maxcontext/max-context/internal/mcp"
 )
 
+// readOnlyAnnotations marks a tool as a safe, repeatable, local-only read —
+// every max-context tool queries the index and touches nothing else.
+func readOnlyAnnotations(title string) *mcp.ToolAnnotations {
+	t, f := true, false
+	return &mcp.ToolAnnotations{
+		Title:           title,
+		ReadOnlyHint:    &t,
+		DestructiveHint: &f,
+		IdempotentHint:  &t,
+		OpenWorldHint:   &f,
+	}
+}
+
 func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot string) []mcp.ToolSchema {
 	store := db.NewSQLiteStore(database)
 
@@ -19,6 +32,8 @@ func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot st
 	return []mcp.ToolSchema{
 		{
 			Name:        "get_definition",
+			Title:       "Find Definition",
+			Annotations: readOnlyAnnotations("Find Definition"),
 			Description: "Find where a symbol is defined by EXACT name. Use this first for 'where is X defined?' questions. Returns answer_status, recommended_next_action, and a canonical result when a class/type should outrank same-named methods or properties. If the result is definitive, answer immediately without further searching.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
@@ -30,6 +45,8 @@ func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot st
 		},
 		{
 			Name:        "query_codebase",
+			Title:       "Search Codebase",
+			Annotations: readOnlyAnnotations("Search Codebase"),
 			Description: "Fuzzy/keyword search of the indexed codebase for functions, types, and docs/config files (markdown, YAML, JSON, proto, GraphQL, SQL, Dockerfiles). Returns terse ranked results plus answer_status and recommended_next_action. For overloaded exact names, canonical type/class definitions outrank same-named methods/properties. For 'where is X defined?' prefer get_definition; for dependency/usage questions prefer get_impact or get_call_chain. One or two queries is usually enough.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
@@ -44,6 +61,8 @@ func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot st
 		},
 		{
 			Name:        "get_call_chain",
+			Title:       "Trace Call Chain",
+			Annotations: readOnlyAnnotations("Trace Call Chain"),
 			Description: "Traverse the call graph to find who calls a function (callers) and what it calls (callees), recursively up to a configurable depth.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
@@ -58,6 +77,8 @@ func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot st
 		},
 		{
 			Name:        "get_impact",
+			Title:       "Analyze Change Impact",
+			Annotations: readOnlyAnnotations("Analyze Change Impact"),
 			Description: "Given changed files (or a git rev range), return symbols whose blast radius is affected. Default behaviour: diff against HEAD, walk callers to depth 2. Use this post-edit to learn what tests and dependents your change may break.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
@@ -73,6 +94,8 @@ func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot st
 		},
 		{
 			Name:        "get_architecture",
+			Title:       "Project Architecture",
+			Annotations: readOnlyAnnotations("Project Architecture"),
 			Description: "Return the project's architecture summary, modules, and entry points.",
 			InputSchema: map[string]interface{}{
 				"type": "object",

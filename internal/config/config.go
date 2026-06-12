@@ -42,19 +42,19 @@ func (f *Flags) Register(fs *flag.FlagSet) {
 // Config is the merged configuration (flags + optional config file).
 type Config struct {
 	Flags
-	ProjectRoot    string
-	DBPath         string
-	Verbose        bool
-	ConfigFile     *ConfigFile
+	ProjectRoot string
+	DBPath      string
+	Verbose     bool
+	ConfigFile  *ConfigFile
 }
 
 // ConfigFile is the optional .max-context/config.json structure.
 type ConfigFile struct {
-	Languages      []string `json:"languages"`
-	Include        []string `json:"include"`
-	Exclude        []string `json:"exclude"`
-	WatchDebounceMs int     `json:"watchDebounceMs"`
-	MaxFileSize    int64    `json:"maxFileSize"`
+	Languages       []string `json:"languages"`
+	Include         []string `json:"include"`
+	Exclude         []string `json:"exclude"`
+	WatchDebounceMs int      `json:"watchDebounceMs"`
+	MaxFileSize     int64    `json:"maxFileSize"`
 }
 
 // Load merges flags with optional .max-context/config.json and returns Config.
