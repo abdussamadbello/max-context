@@ -39,7 +39,7 @@ Tree-sitter parses every supported language deterministically. Symbols and call 
 
 - **Focused MCP tools**: `get_definition` (exact-name, canonical definition), `query_codebase` (BM25 fuzzy symbol search with explicit next action), `get_call_chain` (recursive caller/callee traversal), `get_impact` (change blast radius), `get_architecture` (pre-computed project summary)
 - **Real-time index**: File watcher keeps the index current within 2 seconds of changes
-- **Multi-language**: TypeScript, JavaScript, Python, Go, Rust, Java (and more via Tree-sitter)
+- **Multi-language**: TypeScript, JavaScript, Python, Go, Rust, Java (and more via Tree-sitter). Full call-graph resolution for Go, TypeScript/TSX, and Python; other languages are parsed with name-based call resolution — see [docs/LANGUAGES.md](docs/LANGUAGES.md) for the honest parsed-vs-resolved matrix.
 - **Universal CLI support**: One `max-context setup <cli>` configures Claude Code, VS Code Copilot, Codex CLI, Antigravity, Cursor, and Windsurf
 
 ## Install
