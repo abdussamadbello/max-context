@@ -24,6 +24,12 @@ type Scanner struct {
 	Root       string
 	Ignore     *IgnoreMatcher
 	Extensions []string
+	// Includes, when non-empty, restricts files to those matching at least one
+	// glob (matched against the slash-separated relative path, or the basename
+	// for patterns without a path separator). Note filepath.Match has no `**`.
+	Includes []string
+	// MaxFileSize skips files larger than this many bytes (0 = unlimited).
+	MaxFileSize int64
 }
 
 // IgnoreMatcher matches paths against gitignore-style rules.
@@ -54,6 +60,42 @@ func NewIgnoreMatcher(root string) (*IgnoreMatcher, error) {
 	}
 
 	return &IgnoreMatcher{patterns: patterns}, nil
+}
+
+// NewIgnoreMatcherWithExtra builds the standard ignore matcher plus extra
+// exclude patterns (from .max-context/config.json "exclude"). Extra patterns
+// use the same gitignore-style matching; `!` negations are ignored, as in
+// Match.
+func NewIgnoreMatcherWithExtra(root string, extra []string) (*IgnoreMatcher, error) {
+	m, err := NewIgnoreMatcher(root)
+	if err != nil {
+		return nil, err
+	}
+	m.patterns = append(m.patterns, extra...)
+	return m, nil
+}
+
+// matchesAnyGlob reports whether relPath matches at least one include glob.
+// Globs match the full slash-separated relative path; patterns without a
+// path separator also match the basename (so "*.go" matches nested files).
+func matchesAnyGlob(globs []string, relPath string) bool {
+	norm := filepath.ToSlash(relPath)
+	base := filepath.Base(norm)
+	for _, g := range globs {
+		g = filepath.ToSlash(strings.TrimSpace(g))
+		if g == "" {
+			continue
+		}
+		if matched, _ := filepath.Match(g, norm); matched {
+			return true
+		}
+		if !strings.Contains(g, "/") {
+			if matched, _ := filepath.Match(g, base); matched {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // readIgnoreFile reads a gitignore-style file and returns patterns.
@@ -168,6 +210,12 @@ func (s *Scanner) Scan() ([]string, error) {
 		}
 		rel, _ := filepath.Rel(s.Root, path)
 		if s.Ignore != nil && s.Ignore.Match(rel) {
+			return nil
+		}
+		if s.MaxFileSize > 0 && info.Size() > s.MaxFileSize {
+			return nil
+		}
+		if len(s.Includes) > 0 && !matchesAnyGlob(s.Includes, rel) {
 			return nil
 		}
 		ext := filepath.Ext(path)

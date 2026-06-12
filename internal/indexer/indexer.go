@@ -14,8 +14,53 @@ import (
 
 const batchSize = 500
 
+// Options carries optional indexing configuration from .max-context/config.json.
+// A nil *Options means defaults everywhere (all supported languages, no
+// include/exclude, no size cap).
+type Options struct {
+	Extensions  []string // restrict to these file extensions (nil = all supported)
+	Include     []string // include globs (nil = everything)
+	Exclude     []string // extra exclude patterns (gitignore-style)
+	MaxFileSize int64    // skip files larger than this many bytes (0 = unlimited)
+}
+
+func optsOrNil(opts []*Options) *Options {
+	if len(opts) > 0 {
+		return opts[0]
+	}
+	return nil
+}
+
+// skipsFile reports whether an incrementally changed file should be ignored
+// per the configured include/exclude/size rules — mirroring what Scan() would
+// have excluded on a full index. excl is a matcher built from o.Exclude.
+// Deleted files are never skipped here: IndexFile must still process the
+// deletion to drop stale rows.
+func (o *Options) skipsFile(root, relPath string, excl *IgnoreMatcher) bool {
+	if o == nil {
+		return false
+	}
+	if excl != nil && excl.Match(relPath) {
+		return true
+	}
+	if len(o.Include) > 0 && !matchesAnyGlob(o.Include, relPath) {
+		return true
+	}
+	if o.MaxFileSize > 0 {
+		if info, err := os.Stat(filepath.Join(root, filepath.FromSlash(relPath))); err == nil && info.Size() > o.MaxFileSize {
+			return true
+		}
+	}
+	return false
+}
+
 // RunWorker consumes paths from ch and reindexes each file. Empty string means full reindex (Phase 4: .reindex-queue).
-func RunWorker(ctx context.Context, root string, database *sql.DB, q *db.Queries, ch <-chan string) {
+func RunWorker(ctx context.Context, root string, database *sql.DB, q *db.Queries, ch <-chan string, opts ...*Options) {
+	o := optsOrNil(opts)
+	var excl *IgnoreMatcher
+	if o != nil && len(o.Exclude) > 0 {
+		excl = &IgnoreMatcher{patterns: o.Exclude}
+	}
 	// One delta-maintained resolver reused across incremental reindexes; a full
 	// reindex invalidates it (it rewrites every row), so the next IndexFile
 	// rebuilds it once and then maintains it per-file.
@@ -29,7 +74,7 @@ func RunWorker(ctx context.Context, root string, database *sql.DB, q *db.Queries
 				return
 			}
 			if path == "" {
-				if err := Index(ctx, root, database, q); err != nil {
+				if err := Index(ctx, root, database, q, o); err != nil {
 					// Surface, don't swallow: a failed full index left a stale or empty
 					// index that tools must be able to warn about.
 					fmt.Fprintf(os.Stderr, "max-context: full index failed: %v\n", err)
@@ -52,6 +97,9 @@ func RunWorker(ctx context.Context, root string, database *sql.DB, q *db.Queries
 				})
 				continue
 			}
+			if o.skipsFile(root, path, excl) {
+				continue
+			}
 			if err := IndexFile(ctx, root, path, database, q, cache); err != nil {
 				// Surface the failure so it shows up in staleness; a bad single-file
 				// reindex must not silently leave the index out of date.
@@ -66,9 +114,17 @@ func RunWorker(ctx context.Context, root string, database *sql.DB, q *db.Queries
 }
 
 // Index runs a full index of the project at root, using the given database and queries.
-func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries) error {
-	ignore, _ := NewIgnoreMatcher(root)
-	sc := &Scanner{Root: root, Ignore: ignore}
+func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries, opts ...*Options) error {
+	o := optsOrNil(opts)
+	var exclude []string
+	var include []string
+	var extensions []string
+	var maxFileSize int64
+	if o != nil {
+		exclude, include, extensions, maxFileSize = o.Exclude, o.Include, o.Extensions, o.MaxFileSize
+	}
+	ignore, _ := NewIgnoreMatcherWithExtra(root, exclude)
+	sc := &Scanner{Root: root, Ignore: ignore, Extensions: extensions, Includes: include, MaxFileSize: maxFileSize}
 	files, err := sc.Scan()
 	if err != nil {
 		return fmt.Errorf("scan: %w", err)

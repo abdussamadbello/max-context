@@ -103,6 +103,41 @@ func Parse(ctx context.Context, content []byte, lang Lang) (*sitter.Tree, error)
 }
 
 // SupportedExtensions returns a list of file extensions that can be parsed.
+// ExtensionsForLang returns the file extensions (with leading dot) for a
+// language name as written in .max-context/config.json "languages". Accepts
+// canonical names and common aliases, case-insensitively; unknown names
+// return nil.
+func ExtensionsForLang(name string) []string {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "typescript", "ts":
+		return []string{".ts", ".tsx"}
+	case "tsx":
+		return []string{".tsx"}
+	case "javascript", "js":
+		return []string{".js", ".jsx", ".mjs", ".cjs"}
+	case "jsx":
+		return []string{".jsx"}
+	case "python", "py":
+		return []string{".py", ".pyi"}
+	case "go", "golang":
+		return []string{".go"}
+	case "rust", "rs":
+		return []string{".rs"}
+	case "java":
+		return []string{".java"}
+	case "c":
+		return []string{".c", ".h"}
+	case "cpp", "c++", "cxx":
+		return []string{".cc", ".cpp", ".cxx", ".hh", ".hpp", ".hxx"}
+	case "ruby", "rb":
+		return []string{".rb"}
+	case "swift":
+		return []string{".swift"}
+	default:
+		return nil
+	}
+}
+
 func SupportedExtensions() []string {
 	return []string{
 		".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".pyi", ".go", ".rs",
