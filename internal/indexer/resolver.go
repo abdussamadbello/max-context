@@ -18,6 +18,7 @@ const (
 	resConstructor     = "constructor"      // bare call to a known class/struct (Python/TS Conn()) — classified, not a missed function edge
 	resNameGlobal      = "name-global"      // legacy global name lookup (non-Go / fallback)
 	resUnresolved      = "unresolved"       // Go-precise lookup attempted, no confident target
+	resStale           = "stale"            // edge previously resolved; its target file was reindexed (callee_id nulled), pending re-resolution within the same transaction
 )
 
 // goBuiltins are the predeclared functions that look like bare calls but are
