@@ -195,3 +195,39 @@ func firstLines(s string, n int) string {
 	}
 	return strings.Join(lines, "\n")
 }
+
+// The Windows CI failure this guards: GitHub's Windows runners check out with
+// autocrlf=true, so the embedded markdown arrived as CRLF and the "---\n"
+// fence never matched. Frontmatter was left in the rules files that must not
+// have it, and went undetected in the skills that need it — inverted on both
+// sides. .gitattributes pins the checkout to LF; this keeps the parsing correct
+// even for content that reaches us unnormalised.
+func TestFrontmatterHandlingIsCRLFSafe(t *testing.T) {
+	crlf := func(s string) string { return strings.ReplaceAll(s, "\n", "\r\n") }
+
+	doc := "---\nname: max-context\ndescription: Use when finding code\n---\n\n# Max Context\nbody\n"
+
+	if got := frontmatterField(crlf(doc), "description"); got != "Use when finding code" {
+		t.Errorf("CRLF frontmatter field = %q, want the value", got)
+	}
+	stripped := stripFrontmatter(crlf(doc))
+	if strings.HasPrefix(stripped, "---") {
+		t.Errorf("CRLF frontmatter was not stripped:\n%q", stripped)
+	}
+	if !strings.HasPrefix(stripped, "# Max Context") {
+		t.Errorf("CRLF strip left the wrong content:\n%q", stripped)
+	}
+}
+
+// The embedded guidance must be LF whatever the checkout did, since every
+// downstream check keys on "---\n".
+func TestEmbeddedGuidanceIsNormalised(t *testing.T) {
+	for name, body := range map[string]string{"mcp": guidanceMCP, "cli": guidanceCLI} {
+		if strings.Contains(body, "\r") {
+			t.Errorf("%s guidance still contains CR; the fence checks will not match", name)
+		}
+		if !strings.HasPrefix(body, "---\n") {
+			t.Errorf("%s guidance does not open with an LF frontmatter fence", name)
+		}
+	}
+}

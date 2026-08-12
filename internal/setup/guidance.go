@@ -13,11 +13,23 @@ import (
 // read by any code, while setup wrote a two-line stub instead.
 var (
 	//go:embed guidance/skill-mcp.md
-	guidanceMCP string
+	rawGuidanceMCP string
 
 	//go:embed guidance/skill-cli.md
-	guidanceCLI string
+	rawGuidanceCLI string
 )
+
+// Normalised at init: a Windows checkout with autocrlf=true rewrites these
+// files to CRLF, and every "---\n" fence check below would stop matching —
+// frontmatter would survive in rules files that must not have it, and go
+// undetected in the skills that need it. .gitattributes pins the checkout to
+// LF; this makes the code correct even where it does not.
+var (
+	guidanceMCP = normaliseNewlines(rawGuidanceMCP)
+	guidanceCLI = normaliseNewlines(rawGuidanceCLI)
+)
+
+func normaliseNewlines(s string) string { return strings.ReplaceAll(s, "\r\n", "\n") }
 
 // GuidanceStyle selects how the agent is told to reach the index.
 type GuidanceStyle int
@@ -84,7 +96,9 @@ func (h Harness) agentsLine() string {
 }
 
 // stripFrontmatter removes a leading YAML frontmatter block, if present.
+// Tolerates CRLF so a file that reached us unnormalised still parses.
 func stripFrontmatter(s string) string {
+	s = normaliseNewlines(s)
 	const fence = "---\n"
 	if !strings.HasPrefix(s, fence) {
 		return s
@@ -100,6 +114,7 @@ func stripFrontmatter(s string) string {
 // frontmatterField reads one top-level scalar from a guidance file's
 // frontmatter. Used by tests to assert the fields a harness needs to load it.
 func frontmatterField(s, key string) string {
+	s = normaliseNewlines(s)
 	const fence = "---\n"
 	if !strings.HasPrefix(s, fence) {
 		return ""

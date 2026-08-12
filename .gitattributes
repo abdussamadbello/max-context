@@ -1,0 +1,15 @@
+# Embedded assets must have identical bytes on every platform. Without this,
+# Windows checkouts (autocrlf=true on GitHub runners) rewrite these files to
+# CRLF, and the frontmatter fence in internal/setup/guidance.go stops matching
+# — guidance silently keeps frontmatter it should strip, and loses the
+# frontmatter a skill needs to load at all.
+*.md text eol=lf
+*.go text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.sh text eol=lf
+
+# Shell scripts and fixtures the tests read byte for byte.
+testdata/** text eol=lf
