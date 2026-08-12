@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/maxcontext/max-context/internal/indexer"
 )
 
 // Question describes one benchmark probe. Curated per-repo in benchmark/questions/.
@@ -56,14 +58,22 @@ func Run(root string, questions []Question, opts RunOptions) (*Results, error) {
 		return nil, err
 	}
 
+	// Both baselines walk the same file set max-context indexes. Without this
+	// the comparison rewarded max-context for files it never indexed: grep paid
+	// for every byte under experiments/, the index did not.
+	filter, err := indexer.NewIgnoreMatcherWithExtra(root, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build repo filter: %w", err)
+	}
+
 	res := &Results{Repo: opts.Repo}
 	var sumMC, sumNaive, sumSkilled float64
 	for _, q := range questions {
-		naive, err := NaiveBaseline(root, q.Terms)
+		naive, err := NaiveBaseline(root, q.Terms, filter)
 		if err != nil {
 			return nil, fmt.Errorf("naive baseline %s: %w", q.ID, err)
 		}
-		skilled, err := SkilledBaseline(root, q.Terms)
+		skilled, err := SkilledBaseline(root, q.Terms, filter)
 		if err != nil {
 			return nil, fmt.Errorf("skilled baseline %s: %w", q.ID, err)
 		}

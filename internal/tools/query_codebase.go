@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"path/filepath"
+	"strings"
 
 	"github.com/maxcontext/max-context/internal/db"
 	"github.com/maxcontext/max-context/internal/mcp"
@@ -69,6 +70,16 @@ func QueryCodebaseHandler(database *sql.DB, q *db.Queries, projectRoot string) m
 			scope = "all"
 		}
 
+		// Over-fetch from FTS so the exact-name promotion below has a pool to
+		// find the right symbol in. bm25 ranks a long test name matching every
+		// query term above the short symbol the agent actually wants, so with a
+		// default limit of 3 the real answer never entered the candidate set.
+		// Results are trimmed back to `limit` before returning.
+		fetchLimit := limit * 8
+		if fetchLimit < 30 {
+			fetchLimit = 30
+		}
+
 		// search runs all in-scope FTS lookups for one query string; prebuilt
 		// queries (the expansion fallback) skip the raw-then-sanitize logic.
 		search := func(query string, prebuilt bool) ([]searchResult, error) {
@@ -78,7 +89,7 @@ func QueryCodebaseHandler(database *sql.DB, q *db.Queries, projectRoot string) m
 			}
 			var out []searchResult
 			if scope == "all" || scope == "functions" {
-				rows, err := fts(q.SearchFunctions, query, limit)
+				rows, err := fts(q.SearchFunctions, query, fetchLimit)
 				if err != nil {
 					return out, err
 				}
@@ -111,18 +122,19 @@ func QueryCodebaseHandler(database *sql.DB, q *db.Queries, projectRoot string) m
 				// Types search is best-effort: a failure here never fails the whole
 				// call (functions results may already be present). ftsSearch applies the
 				// same raw-then-sanitized fallback.
-				rows, err := fts(q.SearchTypes, query, limit)
+				rows, err := fts(q.SearchTypes, query, fetchLimit)
 				if err == nil && rows != nil {
 					for rows.Next() {
 						var id int64
 						var name, filePath, kind string
+						var startLine int
 						var definition string
 						var exported int
 						var snippet sql.NullString
 						var rank float64
-						if rows.Scan(&id, &name, &filePath, &kind, &definition, &exported, &snippet, &rank) == nil {
+						if rows.Scan(&id, &name, &filePath, &startLine, &kind, &definition, &exported, &snippet, &rank) == nil {
 							r := searchResult{
-								File: filePath, Kind: "type/" + kind, Name: name, Snippet: truncateSnippet(snippet.String),
+								File: filePath, Line: startLine, Kind: "type/" + kind, Name: name, Snippet: truncateSnippet(snippet.String),
 							}
 							annotateSearchResult(&r)
 							out = append(out, r)
@@ -194,6 +206,11 @@ func QueryCodebaseHandler(database *sql.DB, q *db.Queries, projectRoot string) m
 		// reports the single correct file instead of also naming the other ranked
 		// candidates — which was dropping precision (FINDINGS.md gap 2: P=0.50).
 		exact := exactNameMatches(a.Query, results)
+		// The over-fetched pool has served its purpose; the caller asked for
+		// `limit` results and pays tokens for every one of them.
+		if len(results) > limit {
+			results = results[:limit]
+		}
 		payload := map[string]interface{}{
 			"detected_intent": detectedIntent(a.Query),
 		}
@@ -286,11 +303,20 @@ func truncateSnippet(s string) string {
 // drops the other ranked candidates (precision fix, FINDINGS gap 2).
 func exactNameMatches(query string, results []searchResult) []searchResult {
 	terms := splitTerms(query)
+	// A multi-word query often spells one identifier: "resolver cache" is how an
+	// agent asks for ResolverCache, and "index file" for IndexFile. Joining the
+	// terms recovers the symbol, so those queries get the same decisive
+	// treatment as typing the name directly.
+	joined := strings.Join(terms, "")
 	var exact []searchResult
 	for _, r := range results {
 		// A document titled exactly like the query must never trigger the
 		// "definitive, stop searching" path reserved for symbol definitions.
 		if r.Kind == "document" {
+			continue
+		}
+		if len(terms) > 1 && equalFold(alphanumeric(r.Name), joined) {
+			exact = append(exact, r)
 			continue
 		}
 		for _, t := range terms {
@@ -301,6 +327,18 @@ func exactNameMatches(query string, results []searchResult) []searchResult {
 		}
 	}
 	return exact
+}
+
+// alphanumeric strips separators from a symbol name so snake_case and camelCase
+// spellings of the same identifier compare equal.
+func alphanumeric(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // answerFor renders the decisive one-line location for a single result.

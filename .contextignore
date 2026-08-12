@@ -1,0 +1,13 @@
+# Files max-context should not index in its own repo.
+#
+# experiments/ is the evaluation harness: a separate Go module carrying ~24MB of
+# recorded agent transcripts and results.json blobs. It is not part of the
+# product, and indexing it poisons the tool's own answers — a `-scope docs`
+# search returned LoCoBench transcript JSON ahead of the project's real docs.
+#
+# Note: patterns here are matched per path component, not as full-path globs.
+experiments/
+
+# Build output
+bin/
+dist/

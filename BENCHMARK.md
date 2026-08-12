@@ -8,7 +8,14 @@ This benchmark is a **per-tool-call context-budget benchmark**, not a full agent
 
 | Repo | Questions | max-context per call (avg) | Naive per call (avg) | Skilled per call (avg) | vs Naive | vs Skilled |
 |---|---|---|---|---|---|---|
-| max-context (self) | 20 | 229 | 38,929,834 | 6,774 | 169,776.9× | 29.5× |
+| max-context (self) | 20 | 229 | 39,883 | 12,665 | 173.9× | 55.2× |
+
+> **These numbers replace an earlier, much larger set (169,776.9× vs naive).** That
+> figure was an artefact of the harness, not a result: the naive baseline walked
+> `bin/` and tokenized the project's own compiled binary, and both baselines
+> grepped files — 24MB of recorded eval transcripts under `experiments/` — that
+> max-context never indexed. Both are fixed (see Methodology); treat any
+> previously published naive figure as withdrawn.
 
 The self-repo numbers above are reproducible today via `max-context bench` (see Reproduce). Treat them as a token-volume result for the tool response itself. For task completion quality, repeated tool calls, and agent-session token cost, use the A/B harness under `experiments/eval/`.
 
@@ -17,8 +24,10 @@ The self-repo numbers above are reproducible today via `max-context bench` (see 
 - **We measure** cl100k_base tokens consumed by what the LLM would see for one deterministic answer: tool-call JSON for max-context; `grep` output plus file/window contents for the baselines.
 - **We do not measure** latency, correctness, or LLM answer quality. Different agents will perform differently; this is a *context-budget* measurement, not an *intelligence* measurement.
 - **Baselines run a deterministic Go script**, not a real LLM agent. A real agent may do better (smarter grep flags) or worse (re-reading files).
-- **Naive baseline**: recursive `grep` across all files (no directory exclusions), full `os.ReadFile` of every matching file, no dedup across query terms. This tokenizes everything the file walker can see, *including build artifacts and the indexed binary itself*, which inflates the number — that is precisely what an unfiltered agent would consume.
-- **Skilled baseline**: `grep` with `node_modules`/`.git`/`vendor`/`bin`/`.max-context` excluded, `Read` only ±20 lines around each match, dedupe windows within 40 lines of each other.
+- **Same file set on both sides.** The baselines walk exactly what max-context indexes — the repo's `.gitignore` / `.contextignore` rules — so the comparison measures *how* each approach searches, not *how much* it was pointed at. Before this, grep paid for files the index had never seen, which flattered max-context by roughly 40×.
+- **Binary files are skipped**, using grep's own heuristic (a NUL byte in the first block). Tokenizing a compiled binary is not something any agent does; counting it made the naive baseline meaningless rather than merely unflattering.
+- **Naive baseline**: recursive `grep` across all in-scope files (no directory exclusions beyond the repo's ignore rules), full `os.ReadFile` of every matching file, no dedup across query terms — what an agent that greps and reads whole files consumes.
+- **Skilled baseline**: `grep` with `node_modules`/`.git`/`vendor`/`bin`/`.max-context` additionally excluded, `Read` only ±20 lines around each match, dedupe windows within 40 lines of each other.
 - **Where max-context loses**: semantic questions ("why was this written this way?") that require reading prose, not symbols.
 
 ## Agent-session metric
@@ -41,7 +50,7 @@ The current A/B findings (`experiments/eval/benchmarks/in-house/FINDINGS.md`) sh
 git clone https://github.com/maxcontext/max-context
 cd max-context && make build
 ./bin/max-context --index
-./bin/max-context bench --repo . --out benchmark/runs/max-context
+./bin/max-context bench -repo . -questions benchmark/questions/max-context.json -out benchmark/runs/max-context
 ```
 
 ## Per-repo results

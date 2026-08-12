@@ -125,3 +125,24 @@ jobs:
           if grep -q '"callees"' calls.txt; then
             echo "flags after the positional were ignored:"; cat calls.txt; exit 1
           fi
+
+      # A multi-word query is how an agent actually asks. These used to return
+      # test helpers from a path-name match instead of the symbol itself.
+      - name: Multi-word queries reach camelCase symbols
+        run: |
+          ./bin/max-context query "resolver cache" -n 3 > q1.json
+          grep -q '"name":"ResolverCache"' q1.json || { echo "missed ResolverCache:"; cat q1.json; exit 1; }
+          ./bin/max-context query "index file" -n 3 > q2.json
+          grep -q '"name":"IndexFile"' q2.json || { echo "missed IndexFile:"; cat q2.json; exit 1; }
+
+      - name: Type results carry a line number
+        run: |
+          ./bin/max-context def ResolverCache > d.json
+          python3 -c "
+          import json, sys
+          d = json.load(open('d.json'))
+          hits = d.get('matches') or []
+          assert hits, 'no matches for ResolverCache'
+          bad = [h for h in hits if not h.get('line')]
+          assert not bad, f'results missing a line number: {bad}'
+          "

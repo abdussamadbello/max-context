@@ -117,13 +117,13 @@ func exactDefinitions(database *sql.DB, symbol string) []definitionHit {
 	}
 	// Types/classes/interfaces.
 	trows, err := database.Query(
-		`SELECT name, file_path, kind FROM types WHERE name = ? COLLATE NOCASE ORDER BY file_path`,
+		`SELECT name, file_path, start_line, kind FROM types WHERE name = ? COLLATE NOCASE ORDER BY file_path, start_line`,
 		symbol)
 	if err == nil {
 		for trows.Next() {
 			var h definitionHit
 			var kind string
-			if trows.Scan(&h.Name, &h.File, &kind) == nil {
+			if trows.Scan(&h.Name, &h.File, &h.Line, &kind) == nil {
 				h.Kind = "type/" + kind
 				annotateDefinitionHit(&h)
 				out = append(out, h)

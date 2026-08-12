@@ -288,8 +288,8 @@ func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries, op
 			exported = 1
 		}
 		_, err := tx.Exec(
-			"INSERT INTO types (name, file_path, kind, definition, exported) VALUES (?, ?, ?, ?, ?)",
-			t.Name, t.FilePath, t.Kind, t.Definition, exported,
+			"INSERT INTO types (name, name_parts, file_path, start_line, kind, definition, exported) VALUES (?1, split_identifier(?1), ?2, ?3, ?4, ?5, ?6)",
+			t.Name, t.FilePath, t.Line, t.Kind, t.Definition, exported,
 		)
 		if err != nil {
 			return err
@@ -396,7 +396,7 @@ func insertFunction(tx *sql.Tx, f FuncRecord) error {
 		kind = "func"
 	}
 	_, err := tx.Exec(
-		"INSERT INTO functions (name, file_path, start_line, end_line, language, exported, code, docstring, signature, kind, receiver_type, package, return_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO functions (name, name_parts, file_path, start_line, end_line, language, exported, code, docstring, signature, kind, receiver_type, package, return_type) VALUES (?1, split_identifier(?1), ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
 		f.Name, f.FilePath, f.StartLine, f.EndLine, f.Language, exported, f.Code, f.Docstring, f.Signature,
 		kind, nullStr(f.ReceiverType), nullStr(f.Package), nullStr(f.ReturnType),
 	)
@@ -427,6 +427,7 @@ func constToType(c ConstRecord) TypeRecord {
 	return TypeRecord{
 		Name:       c.Name,
 		FilePath:   c.FilePath,
+		Line:       c.Line,
 		Kind:       "constant",
 		Definition: c.Name,
 		Exported:   isExported(c.Name),
@@ -612,8 +613,8 @@ func IndexFile(ctx context.Context, root string, relPath string, database *sql.D
 			exported = 1
 		}
 		_, err := tx.Exec(
-			"INSERT INTO types (name, file_path, kind, definition, exported) VALUES (?, ?, ?, ?, ?)",
-			t.Name, t.FilePath, t.Kind, t.Definition, exported,
+			"INSERT INTO types (name, name_parts, file_path, start_line, kind, definition, exported) VALUES (?1, split_identifier(?1), ?2, ?3, ?4, ?5, ?6)",
+			t.Name, t.FilePath, t.Line, t.Kind, t.Definition, exported,
 		)
 		if err != nil {
 			return err
@@ -627,8 +628,8 @@ func IndexFile(ctx context.Context, root string, relPath string, database *sql.D
 			exported = 1
 		}
 		if _, err := tx.Exec(
-			"INSERT INTO types (name, file_path, kind, definition, exported) VALUES (?, ?, ?, ?, ?)",
-			ct.Name, ct.FilePath, ct.Kind, ct.Definition, exported,
+			"INSERT INTO types (name, name_parts, file_path, start_line, kind, definition, exported) VALUES (?1, split_identifier(?1), ?2, ?3, ?4, ?5, ?6)",
+			ct.Name, ct.FilePath, ct.Line, ct.Kind, ct.Definition, exported,
 		); err != nil {
 			return err
 		}

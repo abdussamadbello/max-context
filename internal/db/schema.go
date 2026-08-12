@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const schemaVersion = 8
+const schemaVersion = 9
 
 // Migrate ensures the database schema is at the current version, running
 // migrations if needed. Call after Open.
@@ -79,6 +79,7 @@ var migrations = map[int]func(*sql.Tx) error{
 	6: migrationV6,
 	7: migrationV7,
 	8: migrationV8,
+	9: migrationV9,
 }
 
 func migrationV1(tx *sql.Tx) error {
@@ -446,5 +447,113 @@ func migrationV8(tx *sql.Tx) error {
 			VALUES (new.id, new.title, new.file_path, new.content);
 		END;
 	`)
+	return err
+}
+
+// migrationV9 makes multi-word queries reach camelCase and snake_case symbols,
+// and records where a type is defined.
+//
+// FTS5's tokenizer indexes "ResolverCache" as one token, so the query
+// "resolver cache" matched nothing in the name column — but matched the
+// indexed file_path of every symbol in resolver_cache_test.go, which then
+// outranked the type itself. Agents ask in words, so a name_parts column
+// carries the split form ("Resolver Cache") alongside the raw name, and
+// file_path is down-weighted in the search queries so a path match can no
+// longer outrank a name match.
+//
+// types also gains start_line: the table never stored one, so every type
+// result came back with a file but no line to jump to.
+//
+// The FTS tables are dropped and recreated (they are derived data, rebuilt
+// from the content tables in the same transaction), and name_parts is
+// backfilled for existing rows so an upgrade does not require a reindex.
+func migrationV9(tx *sql.Tx) error {
+	// Additive columns on the content tables.
+	for _, stmt := range []string{
+		`ALTER TABLE functions ADD COLUMN name_parts TEXT`,
+		`ALTER TABLE types ADD COLUMN name_parts TEXT`,
+		`ALTER TABLE types ADD COLUMN start_line INTEGER NOT NULL DEFAULT 0`,
+	} {
+		if _, err := tx.Exec(stmt); err != nil {
+			return fmt.Errorf("%s: %w", stmt, err)
+		}
+	}
+
+	// Backfill the split form for rows already indexed, so upgrading does not
+	// require a reindex to get the new matching behaviour.
+	for _, table := range []string{"functions", "types"} {
+		if _, err := tx.Exec("UPDATE " + table + " SET name_parts = split_identifier(name)"); err != nil {
+			return fmt.Errorf("backfill %s.name_parts: %w", table, err)
+		}
+	}
+
+	// Recreate the FTS tables and their triggers with the new column. Dropping
+	// the triggers first avoids them firing against the old shape mid-migration.
+	_, err := tx.Exec(`
+		DROP TRIGGER IF EXISTS functions_ai;
+		DROP TRIGGER IF EXISTS functions_ad;
+		DROP TRIGGER IF EXISTS functions_au;
+		DROP TRIGGER IF EXISTS types_ai;
+		DROP TRIGGER IF EXISTS types_ad;
+		DROP TRIGGER IF EXISTS types_au;
+		DROP TABLE IF EXISTS functions_fts;
+		DROP TABLE IF EXISTS types_fts;
+
+		CREATE VIRTUAL TABLE functions_fts USING fts5(
+			name,
+			name_parts,
+			file_path,
+			code,
+			docstring,
+			content='functions',
+			content_rowid='id'
+		);
+		CREATE VIRTUAL TABLE types_fts USING fts5(
+			name,
+			name_parts,
+			file_path,
+			definition,
+			content='types',
+			content_rowid='id'
+		);
+
+		CREATE TRIGGER functions_ai AFTER INSERT ON functions BEGIN
+			INSERT INTO functions_fts(rowid, name, name_parts, file_path, code, docstring)
+			VALUES (new.id, new.name, new.name_parts, new.file_path, new.code, new.docstring);
+		END;
+		CREATE TRIGGER functions_ad AFTER DELETE ON functions BEGIN
+			INSERT INTO functions_fts(functions_fts, rowid, name, name_parts, file_path, code, docstring)
+			VALUES ('delete', old.id, old.name, old.name_parts, old.file_path, old.code, old.docstring);
+		END;
+		CREATE TRIGGER functions_au AFTER UPDATE ON functions BEGIN
+			INSERT INTO functions_fts(functions_fts, rowid, name, name_parts, file_path, code, docstring)
+			VALUES ('delete', old.id, old.name, old.name_parts, old.file_path, old.code, old.docstring);
+			INSERT INTO functions_fts(rowid, name, name_parts, file_path, code, docstring)
+			VALUES (new.id, new.name, new.name_parts, new.file_path, new.code, new.docstring);
+		END;
+
+		CREATE TRIGGER types_ai AFTER INSERT ON types BEGIN
+			INSERT INTO types_fts(rowid, name, name_parts, file_path, definition)
+			VALUES (new.id, new.name, new.name_parts, new.file_path, new.definition);
+		END;
+		CREATE TRIGGER types_ad AFTER DELETE ON types BEGIN
+			INSERT INTO types_fts(types_fts, rowid, name, name_parts, file_path, definition)
+			VALUES ('delete', old.id, old.name, old.name_parts, old.file_path, old.definition);
+		END;
+		CREATE TRIGGER types_au AFTER UPDATE ON types BEGIN
+			INSERT INTO types_fts(types_fts, rowid, name, name_parts, file_path, definition)
+			VALUES ('delete', old.id, old.name, old.name_parts, old.file_path, old.definition);
+			INSERT INTO types_fts(rowid, name, name_parts, file_path, definition)
+			VALUES (new.id, new.name, new.name_parts, new.file_path, new.definition);
+		END;
+	`)
+	if err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec("INSERT INTO functions_fts(functions_fts) VALUES('rebuild')"); err != nil {
+		return err
+	}
+	_, err = tx.Exec("INSERT INTO types_fts(types_fts) VALUES('rebuild')")
 	return err
 }

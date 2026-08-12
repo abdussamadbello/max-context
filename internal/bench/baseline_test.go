@@ -15,7 +15,7 @@ func TestNaiveBaseline_GrepAndRead(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tokens, err := NaiveBaseline(dir, []string{"AuthHandler"})
+	tokens, err := NaiveBaseline(dir, []string{"AuthHandler"}, nil)
 	if err != nil {
 		t.Fatalf("NaiveBaseline: %v", err)
 	}
@@ -31,11 +31,11 @@ func TestSkilledBaseline_NarrowerThanNaive(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}
-	naive, err := NaiveBaseline(dir, []string{"AuthHandler"})
+	naive, err := NaiveBaseline(dir, []string{"AuthHandler"}, nil)
 	if err != nil {
 		t.Fatalf("NaiveBaseline: %v", err)
 	}
-	skilled, err := SkilledBaseline(dir, []string{"AuthHandler"})
+	skilled, err := SkilledBaseline(dir, []string{"AuthHandler"}, nil)
 	if err != nil {
 		t.Fatalf("SkilledBaseline: %v", err)
 	}

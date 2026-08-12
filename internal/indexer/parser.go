@@ -95,6 +95,7 @@ type ConstRecord struct {
 type TypeRecord struct {
 	Name       string
 	FilePath   string
+	Line       int // 1-based declaration line; 0 when the grammar gives no position
 	Kind       string
 	Definition string
 	Exported   bool
@@ -196,6 +197,7 @@ func parseGeneric(slashPath, lang string, groups []treesitter.CaptureGroup) *Par
 				res.Types = append(res.Types, TypeRecord{
 					Name:       name,
 					FilePath:   slashPath,
+					Line:       rowOf(g, "name"),
 					Kind:       "type",
 					Definition: truncate(def, 300),
 					Exported:   isExported(name),
@@ -346,6 +348,7 @@ func parseGo(slashPath string, groups []treesitter.CaptureGroup) *ParseResult {
 			res.Types = append(res.Types, TypeRecord{
 				Name:       t["type.name"],
 				FilePath:   slashPath,
+				Line:       rowOf(g, "type.name"),
 				Kind:       "type",
 				Definition: truncate(t["type.def"], 300),
 				Exported:   isExported(t["type.name"]),
@@ -540,7 +543,7 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 			start, end := defRange(g, "class.name", "class.body")
 			clsSpans = append(clsSpans, &classSpan{name: t["class.name"], start: start, end: end})
 			res.Types = append(res.Types, TypeRecord{
-				Name: t["class.name"], FilePath: slashPath, Kind: "class",
+				Name: t["class.name"], FilePath: slashPath, Line: start, Kind: "class",
 				Exported: isExported(t["class.name"]),
 			})
 
@@ -598,7 +601,7 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 
 		case t["type.name"] != "" && t["type.def"] != "":
 			res.Types = append(res.Types, TypeRecord{
-				Name: t["type.name"], FilePath: slashPath, Kind: "type",
+				Name: t["type.name"], FilePath: slashPath, Line: rowOf(g, "type.name"), Kind: "type",
 				Definition: truncate(t["type.def"], 300), Exported: isExported(t["type.name"]),
 			})
 		}
