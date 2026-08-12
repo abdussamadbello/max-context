@@ -135,6 +135,23 @@ jobs:
           ./bin/max-context query "index file" -n 3 > q2.json
           grep -q '"name":"IndexFile"' q2.json || { echo "missed IndexFile:"; cat q2.json; exit 1; }
 
+      # The tool definitions are re-sent every request, so their size is a
+      # per-turn tax on every session. Keep it visible in CI output.
+      - name: Report tool-definition token cost
+        run: |
+          printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{}}}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+            | ./bin/max-context | tail -1 > tools.json
+          python3 -c "
+          import json
+          tools = json.load(open('tools.json'))['result']['tools']
+          size = len(json.dumps(tools))
+          print(f'tool definitions: {size} bytes (~{size//4} tokens) across {len(tools)} tools')
+          for t in tools:
+              print(f\"  {t['name']:<18} {len(json.dumps(t)):>5} bytes\")
+          "
+
       - name: Type results carry a line number
         run: |
           ./bin/max-context def ResolverCache > d.json

@@ -8,17 +8,33 @@ import (
 )
 
 // readOnlyAnnotations marks a tool as a safe, repeatable, local-only read —
-// every max-context tool queries the index and touches nothing else.
-func readOnlyAnnotations(title string) *mcp.ToolAnnotations {
+// every max-context tool queries the index and touches nothing else. Title is
+// deliberately not set: it duplicates ToolSchema.Title in every definition.
+func readOnlyAnnotations() *mcp.ToolAnnotations {
 	t, f := true, false
 	return &mcp.ToolAnnotations{
-		Title:           title,
 		ReadOnlyHint:    &t,
 		DestructiveHint: &f,
 		IdempotentHint:  &t,
 		OpenWorldHint:   &f,
 	}
 }
+
+// Tool schemas are re-sent by the client on every request, so their size is a
+// per-turn tax on every session — paid whether or not the tools are used. The
+// text below is kept deliberately terse: it carries the cross-tool steering the
+// A/B runs showed the model needs (which tool answers which question, and when
+// to stop searching) and nothing else. Mechanics that the response itself
+// explains do not belong here.
+//
+// Guard rail: TestToolSchemaBudget fails if the definitions grow past their
+// budget, so this stays a decision rather than a drift.
+
+// confidenceLevels is the shared resolution-confidence vocabulary for the two
+// graph tools. Defined once: it appeared verbatim in both schemas before.
+var confidenceLevels = []string{"interface-dispatch", "name-global", "receiver-typed", "same-package", "same-file"}
+
+const confidenceDesc = "Minimum call-edge confidence to traverse. 'interface-dispatch' also follows interfaces to implementations (low confidence, off by default)."
 
 func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot string) []mcp.ToolSchema {
 	store := db.NewSQLiteStore(database)
@@ -29,32 +45,36 @@ func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot st
 	h.Register("get_impact", GetImpactHandler(store, projectRoot))
 	h.Register("get_architecture", GetArchitectureHandler(database, projectRoot))
 
+	str := func(desc string) map[string]string {
+		return map[string]string{"type": "string", "description": desc}
+	}
+	depth := map[string]interface{}{"type": "integer", "description": "Recursion depth 1-5", "default": 2}
+	confidence := map[string]interface{}{"type": "string", "description": confidenceDesc, "enum": confidenceLevels}
+
 	return []mcp.ToolSchema{
 		{
 			Name:        "get_definition",
 			Title:       "Find Definition",
-			Annotations: readOnlyAnnotations("Find Definition"),
-			Description: "Find where a symbol is defined by EXACT name. Use this first for 'where is X defined?' questions. Returns answer_status, recommended_next_action, and a canonical result when a class/type should outrank same-named methods or properties. If the result is definitive, answer immediately without further searching.",
+			Annotations: readOnlyAnnotations(),
+			Description: "Where is X defined? Exact name. Try this before query_codebase. When answer_status is 'definitive', answer immediately — do not search again.",
 			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"symbol": map[string]string{"type": "string", "description": "Exact symbol name (function, method, type, class)"},
-				},
-				"required": []string{"symbol"},
+				"type":       "object",
+				"properties": map[string]interface{}{"symbol": str("Exact symbol name")},
+				"required":   []string{"symbol"},
 			},
 		},
 		{
 			Name:        "query_codebase",
 			Title:       "Search Codebase",
-			Annotations: readOnlyAnnotations("Search Codebase"),
-			Description: "Fuzzy/keyword search of the indexed codebase for functions, types, and docs/config files (markdown, YAML, JSON, proto, GraphQL, SQL, Dockerfiles). Returns terse ranked results plus answer_status and recommended_next_action. For overloaded exact names, canonical type/class definitions outrank same-named methods/properties. For 'where is X defined?' prefer get_definition; for dependency/usage questions prefer get_impact or get_call_chain. One or two queries is usually enough.",
+			Annotations: readOnlyAnnotations(),
+			Description: "Keyword search over indexed symbols and docs. Use get_definition for 'where is X defined', and get_impact or get_call_chain for 'what uses/breaks X'. One or two queries is usually enough; obey recommended_next_action.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"query":       map[string]string{"type": "string", "description": "Search query (keywords or function/type name)"},
-					"max_results": map[string]interface{}{"type": "integer", "description": "Max results to return (1-50)", "default": 3},
-					"scope":       map[string]interface{}{"type": "string", "description": "Restrict search scope. 'docs' searches non-code files (markdown, YAML, JSON, proto, GraphQL, SQL, Dockerfiles) only.", "enum": []string{"all", "functions", "types", "files", "docs"}, "default": "all"},
-					"file_filter": map[string]interface{}{"type": "string", "description": "Glob pattern to filter by file path (e.g. 'src/**/*.ts')"},
+					"query":       str("Keywords or a symbol name"),
+					"max_results": map[string]interface{}{"type": "integer", "description": "1-50", "default": 3},
+					"scope":       map[string]interface{}{"type": "string", "description": "'docs' searches non-code files only", "enum": []string{"all", "functions", "types", "files", "docs"}, "default": "all"},
+					"file_filter": str("Path glob, e.g. 'src/**/*.ts'"),
 				},
 				"required": []string{"query"},
 			},
@@ -62,15 +82,15 @@ func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot st
 		{
 			Name:        "get_call_chain",
 			Title:       "Trace Call Chain",
-			Annotations: readOnlyAnnotations("Trace Call Chain"),
-			Description: "Traverse the call graph to find who calls a function (callers) and what it calls (callees), recursively up to a configurable depth.",
+			Annotations: readOnlyAnnotations(),
+			Description: "Who calls this function, and what does it call — recursively.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"function_name":  map[string]string{"type": "string", "description": "Name of the function to trace"},
-					"direction":      map[string]interface{}{"type": "string", "description": "Traversal direction", "enum": []string{"callers", "callees", "both"}, "default": "both"},
-					"depth":          map[string]interface{}{"type": "integer", "description": "Max recursion depth (1-5)", "default": 2},
-					"min_confidence": map[string]interface{}{"type": "string", "description": "Only traverse call edges at or above this resolution confidence. Set 'interface-dispatch' to ALSO follow interface methods to concrete implementations (low-confidence, off by default).", "enum": []string{"interface-dispatch", "name-global", "receiver-typed", "same-package", "same-file"}},
+					"function_name":  str("Function to trace"),
+					"direction":      map[string]interface{}{"type": "string", "enum": []string{"callers", "callees", "both"}, "default": "both"},
+					"depth":          depth,
+					"min_confidence": confidence,
 				},
 				"required": []string{"function_name"},
 			},
@@ -78,30 +98,28 @@ func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot st
 		{
 			Name:        "get_impact",
 			Title:       "Analyze Change Impact",
-			Annotations: readOnlyAnnotations("Analyze Change Impact"),
-			Description: "Given changed files (or a git rev range), return symbols whose blast radius is affected. Default behaviour: diff against HEAD, walk callers to depth 2. Use this post-edit to learn what tests and dependents your change may break.",
+			Annotations: readOnlyAnnotations(),
+			Description: "What does a change break? Returns the blast radius of changed files. Defaults to the diff against HEAD. Use after editing to find affected tests and dependents.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"files":          map[string]interface{}{"type": "array", "items": map[string]string{"type": "string"}, "description": "Explicit file list (project-root relative). If omitted, uses from_git or defaults to HEAD."},
-					"from_git":       map[string]string{"type": "string", "description": "Git revision (e.g. 'HEAD' or 'main..HEAD'). Ignored if 'files' is set."},
-					"depth":          map[string]interface{}{"type": "integer", "description": "Max recursion depth (1-5)", "default": 2},
-					"direction":      map[string]interface{}{"type": "string", "description": "callers (blast radius), callees (dependencies), or both", "enum": []string{"callers", "callees", "both"}, "default": "callers"},
-					"include_tests":  map[string]interface{}{"type": "boolean", "description": "Include test files in results", "default": true},
-					"min_confidence": map[string]interface{}{"type": "string", "description": "Only traverse call edges at or above this resolution confidence. Use to exclude lower-confidence guesses from the blast radius. Set 'interface-dispatch' to ALSO fan out through interface methods to concrete implementations (low-confidence, off by default).", "enum": []string{"interface-dispatch", "name-global", "receiver-typed", "same-package", "same-file"}},
+					"files":          map[string]interface{}{"type": "array", "items": map[string]string{"type": "string"}, "description": "Project-relative paths; defaults to the git diff"},
+					"from_git":       str("Git revision, e.g. 'main..HEAD'. Ignored when files is set"),
+					"depth":          depth,
+					"direction":      map[string]interface{}{"type": "string", "enum": []string{"callers", "callees", "both"}, "default": "callers"},
+					"include_tests":  map[string]interface{}{"type": "boolean", "default": true},
+					"min_confidence": confidence,
 				},
 			},
 		},
 		{
 			Name:        "get_architecture",
 			Title:       "Project Architecture",
-			Annotations: readOnlyAnnotations("Project Architecture"),
-			Description: "Return the project's architecture summary, modules, and entry points.",
+			Annotations: readOnlyAnnotations(),
+			Description: "Project summary, modules, and entry points.",
 			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"focus": map[string]string{"type": "string", "description": "Optional subsystem filter"},
-				},
+				"type":       "object",
+				"properties": map[string]interface{}{"focus": str("Optional subsystem filter")},
 			},
 		},
 	}

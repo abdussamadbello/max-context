@@ -32,6 +32,31 @@ You need Go 1.22+ and a C toolchain (CGO is required for the tree-sitter binding
 
 See [README.md](README.md) for the architectural overview.
 
+## Adding an agent harness
+
+Harnesses are entries in `harnesses` in [`internal/setup/harness.go`](internal/setup/harness.go),
+not new files. A new one needs:
+
+- `Name` — the `max-context setup <name>` target
+- `MCPConfig` — where that harness reads its MCP server map, relative to the project root
+- `ServersKey` — the JSON key holding the server map, if it isn't `mcpServers`
+- `GuidancePath` / `Guidance` — the skill or rules file that tells the agent to use the tools
+- `Commands` / `CommandsDir` — how it wants the reindex/index/status commands written
+- `Extra` — only for genuine one-offs (VS Code's hook scripts are the sole current case)
+
+`TestEveryHarnessConfiguresACleanProject` and `TestEveryHarnessIsIdempotent` pick
+up the new entry automatically. Get `ServersKey` right: writing the wrong key
+produces a config the harness silently ignores, which looks exactly like setup
+having worked.
+
+## Tool-definition budget
+
+MCP tool schemas are re-sent on every request, so their size is a per-turn cost
+in every session that loads the server. `TestToolSchemaBudget` fails if they
+grow past the budget — trim a description rather than raising it, and keep the
+cross-tool steering (`TestSchemasKeepCrossToolSteering` guards the parts the A/B
+runs tuned).
+
 ## Reporting bugs
 
 Open an issue with: what you ran, what happened, what you expected, and your platform (OS + Go version + `max-context --version`).

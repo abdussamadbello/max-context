@@ -32,15 +32,14 @@ func readServers(t *testing.T, path string) map[string]interface{} {
 // max-context. The tools then simply never appeared in their editor.
 func TestSetupRegistersAlongsideExistingServers(t *testing.T) {
 	for _, tc := range []struct {
-		name    string
+		target  string
 		relPath string
-		run     func(root string, r *Report) error
 	}{
-		{"cursor", filepath.Join(".cursor", "mcp.json"), setupCursor},
-		{"claude-code", ".mcp.json", setupClaudeCode},
-		{"vscode", filepath.Join(".vscode", "mcp.json"), setupVSCode},
+		{"cursor", filepath.Join(".cursor", "mcp.json")},
+		{"claude-code", ".mcp.json"},
+		{"vscode", filepath.Join(".vscode", "mcp.json")},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(tc.target, func(t *testing.T) {
 			root := t.TempDir()
 			path := filepath.Join(root, tc.relPath)
 			if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
@@ -56,7 +55,7 @@ func TestSetupRegistersAlongsideExistingServers(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := tc.run(root, nil); err != nil {
+			if _, err := Run(root, tc.target); err != nil {
 				t.Fatalf("setup: %v", err)
 			}
 

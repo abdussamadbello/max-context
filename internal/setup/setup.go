@@ -14,56 +14,30 @@ const MarkerEnd = "<!-- max-context end -->"
 // .max-context/ out of version control.
 const gitignoreEntry = ".max-context/"
 
-var cliTargets = []string{"claude-code", "vscode", "codex", "antigravity", "cursor", "windsurf", "all"}
-
 // Run configures the given CLI target (or all of them) for projectRoot and
 // returns a Report describing every file it created, updated, left alone, or
 // refused to touch. The caller is expected to show the report: a setup command
 // that exits silently gives the user no way to tell success from a no-op.
 func Run(projectRoot string, target string) (*Report, error) {
-	var ok bool
-	for _, t := range cliTargets {
-		if t == target {
-			ok = true
-			break
-		}
-	}
-	if !ok {
-		return nil, fmt.Errorf("unknown setup target: %q", target)
-	}
 	r := NewReport(projectRoot)
-	// Regardless of CLI target, keep the index out of version control.
+	// Regardless of target, keep the index out of version control.
 	_ = ensureGitignore(projectRoot, r)
+
 	if target == "all" {
-		for _, t := range cliTargets {
-			if t == "all" {
-				continue
-			}
-			if err := runOne(projectRoot, t, r); err != nil {
-				return r, err
+		for _, h := range harnesses {
+			if err := h.apply(projectRoot, r); err != nil {
+				return r, fmt.Errorf("setup %s: %w", h.Name, err)
 			}
 		}
 		return r, nil
 	}
-	return r, runOne(projectRoot, target, r)
-}
 
-func runOne(root string, target string, r *Report) error {
-	switch target {
-	case "claude-code":
-		return setupClaudeCode(root, r)
-	case "vscode":
-		return setupVSCode(root, r)
-	case "codex":
-		return setupCodex(root, r)
-	case "antigravity":
-		return setupAntigravity(root, r)
-	case "cursor":
-		return setupCursor(root, r)
-	case "windsurf":
-		return setupWindsurf(root, r)
+	h, ok := lookupHarness(target)
+	if !ok {
+		return nil, fmt.Errorf("unknown setup target %q; known targets: %s, all",
+			target, strings.Join(HarnessNames(), ", "))
 	}
-	return nil
+	return r, h.apply(projectRoot, r)
 }
 
 // appendWithMarkers appends content to filePath inside sentinel markers, once.
