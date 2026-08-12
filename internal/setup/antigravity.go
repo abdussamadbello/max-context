@@ -1,16 +1,14 @@
 package setup
 
 import (
-	"os"
 	"path/filepath"
 )
 
-func setupAntigravity(root string) error {
-	ensureDir(filepath.Join(root, ".agent", "skills", "max-context"))
+func setupAntigravity(root string, r *Report) error {
 	skillPath := filepath.Join(root, ".agent", "skills", "max-context", "SKILL.md")
-	if _, err := os.Stat(skillPath); os.IsNotExist(err) {
-		content := "# Max Context\nUse query_codebase and get_architecture.\n" + renderSkillCommandsSection(Commands)
-		os.WriteFile(skillPath, []byte(content), 0644)
+	content := "# Max Context\nUse query_codebase and get_architecture.\n" + renderSkillCommandsSection(Commands)
+	if err := writeFileIfAbsent(skillPath, content, 0644, r); err != nil {
+		return err
 	}
-	return appendWithMarkers(filepath.Join(root, "AGENTS.md"), "Use max-context: query_codebase, get_architecture.")
+	return appendWithMarkers(filepath.Join(root, "AGENTS.md"), "Use max-context: query_codebase, get_architecture.", r)
 }

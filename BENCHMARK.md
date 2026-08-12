@@ -2,7 +2,7 @@
 
 max-context vs naive and skilled `Grep`+`Read` baselines, measured in tokens consumed by the LLM for a single deterministic tool answer.
 
-This benchmark is a **per-tool-call context-budget benchmark**, not a full agent-session benchmark. The causal A/B evaluation in `experiments/eval/FINDINGS.md` found that per-call savings do not automatically translate into end-to-end agent savings: verbose or ambiguous tool responses can make a model keep searching. The MCP tools now return explicit `answer_status` / `recommended_next_action` fields and canonical overloaded-symbol results to reduce that failure mode, but session-level cost should be measured separately.
+This benchmark is a **per-tool-call context-budget benchmark**, not a full agent-session benchmark. The causal A/B evaluation in `experiments/eval/benchmarks/in-house/FINDINGS.md` found that per-call savings do not automatically translate into end-to-end agent savings: verbose or ambiguous tool responses can make a model keep searching. The MCP tools now return explicit `answer_status` / `recommended_next_action` fields and canonical overloaded-symbol results to reduce that failure mode, but session-level cost should be measured separately.
 
 ## TL;DR
 
@@ -33,7 +33,7 @@ Track these separately from this benchmark:
 - turns to final answer
 - retrieval precision/recall or edit rubric score
 
-The current A/B findings (`experiments/eval/FINDINGS.md`) show the important distinction: early max-context responses were cheap per call but expensive per session because the model looped; after terser responses, `get_definition`, impact steering, loop guards, and canonical overloaded-symbol ranking, the loop behavior is explicitly guarded against. The published runs find **equal answer quality to a skilled grep agent** on the tasks measured, at **up to 94% fewer tokens (≈90% in aggregate)** on call-graph / "what-calls-this" questions, plus a strict recall win on **aliased imports** (a controlled task where grep found 0 of 5 callers and max-context found all 5). Honest scope: small sample (1 repo family, 1 replicate); quality is a tie, not a broad win.
+The current A/B findings (`experiments/eval/benchmarks/in-house/FINDINGS.md`) show the important distinction: early max-context responses were cheap per call but expensive per session because the model looped; after terser responses, `get_definition`, impact steering, loop guards, and canonical overloaded-symbol ranking, the loop behavior is explicitly guarded against. The published runs find **equal answer quality to a skilled grep agent** on the tasks measured, at **up to 94% fewer tokens (≈90% in aggregate)** on call-graph / "what-calls-this" questions, plus a strict recall win on **aliased imports** (a controlled task where grep found 0 of 5 callers and max-context found all 5). Honest scope: small sample (1 repo family, 1 replicate); quality is a tie, not a broad win.
 
 ## Reproduce
 

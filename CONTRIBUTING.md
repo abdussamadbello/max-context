@@ -12,7 +12,7 @@ make test          # runs the Go test suite
 make install       # installs to $HOME/.local/bin (override with PREFIX=)
 ```
 
-You need Go 1.22+ and a C toolchain (CGO is required for the SQLite driver and tree-sitter bindings).
+You need Go 1.22+ and a C toolchain (CGO is required for the tree-sitter bindings; the SQLite driver is pure Go).
 
 ## Submitting changes
 

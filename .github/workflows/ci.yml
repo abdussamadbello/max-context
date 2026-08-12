@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      # CGO is required for the tree-sitter grammars.
+      - name: Build
+        env:
+          CGO_ENABLED: '1'
+        run: go build ./...
+
+      - name: Test
+        env:
+          CGO_ENABLED: '1'
+        run: go test ./...
+
+  race:
+    name: race detector
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+      - name: Test with -race
+        env:
+          CGO_ENABLED: '1'
+        run: go test -race ./...
+
+  lint:
+    name: vet + gofmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: go vet
+        env:
+          CGO_ENABLED: '1'
+        run: go vet ./...
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l ./cmd ./internal ./pkg)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+  smoke:
+    name: end-to-end smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Build binary
+        env:
+          CGO_ENABLED: '1'
+        run: go build -o bin/max-context ./cmd/max-context
+
+      # Exercises the paths unit tests cannot: real indexing, the MCP handshake
+      # over stdio, and the CLI subcommands.
+      - name: Index this repo
+        run: ./bin/max-context --index
+
+      - name: Status reports a healthy index
+        run: |
+          ./bin/max-context --status | tee status.txt
+          grep -q 'healthy: true' status.txt
+
+      - name: MCP handshake over stdio
+        run: |
+          printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{}}}' \
+            '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+            | ./bin/max-context > mcp.out
+          # Exactly two responses: the notification must not be answered.
+          lines=$(grep -c . mcp.out)
+          if [ "$lines" -ne 2 ]; then
+            echo "expected 2 responses, got $lines:"; cat mcp.out; exit 1
+          fi
+          grep -q '"name":"get_definition"' mcp.out
+
+      - name: CLI subcommands accept flags on either side
+        run: |
+          ./bin/max-context def IndexFile | grep -q '"answer_status"'
+          ./bin/max-context calls Migrate -direction callers -depth 3 > calls.txt
+          # -direction callers must suppress the callees list.
+          if grep -q '"callees"' calls.txt; then
+            echo "flags after the positional were ignored:"; cat calls.txt; exit 1
+          fi

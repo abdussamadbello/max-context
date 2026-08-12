@@ -36,9 +36,9 @@ func TestParse(t *testing.T) {
 func TestParseAndQuery_NewLangs(t *testing.T) {
 	ctx := context.Background()
 	tests := []struct {
-		lang    Lang
-		source  string
-		ext     string
+		lang   Lang
+		source string
+		ext    string
 	}{
 		{LangJava, "class Foo { void bar() {} }", ".java"},
 		{LangC, "void foo() {}", ".c"},

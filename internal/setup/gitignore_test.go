@@ -12,7 +12,7 @@ import (
 func TestSetupAddsGitignore(t *testing.T) {
 	t.Run("creates when absent", func(t *testing.T) {
 		root := t.TempDir()
-		if err := Run(root, "vscode"); err != nil {
+		if _, err := Run(root, "vscode"); err != nil {
 			t.Fatalf("Run: %v", err)
 		}
 		assertIgnored(t, root)
@@ -24,7 +24,7 @@ func TestSetupAddsGitignore(t *testing.T) {
 		if err := os.WriteFile(gi, []byte("node_modules/\ndist/\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := Run(root, "vscode"); err != nil {
+		if _, err := Run(root, "vscode"); err != nil {
 			t.Fatalf("Run: %v", err)
 		}
 		body := readFile(t, gi)
@@ -34,7 +34,7 @@ func TestSetupAddsGitignore(t *testing.T) {
 		assertIgnored(t, root)
 
 		// Run again — must not duplicate the entry.
-		if err := Run(root, "claude-code"); err != nil {
+		if _, err := Run(root, "claude-code"); err != nil {
 			t.Fatalf("Run again: %v", err)
 		}
 		if n := strings.Count(readFile(t, gi), ".max-context/"); n != 1 {
@@ -48,7 +48,7 @@ func TestSetupAddsGitignore(t *testing.T) {
 		if err := os.WriteFile(gi, []byte(".max-context\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := Run(root, "vscode"); err != nil {
+		if _, err := Run(root, "vscode"); err != nil {
 			t.Fatalf("Run: %v", err)
 		}
 		if n := strings.Count(readFile(t, gi), ".max-context"); n != 1 {

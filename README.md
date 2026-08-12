@@ -1,6 +1,6 @@
 # Maximum Context
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 [![Go 1.22+](https://img.shields.io/badge/Go-1.22+-00ADD8.svg)](./go.mod)
 [![GitHub Release](https://img.shields.io/github/v/release/maxcontext/max-context)](https://github.com/maxcontext/max-context/releases)
 [![MCP](https://img.shields.io/badge/MCP-stdio-8A2BE2.svg)](https://modelcontextprotocol.io)
@@ -17,7 +17,7 @@ AI coding agents waste 30–60% of their context window grepping and re-reading 
 
 See [`BENCHMARK.md`](./BENCHMARK.md) for per-tool-call token savings vs naive and skilled Grep+Read baselines. The current skilled-baseline headline is **29.5× fewer tokens per deterministic query on max-context's own codebase**.
 
-For *agent-session* quality and cost — does an LLM actually do better with these tools? — see the causal A/B in [`experiments/eval/FINDINGS.md`](./experiments/eval/FINDINGS.md) (same model, same tasks, only the toolset differs; blind different-model judge; pre-registered). On the tasks measured so far it finds **equal answer quality to a skilled grep agent, at materially lower cost** — up to 94% fewer tokens (≈90% in aggregate) on call-graph / "what-calls-this" questions — plus a structural edge on **aliased imports** (`from m import f as g; g()`), where text search can't connect the call site to the definition and max-context can. Honest scope: small sample (1 repo family, 1 replicate); quality is a *tie*, not a win, except the alias case.
+For *agent-session* quality and cost — does an LLM actually do better with these tools? — see the causal A/B in [`experiments/eval/benchmarks/in-house/FINDINGS.md`](./experiments/eval/benchmarks/in-house/FINDINGS.md) (same model, same tasks, only the toolset differs; blind different-model judge; pre-registered). On the tasks measured so far it finds **equal answer quality to a skilled grep agent, at materially lower cost** — up to 94% fewer tokens (≈90% in aggregate) on call-graph / "what-calls-this" questions — plus a structural edge on **aliased imports** (`from m import f as g; g()`), where text search can't connect the call site to the definition and max-context can. Honest scope: small sample (1 repo family, 1 replicate); quality is a *tie*, not a win, except the alias case.
 
 ## How it works
 
@@ -89,7 +89,7 @@ Or add it manually to any MCP client config:
 # Build from source (optional)
 make build
 
-# Full index (builds index and starts watcher)
+# Full index (builds the index and exits; the watcher runs in server mode)
 max-context --index
 
 # MCP server mode (stdio; used by IDEs)
@@ -121,7 +121,7 @@ After installing `max-context` and ensuring it’s on your PATH:
 | Flag / Subcommand | Description |
 |-------------------|-------------|
 | (none) | Run MCP server on stdin/stdout |
-| `--index` | Build full index and start file watcher |
+| `--index` | Build full index and exit |
 | `--reindex` | Force full rebuild of index |
 | `--status` | Report index health, file count, symbol count |
 | `--watch` | Start only the file watcher |

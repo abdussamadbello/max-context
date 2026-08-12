@@ -109,7 +109,8 @@ func watcherOptions(cfg *config.Config) *watcher.Options {
 	}
 }
 
-// runIndex performs full index and optionally starts the watcher (handled in indexer).
+// runIndex builds the full index and exits. It does not start the watcher —
+// that runs in MCP server mode (runServe) and under --watch.
 func runIndex(cfg *config.Config) error {
 	database, err := db.Open(cfg.DBPath)
 	if err != nil {
@@ -235,7 +236,16 @@ func runMCPServer(cfg *config.Config) error {
 }
 
 func runSetup(cfg *config.Config, target string) error {
-	return setup.Run(cfg.ProjectRoot, target)
+	report, err := setup.Run(cfg.ProjectRoot, target)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stdout, "Configured %s in %s:\n%s", target, cfg.ProjectRoot, report)
+	if skipped := report.Skipped(); len(skipped) > 0 {
+		fmt.Fprintf(os.Stdout, "\n%d file(s) needed manual attention — see SKIPPED above.\n", len(skipped))
+	}
+	fmt.Fprintf(os.Stdout, "\nNext: run `max-context --index` in this project, then start your editor.\n")
+	return nil
 }
 
 // runBench executes the benchmark harness against a question set and writes
