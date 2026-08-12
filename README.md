@@ -112,7 +112,7 @@ After installing `max-context` and ensuring it’s on your PATH:
 |-----|--------|
 | **Claude Code** | 1. Add MCP server (e.g. `max-context setup claude-code` or put `max-context` in `.mcp.json`). 2. Install plugin: `/plugin marketplace add <path-to-repo>` then `/plugin install max-context@max-context-local` (see [Claude Code Plugin](#claude-code-plugin) below). 3. In project: `max-context --index` then start Claude Code. |
 | **VS Code Copilot** | 1. `max-context setup vscode` (writes `.vscode/mcp.json`, `.github/hooks/`, skills). 2. `max-context --index` in project. 3. Open VS Code; MCP and hooks load. |
-| **Codex CLI** | 1. `max-context setup codex` (adds MCP to `.codex/config.toml`, skill to `.codex/skills/max-context/`). 2. `max-context --index`. 3. Use Codex in the project. |
+| **Codex CLI** | 1. `max-context setup codex` (adds `[mcp_servers.max-context]` to `.codex/config.toml`, skill to `.codex/skills/max-context/`). 2. `max-context --index`. 3. Use Codex in the project. Codex loads project config only for **trusted** projects — setup prints the `trust_level` snippet if you need it. |
 | **Antigravity** | 1. `max-context setup antigravity` (MCP config, `.agent/skills/max-context/`, rules). 2. `max-context --index`. 3. Run Antigravity in the project. |
 | **Cursor** | 1. `max-context setup cursor` (`.cursor/mcp.json`, `.cursor/rules/max-context.md`, AGENTS.md). 2. `max-context --index`. 3. Use Cursor; MCP and rules apply. |
 | **Windsurf** | 1. `max-context setup windsurf` (user MCP config, `.windsurf/rules/max-context.md`, workflows, AGENTS.md). 2. `max-context --index`. 3. Use Windsurf in the project. |

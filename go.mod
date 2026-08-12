@@ -3,6 +3,7 @@ module github.com/maxcontext/max-context
 go 1.22
 
 require (
+	github.com/BurntSushi/toml v1.3.2
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/pkoukk/tiktoken-go v0.1.8
 	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82

@@ -24,6 +24,7 @@ type ConfigFormat int
 const (
 	FormatJSON ConfigFormat = iota
 	FormatYAML
+	FormatTOML
 )
 
 // ServerEntryStyle is the shape of a single server definition. Harnesses do not
@@ -87,6 +88,10 @@ type Harness struct {
 	// AgentsLine is appended to AGENTS.md inside the sentinel markers.
 	AgentsLine string
 
+	// Note is printed after setup when using this harness needs a step
+	// max-context cannot take on the user's behalf.
+	Note string
+
 	// Extra handles anything the fields above cannot express (VS Code's hook
 	// scripts, for example). Optional.
 	Extra func(root string, r *Report) error
@@ -118,11 +123,24 @@ var harnesses = []Harness{
 		Extra:        writeVSCodeHooks,
 	},
 	{
+		// Codex reads TOML, keying servers under [mcp_servers.<name>]. Config is
+		// layered: ~/.codex/config.toml globally, .codex/config.toml per project.
+		// The project layer is written here so the setting travels with the repo
+		// — but Codex only loads it for projects the user has marked trusted, so
+		// Note says how, rather than leaving a config that looks applied and is
+		// not. https://learn.chatgpt.com/docs/extend/mcp?surface=cli
 		Name:         "codex",
+		MCPConfig:    filepath.Join(".codex", "config.toml"),
+		ServersKey:   "mcp_servers",
+		Format:       FormatTOML,
 		GuidancePath: filepath.Join(".codex", "skills", "max-context", "SKILL.md"),
 		Guidance:     defaultGuidance,
 		Commands:     CommandsInGuidance,
 		AgentsLine:   defaultAgentsLine,
+		Note: "Codex loads .codex/config.toml only for projects you have marked trusted. " +
+			"If max-context does not appear in /mcp, add this to ~/.codex/config.toml:\n" +
+			"    [projects.\"<absolute path to this project>\"]\n" +
+			"    trust_level = \"trusted\"",
 	},
 	{
 		Name:         "antigravity",
@@ -264,12 +282,15 @@ func (h Harness) apply(root string, r *Report) error {
 		switch h.Format {
 		case FormatYAML:
 			err = mergeYAMLConfig(path, h.serversKey(), h.serverEntry(), r)
+		case FormatTOML:
+			err = mergeTOMLConfig(path, h.serversKey(), h.serverEntry(), r)
 		default:
 			err = mergeMCPConfigEntry(path, h.serversKey(), h.serverEntry(), r)
 		}
 		if err != nil {
 			return err
 		}
+		r.note(h.Note)
 	}
 
 	if h.GuidancePath != "" {

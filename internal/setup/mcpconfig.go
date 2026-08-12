@@ -36,7 +36,10 @@ type Change struct {
 // that do not want a report (tests, "all" sub-runs) can pass nil.
 type Report struct {
 	Changes []Change
-	root    string
+	// Notes are steps max-context cannot take for the user — a harness that
+	// needs the project marked trusted, for instance. Printed after the summary.
+	Notes []string
+	root  string
 }
 
 func NewReport(root string) *Report { return &Report{root: root} }
@@ -58,6 +61,19 @@ func (r *Report) created(path, note string)   { r.add(ActionCreated, path, note)
 func (r *Report) updated(path, note string)   { r.add(ActionUpdated, path, note) }
 func (r *Report) unchanged(path, note string) { r.add(ActionUnchanged, path, note) }
 func (r *Report) skipped(path, note string)   { r.add(ActionSkipped, path, note) }
+
+// note records a follow-up step for the user, once.
+func (r *Report) note(text string) {
+	if r == nil || text == "" {
+		return
+	}
+	for _, existing := range r.Notes {
+		if existing == text {
+			return
+		}
+	}
+	r.Notes = append(r.Notes, text)
+}
 
 // Skipped reports whether any file needs the user's attention.
 func (r *Report) Skipped() []Change {

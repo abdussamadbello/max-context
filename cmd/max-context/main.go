@@ -244,6 +244,9 @@ func runSetup(cfg *config.Config, target string) error {
 	if skipped := report.Skipped(); len(skipped) > 0 {
 		fmt.Fprintf(os.Stdout, "\n%d file(s) needed manual attention — see SKIPPED above.\n", len(skipped))
 	}
+	for _, note := range report.Notes {
+		fmt.Fprintf(os.Stdout, "\nNote: %s\n", note)
+	}
 	fmt.Fprintf(os.Stdout, "\nNext: run `max-context --index` in this project, then start your editor.\n")
 	return nil
 }
