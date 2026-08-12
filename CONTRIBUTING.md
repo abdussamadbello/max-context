@@ -26,7 +26,7 @@ You need Go 1.22+ and a C toolchain (CGO is required for the tree-sitter binding
 - `cmd/max-context/` — CLI entrypoint
 - `internal/` — private Go packages (indexer, MCP server, tools, watcher, etc.)
 - `pkg/treesitter/` — tree-sitter bindings (public API)
-- `.claude-plugin/`, `commands/`, `hooks/`, `skills/`, `templates/` — Claude Code plugin assets (the repo root is the plugin)
+- `.claude-plugin/`, `commands/`, `hooks/`, `skills/` — Claude Code plugin assets (the repo root is the plugin)
 - `benchmark/` — token-savings benchmark harness + question sets
 - `docs/` — public benchmark transcripts and screenshots
 
@@ -47,6 +47,13 @@ not new files. A new one needs:
 - `HomeRelative` — if the harness only has a global config, so `MCPConfig` resolves against `$HOME` (Hermes)
 - `InstructionsKey` / `NoAgentsMD` — for harnesses that discover guidance through a config array rather than AGENTS.md (opencode)
 - `Note` — a step max-context cannot take for the user (Codex needs the project marked trusted); printed after the summary
+
+Guidance content is **not** a harness field. It is derived: MCP-tool phrasing
+when the harness registers a server, CLI phrasing when it does not, with Agent
+Skills frontmatter when the file is a `SKILL.md`. Edit the text in
+[`internal/setup/guidance/`](internal/setup/guidance/); it is embedded at build
+time. Deriving the style means guidance can never tell an agent to call tools
+the harness has no way to reach.
 - `Extra` — only for genuine one-offs (VS Code's hook scripts are the sole current case)
 
 A harness with no MCP support at all (pi) simply leaves `MCPConfig` empty: it

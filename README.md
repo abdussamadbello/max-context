@@ -229,7 +229,7 @@ IDEs that support MCP Resources (e.g. VS Code Copilot) can list and read these i
 - `hooks/` — Claude Code plugin hooks (PreToolUse, SessionStart, PreCompact)
 - `commands/` — Plugin slash command (e.g. `/reindex`)
 - `skills/` — Plugin skills (`index-codebase`, `show-call-chain`)
-- `templates/` — Per-CLI skill/rules templates emitted by `max-context setup`
+- `internal/setup/guidance/` — the skill text `max-context setup` writes, embedded into the binary (MCP-tool and CLI variants)
 - `npm-package/` — npm wrapper `@maxcontext/cli` with postinstall binary download + SHA256
 - `scripts/install.sh` — Install script for curl\|sh
 - `Formula/` — Homebrew formula template; update SHA256 from `checksums.txt` after each release

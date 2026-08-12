@@ -152,6 +152,20 @@ jobs:
               print(f\"  {t['name']:<18} {len(json.dumps(t)):>5} bytes\")
           "
 
+      # The skill is the whole integration for harnesses with no MCP client,
+      # and only loads if its frontmatter description is present.
+      - name: setup writes a real, loadable skill
+        run: |
+          tmp=$(mktemp -d)
+          ./bin/max-context -project "$tmp" setup claude-code
+          skill="$tmp/.claude/skills/max-context/SKILL.md"
+          test -s "$skill" || { echo "no skill written"; exit 1; }
+          head -1 "$skill" | grep -q '^---$' || { echo "skill has no frontmatter:"; head -5 "$skill"; exit 1; }
+          grep -q '^description: ' "$skill" || { echo "skill has no description, so it will not load"; exit 1; }
+          bytes=$(wc -c < "$skill")
+          test "$bytes" -gt 1000 || { echo "skill is only $bytes bytes"; exit 1; }
+          echo "skill: $bytes bytes with frontmatter"
+
       - name: Type results carry a line number
         run: |
           ./bin/max-context def ResolverCache > d.json

@@ -184,10 +184,8 @@ func TestNewHarnessNeedsOnlyATableEntry(t *testing.T) {
 		MCPConfig:    filepath.Join(".example", "config.json"),
 		ServersKey:   "servers", // a harness that uses a different key
 		GuidancePath: filepath.Join(".example", "rules", "max-context.md"),
-		Guidance:     defaultGuidance,
 		Commands:     CommandsFrontmatter,
 		CommandsDir:  filepath.Join(".example", "commands"),
-		AgentsLine:   defaultAgentsLine,
 	})
 
 	root := t.TempDir()
