@@ -90,6 +90,7 @@ func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot st
 					"function_name":  str("Function to trace"),
 					"direction":      map[string]interface{}{"type": "string", "enum": []string{"callers", "callees", "both"}, "default": "both"},
 					"depth":          depth,
+					"max_results":    map[string]interface{}{"type": "integer", "description": "Cap per direction, nearest first (1-200)", "default": 50},
 					"min_confidence": confidence,
 				},
 				"required": []string{"function_name"},

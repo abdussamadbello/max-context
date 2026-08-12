@@ -13,12 +13,13 @@ func TestRun_WritesResultsAndMarkdown(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(root, "a.go"), []byte("package a\nfunc Foo() {}\n"), 0644)
 
 	questions := []Question{
-		{ID: "q1", Text: "find Foo", Category: "lookup", Tool: "query_codebase", Terms: []string{"Foo"}, MCResponseTokens: 50},
+		{ID: "q1", Text: "find Foo", Category: "lookup", Tool: "query_codebase", Terms: []string{"Foo"}},
 	}
 	out := t.TempDir()
 	res, err := Run(root, questions, RunOptions{
-		OutDir: out,
-		Repo:   "fixture",
+		OutDir:     out,
+		Repo:       "fixture",
+		InvokeTool: func(string, json.RawMessage) (string, error) { return `{"answer":"Foo is at a.go:2"}`, nil },
 	})
 	if err != nil {
 		t.Fatalf("Run: %v", err)

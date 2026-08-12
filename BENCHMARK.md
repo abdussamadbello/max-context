@@ -8,38 +8,20 @@ This benchmark is a **per-tool-call context-budget benchmark**, not a full agent
 
 | Repo | Questions | max-context per call (avg) | Naive per call (avg) | Skilled per call (avg) | vs Naive | vs Skilled |
 |---|---|---|---|---|---|---|
-| max-context (self) | 20 | 229 *(asserted — see below)* | 41,344 | 13,122 | 180.3× | 57.2× |
+| max-context (self) | 20 | 1,214 | 43,158 | 13,671 | 35.5× | 11.3× |
 
-> [!WARNING]
-> **The max-context column is not measured, so the ratios above are an upper
-> bound.** `mc_response_tokens` is a hand-written integer per question in
-> `benchmark/questions/max-context.json`; only the two baselines are computed by
-> actually running grep+read. The ratio therefore moves when the repo grows and
-> never when the tool's output changes.
+> **Both sides are now measured.** An earlier version of this table carried a
+> hand-written `mc_response_tokens` per question while only the baselines were
+> computed, so the ratio moved when the repo grew and never when the tool output
+> changed. The runner now invokes each question's tool against the real index and
+> counts the response, the same way it runs real greps for the baselines, and
+> refuses to run without a way to do so. Previously published figures — 169,776.9×,
+> 173.9×, 180.3× vs naive; 29.5×, 55.2×, 57.2× vs skilled — are all withdrawn.
 >
-> Measuring all 20 questions against the current binary (each call using the
-> direction its question implies) gives **611 tokens per call, 2.67× the
-> asserted figure** — which puts the honest result at **67.6× vs naive and
-> 21.5× vs skilled**.
->
-> The gap is concentrated in `get_call_chain`: asserted at 49–134 tokens,
-> it actually returns 371–3,272. "What calls `Open` in the db package?" is
-> recorded as 49 tokens and really costs 3,272, because `Open` has wide fan-in
-> and nothing caps the traversal. `get_impact` is accurate to within ~10%, and
-> `query_codebase` is *cheaper* than claimed on 4 of 7 questions since the
-> definitive path returns one canonical result instead of a ranked list.
->
-> Until the harness measures the tool the way it measures the baselines, quote
-> 21.5× rather than 57.2×.
+> The drop from 57.2× to 11.3× is the correction, not a regression: it is what
+> the tools always cost, now that they are being asked instead of assumed.
 
-> **These numbers replace an earlier, much larger set (169,776.9× vs naive).** That
-> figure was an artefact of the harness, not a result: the naive baseline walked
-> `bin/` and tokenized the project's own compiled binary, and both baselines
-> grepped files — 24MB of recorded eval transcripts under `experiments/` — that
-> max-context never indexed. Both are fixed (see Methodology); treat any
-> previously published naive figure as withdrawn.
-
-The self-repo baseline numbers above are reproducible today via `max-context bench` (see Reproduce); the max-context column is not, for the reason stated above. Treat them as a token-volume result for the tool response itself. For task completion quality, repeated tool calls, and agent-session token cost, use the A/B harness under `experiments/eval/`.
+Every number above is reproducible today via `max-context bench` (see Reproduce). Treat them as a token-volume result for the tool response itself. For task completion quality, repeated tool calls, and agent-session token cost, use the A/B harness under `experiments/eval/`.
 
 ## Methodology
 
@@ -50,7 +32,8 @@ The self-repo baseline numbers above are reproducible today via `max-context ben
 - **Binary files are skipped**, using grep's own heuristic (a NUL byte in the first block). Tokenizing a compiled binary is not something any agent does; counting it made the naive baseline meaningless rather than merely unflattering.
 - **Naive baseline**: recursive `grep` across all in-scope files (no directory exclusions beyond the repo's ignore rules), full `os.ReadFile` of every matching file, no dedup across query terms — what an agent that greps and reads whole files consumes.
 - **Skilled baseline**: `grep` with `node_modules`/`.git`/`vendor`/`bin`/`.max-context` additionally excluded, `Read` only ±20 lines around each match, dedupe windows within 40 lines of each other.
-- **The max-context side is asserted, not measured** — the known gap above. Fixing it means invoking each question's tool and tokenizing the response, exactly as the baselines are computed, so `mc_response_tokens` becomes an output of the run rather than an input to it.
+- **Both sides are measured the same way.** Each question records the tool and the exact `mc_args` it is invoked with; the runner calls the tool against the real index and tokenizes what comes back. An empty response or a tool error fails the run rather than scoring as free, so a question that goes stale against the index is loud instead of flattering.
+- **Where the cost sits.** Lookups (`query_codebase`, `get_definition`) run 213–414 tokens. `get_call_chain` runs 371–1,778, capped at 50 results per direction with the true total reported. `get_impact` is now the most expensive at 724–4,565 tokens: its cap is `maxImpactNodes = 1000`, a runaway guard rather than a context budget, so a change to a widely-depended-on file returns everything. That is the next thing worth tuning.
 - **Where max-context loses**: semantic questions ("why was this written this way?") that require reading prose, not symbols.
 
 ## Agent-session metric

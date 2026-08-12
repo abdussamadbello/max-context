@@ -14,6 +14,9 @@ const (
 	actionInspectRelevantFile = "inspect_relevant_file"
 	actionSwitchToolsOrAnswer = "switch_tools_or_answer"
 	actionCallImpactOrChain   = "call_get_impact_or_get_call_chain"
+	// actionNarrowScope tells the model the answer was capped and how to get a
+	// smaller, sharper one rather than paging through a hub function.
+	actionNarrowScope = "narrow_scope"
 )
 
 func definitionLabel(kind string) string {

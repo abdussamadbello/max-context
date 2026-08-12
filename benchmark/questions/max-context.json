@@ -7,7 +7,9 @@
     "baseline_terms": [
       "Open"
     ],
-    "mc_response_tokens": 776
+    "mc_args": {
+      "query": "Open"
+    }
   },
   {
     "id": "L02",
@@ -17,7 +19,9 @@
     "baseline_terms": [
       "fsnotify"
     ],
-    "mc_response_tokens": 432
+    "mc_args": {
+      "query": "fsnotify"
+    }
   },
   {
     "id": "L03",
@@ -27,7 +31,9 @@
     "baseline_terms": [
       "ToolHandler"
     ],
-    "mc_response_tokens": 179
+    "mc_args": {
+      "query": "ToolHandler"
+    }
   },
   {
     "id": "L04",
@@ -37,7 +43,9 @@
     "baseline_terms": [
       "query_codebase"
     ],
-    "mc_response_tokens": 1174
+    "mc_args": {
+      "query": "query_codebase"
+    }
   },
   {
     "id": "L05",
@@ -48,7 +56,9 @@
       "migrationV1",
       "CREATE TABLE functions"
     ],
-    "mc_response_tokens": 165
+    "mc_args": {
+      "query": "migrationV1"
+    }
   },
   {
     "id": "L06",
@@ -59,7 +69,9 @@
       "WriteArchitecture",
       "WriteSummary"
     ],
-    "mc_response_tokens": 533
+    "mc_args": {
+      "query": "WriteArchitecture"
+    }
   },
   {
     "id": "L07",
@@ -69,7 +81,9 @@
     "baseline_terms": [
       "searchResult"
     ],
-    "mc_response_tokens": 174
+    "mc_args": {
+      "query": "searchResult"
+    }
   },
   {
     "id": "T01",
@@ -79,7 +93,10 @@
     "baseline_terms": [
       "IndexFile"
     ],
-    "mc_response_tokens": 72
+    "mc_args": {
+      "function_name": "IndexFile",
+      "direction": "callers"
+    }
   },
   {
     "id": "T02",
@@ -89,7 +106,10 @@
     "baseline_terms": [
       "Migrate"
     ],
-    "mc_response_tokens": 134
+    "mc_args": {
+      "function_name": "Migrate",
+      "direction": "callees"
+    }
   },
   {
     "id": "T03",
@@ -99,7 +119,10 @@
     "baseline_terms": [
       "PrepareQueries"
     ],
-    "mc_response_tokens": 100
+    "mc_args": {
+      "function_name": "PrepareQueries",
+      "direction": "callers"
+    }
   },
   {
     "id": "T04",
@@ -110,7 +133,10 @@
       "db.Open",
       "Open("
     ],
-    "mc_response_tokens": 49
+    "mc_args": {
+      "function_name": "Open",
+      "direction": "callers"
+    }
   },
   {
     "id": "T05",
@@ -120,7 +146,10 @@
     "baseline_terms": [
       "indexer.Index"
     ],
-    "mc_response_tokens": 50
+    "mc_args": {
+      "function_name": "Index",
+      "direction": "callees"
+    }
   },
   {
     "id": "T06",
@@ -131,7 +160,10 @@
       "Serve",
       "srv.Serve"
     ],
-    "mc_response_tokens": 97
+    "mc_args": {
+      "function_name": "Serve",
+      "direction": "callees"
+    }
   },
   {
     "id": "I01",
@@ -142,7 +174,11 @@
       "queries.go",
       "Queries"
     ],
-    "mc_response_tokens": 78
+    "mc_args": {
+      "files": [
+        "internal/db/queries.go"
+      ]
+    }
   },
   {
     "id": "I02",
@@ -152,7 +188,11 @@
     "baseline_terms": [
       "RegisterAll"
     ],
-    "mc_response_tokens": 99
+    "mc_args": {
+      "files": [
+        "internal/tools/register.go"
+      ]
+    }
   },
   {
     "id": "I03",
@@ -162,7 +202,11 @@
     "baseline_terms": [
       "SymbolsInFile"
     ],
-    "mc_response_tokens": 99
+    "mc_args": {
+      "files": [
+        "internal/db/queries.go"
+      ]
+    }
   },
   {
     "id": "I04",
@@ -174,7 +218,11 @@
       "InsertCall",
       "GetCallersOf"
     ],
-    "mc_response_tokens": 99
+    "mc_args": {
+      "files": [
+        "internal/db/schema.go"
+      ]
+    }
   },
   {
     "id": "I05",
@@ -184,7 +232,11 @@
     "baseline_terms": [
       "queryCallChain"
     ],
-    "mc_response_tokens": 99
+    "mc_args": {
+      "files": [
+        "internal/tools/get_call_chain.go"
+      ]
+    }
   },
   {
     "id": "I06",
@@ -195,7 +247,11 @@
       "ToolHandler",
       "mcp.ToolHandler"
     ],
-    "mc_response_tokens": 99
+    "mc_args": {
+      "files": [
+        "internal/mcp/handler.go"
+      ]
+    }
   },
   {
     "id": "I07",
@@ -206,6 +262,10 @@
       "register.go",
       "tools.RegisterAll"
     ],
-    "mc_response_tokens": 78
+    "mc_args": {
+      "files": [
+        "internal/tools/register.go"
+      ]
+    }
   }
 ]
