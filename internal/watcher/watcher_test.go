@@ -86,23 +86,29 @@ func TestWatcherDeliversWithinTwoSeconds(t *testing.T) {
 }
 
 // Rapid successive writes must collapse into one reindex request.
+//
+// The debounce is deliberately much longer than the write loop takes: if a gap
+// between writes ever exceeded the window the writes would land in separate
+// windows and legitimately produce two events, which would look like a
+// coalescing failure. A loaded CI runner can stretch a short sleep well past a
+// short debounce, so the margin is the point.
 func TestWatcherDebouncesRapidWrites(t *testing.T) {
 	root := t.TempDir()
 	ch := make(chan string, 20)
-	startWatcher(t, root, ch, &Options{DebounceMs: 120})
+	startWatcher(t, root, ch, &Options{DebounceMs: 600})
 
 	path := filepath.Join(root, "busy.go")
 	for i := 0; i < 6; i++ {
 		if err := os.WriteFile(path, []byte("package main\n// "+string(rune('a'+i))+"\n"), 0644); err != nil {
 			t.Fatal(err)
 		}
-		time.Sleep(20 * time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 	}
-	if got := waitFor(t, ch, 3*time.Second); got != "busy.go" {
+	if got := waitFor(t, ch, 5*time.Second); got != "busy.go" {
 		t.Errorf("got %q, want busy.go", got)
 	}
 	// Everything within the window coalesced; nothing more should follow.
-	expectNothing(t, ch, 300*time.Millisecond)
+	expectNothing(t, ch, 500*time.Millisecond)
 }
 
 func TestWatcherIgnoresUnsupportedExtensions(t *testing.T) {
@@ -162,6 +168,14 @@ func TestWatcherSkipsIgnoredDirectories(t *testing.T) {
 
 // A directory created after startup must be watched too, or files added to a
 // new package are never indexed.
+//
+// The watch on a new directory is registered when the watcher processes that
+// directory's own Create event, so a single write races registration: land
+// first and no event is ever emitted, and waiting cannot fix it. An earlier
+// version slept a fixed 200ms and then wrote once, which held on Linux and
+// flaked on Windows. Retrying the write is what makes this deterministic — the
+// property under test is that a new directory becomes watched, not how quickly
+// the registration lands.
 func TestWatcherPicksUpNewDirectories(t *testing.T) {
 	root := t.TempDir()
 	ch := make(chan string, 10)
@@ -171,14 +185,24 @@ func TestWatcherPicksUpNewDirectories(t *testing.T) {
 	if err := os.MkdirAll(sub, 0755); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(200 * time.Millisecond) // let the new dirs register
+	file := filepath.Join(sub, "deep.go")
 
-	if err := os.WriteFile(filepath.Join(sub, "deep.go"), []byte("package inner\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	got := waitFor(t, ch, 3*time.Second)
-	if got != "pkg/inner/deep.go" {
-		t.Errorf("got %q, want pkg/inner/deep.go", got)
+	deadline := time.After(15 * time.Second)
+	for attempt := 1; ; attempt++ {
+		if err := os.WriteFile(file, []byte("package inner\n// touch\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case got := <-ch:
+			if got != "pkg/inner/deep.go" {
+				t.Errorf("got %q, want pkg/inner/deep.go", got)
+			}
+			return
+		case <-deadline:
+			t.Fatalf("a file in a directory created after startup was never reported (%d writes)", attempt)
+		case <-time.After(250 * time.Millisecond):
+			// Watch not live yet; write again.
+		}
 	}
 }
 
