@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
 // serverName is the key max-context registers itself under in an IDE's MCP config.
@@ -44,7 +45,10 @@ func (r *Report) add(a Action, path, note string) {
 	if r == nil {
 		return
 	}
-	if rel, err := filepath.Rel(r.root, path); err == nil && rel != "" {
+	// Relative inside the project, absolute outside it: a harness with only a
+	// global config (Hermes) writes outside the repo, and "../../.hermes/..."
+	// would hide that.
+	if rel, err := filepath.Rel(r.root, path); err == nil && rel != "" && !strings.HasPrefix(rel, "..") {
 		path = rel
 	}
 	r.Changes = append(r.Changes, Change{Action: a, Path: path, Note: note})
@@ -121,6 +125,14 @@ func manualSnippet(serversKey string) string {
 // A file we cannot parse is never overwritten: hand-written config (including
 // JSONC with comments) is worth more than an automatic edit.
 func mergeMCPConfig(path, serversKey string, r *Report) error {
+	return mergeMCPConfigEntry(path, serversKey, mcpServerEntry(), r)
+}
+
+// mergeMCPConfigEntry is mergeMCPConfig with the server definition supplied by
+// the caller. Harnesses disagree on the shape of a server entry — opencode
+// wants {"type":"local","command":["max-context"]} where most want
+// {"command":"max-context","args":[]} — so the shape travels with the harness.
+func mergeMCPConfigEntry(path, serversKey string, entry map[string]interface{}, r *Report) error {
 	if err := ensureDir(filepath.Dir(path)); err != nil {
 		return err
 	}
@@ -128,7 +140,7 @@ func mergeMCPConfig(path, serversKey string, r *Report) error {
 	raw, err := os.ReadFile(path)
 	switch {
 	case errors.Is(err, os.ErrNotExist), err == nil && len(bytes.TrimSpace(raw)) == 0:
-		doc := map[string]interface{}{serversKey: map[string]interface{}{serverName: mcpServerEntry()}}
+		doc := map[string]interface{}{serversKey: map[string]interface{}{serverName: entry}}
 		if err := writeJSONFile(path, doc); err != nil {
 			return err
 		}
@@ -164,7 +176,7 @@ func mergeMCPConfig(path, serversKey string, r *Report) error {
 	}
 	sort.Strings(others)
 
-	servers[serverName] = mcpServerEntry()
+	servers[serverName] = entry
 	doc[serversKey] = servers
 	if err := writeJSONFile(path, doc); err != nil {
 		return err
@@ -202,5 +214,40 @@ func writeFileIfAbsent(path, content string, perm os.FileMode, r *Report) error 
 		return err
 	}
 	r.created(path, "")
+	return nil
+}
+
+// addInstructionsPath registers the guidance file in a config key holding an
+// array of instruction paths. opencode has no AGENTS.md convention; it loads
+// whatever its `instructions` array points at, so the guidance file is inert
+// until it is listed there.
+func addInstructionsPath(path, key, guidance string, r *Report) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err // the config was just written by mergeMCPConfigEntry
+	}
+	var doc map[string]interface{}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		r.skipped(path, fmt.Sprintf("not valid JSON; add %q to %q yourself", guidance, key))
+		return nil
+	}
+
+	existing, present := doc[key]
+	list, ok := existing.([]interface{})
+	if present && !ok {
+		r.skipped(path, fmt.Sprintf("%q is not an array; add %q to it yourself", key, guidance))
+		return nil
+	}
+	want := filepath.ToSlash(guidance)
+	for _, v := range list {
+		if s, ok := v.(string); ok && filepath.ToSlash(s) == want {
+			return nil // already listed
+		}
+	}
+	doc[key] = append(list, want)
+	if err := writeJSONFile(path, doc); err != nil {
+		return err
+	}
+	r.updated(path, fmt.Sprintf("listed %s under %q", want, key))
 	return nil
 }

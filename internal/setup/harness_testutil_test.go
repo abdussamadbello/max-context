@@ -13,3 +13,14 @@ func applyHarness(t *testing.T, target, root string, r *Report) error {
 	}
 	return h.apply(root, r)
 }
+
+// fakeHome points home-relative harnesses at a temp directory for the duration
+// of one test, so the suite never writes to the developer's real ~/.hermes.
+func fakeHome(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	prev := userHomeDir
+	userHomeDir = func() (string, error) { return dir, nil }
+	t.Cleanup(func() { userHomeDir = prev })
+	return dir
+}

@@ -45,7 +45,7 @@ Tree-sitter parses every supported language deterministically. Symbols and call 
 - **Focused MCP tools**: `get_definition` (exact-name, canonical definition), `query_codebase` (BM25 fuzzy symbol search with explicit next action), `get_call_chain` (recursive caller/callee traversal), `get_impact` (change blast radius), `get_architecture` (pre-computed project summary)
 - **Real-time index**: File watcher keeps the index current within 2 seconds of changes
 - **Multi-language**: TypeScript, JavaScript, Python, Go, Rust, Java (and more via Tree-sitter). Full call-graph resolution for Go, TypeScript/TSX, and Python; other languages are parsed with name-based call resolution — see [docs/LANGUAGES.md](docs/LANGUAGES.md) for the honest parsed-vs-resolved matrix.
-- **Universal CLI support**: One `max-context setup <cli>` configures Claude Code, VS Code Copilot, Codex CLI, Antigravity, Cursor, and Windsurf. Harnesses live in a registry (`internal/setup/harness.go`) — adding one is a table entry, not new code
+- **Universal harness support**: One `max-context setup <name>` configures Claude Code, VS Code Copilot, Codex CLI, Antigravity, Cursor, Windsurf, opencode, Hermes, and pi. Harnesses live in a registry (`internal/setup/harness.go`) — adding one is a table entry, not new code
 - **Small always-on footprint**: the five tool definitions total ~875 tokens, re-sent every request. A CI step prints the number and a test fails if it grows
 
 ## Install
@@ -116,6 +116,9 @@ After installing `max-context` and ensuring it’s on your PATH:
 | **Antigravity** | 1. `max-context setup antigravity` (MCP config, `.agent/skills/max-context/`, rules). 2. `max-context --index`. 3. Run Antigravity in the project. |
 | **Cursor** | 1. `max-context setup cursor` (`.cursor/mcp.json`, `.cursor/rules/max-context.md`, AGENTS.md). 2. `max-context --index`. 3. Use Cursor; MCP and rules apply. |
 | **Windsurf** | 1. `max-context setup windsurf` (user MCP config, `.windsurf/rules/max-context.md`, workflows, AGENTS.md). 2. `max-context --index`. 3. Use Windsurf in the project. |
+| **opencode** | 1. `max-context setup opencode` (adds the server to `opencode.json` under `mcp`, writes `.opencode/max-context.md` and lists it under `instructions`). 2. `max-context --index`. 3. Run opencode in the project. |
+| **Hermes** | 1. `max-context setup hermes` (adds the server to the **global** `~/.hermes/config.yaml` under `mcp_servers`, plus a project skill). 2. `max-context --index`. 3. Run Hermes in the project. |
+| **pi** | 1. `max-context setup pi` (writes `.pi/skills/max-context/SKILL.md` and an AGENTS.md block). 2. `max-context --index`. 3. Run pi in the project. **pi ships no MCP client by design**, so it drives max-context through the one-shot CLI below. |
 
 ## Commands
 
@@ -145,8 +148,14 @@ max-context arch                                       # get_architecture
 max-context tool get_call_chain --json '{"function_name":"Migrate"}'  # generic form
 ```
 
-Global flags go before the subcommand (`max-context -project /repo query …`).
+Global flags go before the subcommand (`max-context -project /repo query …`);
+subcommand flags may go on either side of the positional argument.
 Build the index first with `max-context --index`.
+
+This CLI is also the whole integration for harnesses that do not speak MCP —
+[pi](https://github.com/earendil-works/pi) deliberately ships without an MCP
+client ("No MCP. Build CLI tools with READMEs"), so `max-context setup pi`
+installs a skill documenting these commands instead of tool definitions.
 
 ## Configuration (`.max-context/config.json`)
 

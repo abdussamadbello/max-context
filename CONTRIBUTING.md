@@ -42,7 +42,18 @@ not new files. A new one needs:
 - `ServersKey` — the JSON key holding the server map, if it isn't `mcpServers`
 - `GuidancePath` / `Guidance` — the skill or rules file that tells the agent to use the tools
 - `Commands` / `CommandsDir` — how it wants the reindex/index/status commands written
+- `Format` — `FormatYAML` if the config is YAML rather than JSON (Hermes)
+- `EntryStyle` — `EntryTypedArgv` if a server is `{"type":"local","command":["max-context"]}` rather than `{"command":"max-context","args":[]}` (opencode)
+- `HomeRelative` — if the harness only has a global config, so `MCPConfig` resolves against `$HOME` (Hermes)
+- `InstructionsKey` / `NoAgentsMD` — for harnesses that discover guidance through a config array rather than AGENTS.md (opencode)
 - `Extra` — only for genuine one-offs (VS Code's hook scripts are the sole current case)
+
+A harness with no MCP support at all (pi) simply leaves `MCPConfig` empty: it
+gets the skill and the AGENTS.md block, and drives the tools through the
+one-shot CLI subcommands.
+
+Tests that touch a home-relative harness must call `fakeHome(t)` so the suite
+never writes to a real `~/.hermes`.
 
 `TestEveryHarnessConfiguresACleanProject` and `TestEveryHarnessIsIdempotent` pick
 up the new entry automatically. Get `ServersKey` right: writing the wrong key

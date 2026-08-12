@@ -14,6 +14,7 @@ func TestEveryHarnessConfiguresACleanProject(t *testing.T) {
 	for _, h := range harnesses {
 		t.Run(h.Name, func(t *testing.T) {
 			root := t.TempDir()
+			home := fakeHome(t)
 			r, err := Run(root, h.Name)
 			if err != nil {
 				t.Fatalf("Run(%s): %v", h.Name, err)
@@ -21,15 +22,21 @@ func TestEveryHarnessConfiguresACleanProject(t *testing.T) {
 			if len(r.Changes) == 0 {
 				t.Fatalf("%s wrote nothing", h.Name)
 			}
-			agents, err := os.ReadFile(filepath.Join(root, "AGENTS.md"))
-			if err != nil {
-				t.Fatalf("AGENTS.md: %v", err)
+			if !h.NoAgentsMD {
+				agents, err := os.ReadFile(filepath.Join(root, "AGENTS.md"))
+				if err != nil {
+					t.Fatalf("AGENTS.md: %v", err)
+				}
+				if !strings.Contains(string(agents), "max-context") {
+					t.Errorf("AGENTS.md does not mention max-context:\n%s", agents)
+				}
 			}
-			if !strings.Contains(string(agents), "max-context") {
-				t.Errorf("AGENTS.md does not mention max-context:\n%s", agents)
-			}
-			if h.MCPConfig != "" {
-				raw, err := os.ReadFile(filepath.Join(root, h.MCPConfig))
+			if h.MCPConfig != "" && h.Format == FormatJSON {
+				base := root
+				if h.HomeRelative {
+					base = home
+				}
+				raw, err := os.ReadFile(filepath.Join(base, h.MCPConfig))
 				if err != nil {
 					t.Fatalf("expected %s: %v", h.MCPConfig, err)
 				}
@@ -59,17 +66,25 @@ func TestEveryHarnessIsIdempotent(t *testing.T) {
 	for _, h := range harnesses {
 		t.Run(h.Name, func(t *testing.T) {
 			root := t.TempDir()
+			home := fakeHome(t)
 			if _, err := Run(root, h.Name); err != nil {
 				t.Fatal(err)
 			}
 			before := snapshotTree(t, root)
+			beforeHome := snapshotTree(t, home)
 
 			r, err := Run(root, h.Name)
 			if err != nil {
 				t.Fatal(err)
 			}
 			after := snapshotTree(t, root)
+			afterHome := snapshotTree(t, home)
 
+			for path, content := range beforeHome {
+				if afterHome[path] != content {
+					t.Errorf("second run rewrote the global config %s", path)
+				}
+			}
 			if len(before) != len(after) {
 				t.Fatalf("second run changed the file set: %d -> %d", len(before), len(after))
 			}
@@ -91,6 +106,7 @@ func TestEveryHarnessIsIdempotent(t *testing.T) {
 // share AGENTS.md and .gitignore.
 func TestSetupAllAppliesEveryHarness(t *testing.T) {
 	root := t.TempDir()
+	fakeHome(t)
 	if _, err := Run(root, "all"); err != nil {
 		t.Fatalf("Run(all): %v", err)
 	}
