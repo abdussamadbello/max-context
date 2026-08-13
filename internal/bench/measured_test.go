@@ -137,3 +137,25 @@ func runQuestions(t *testing.T, root string, qs []Question, invoke func(string, 
 	}
 	return res
 }
+
+// The mirror of TestEmptyResponseIsAnError: a grep term that matches nothing
+// is a broken question, not a free win. Caught when a cross-repo run scored a
+// question 0x because its term appeared nowhere in the repo.
+func TestBaselineThatMatchesNothingIsAnError(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root)
+
+	_, err := Run(root, []Question{
+		{ID: "q1", Tool: "query_codebase", Terms: []string{"NoSuchSymbolAnywhere"}},
+	}, RunOptions{
+		OutDir:     t.TempDir(),
+		Repo:       "x",
+		InvokeTool: func(string, json.RawMessage) (string, error) { return `{"answer":"nothing"}`, nil },
+	})
+	if err == nil {
+		t.Fatal("a term matching nothing was accepted; it scores 0x and drags the average down")
+	}
+	if !strings.Contains(err.Error(), "match nothing") {
+		t.Errorf("error should say the term matched nothing, got: %v", err)
+	}
+}

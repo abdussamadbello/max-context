@@ -1,0 +1,149 @@
+[
+  {
+    "id": "L01",
+    "text": "Where is Execute defined?",
+    "category": "lookup",
+    "mc_tool": "query_codebase",
+    "baseline_terms": [
+      "Execute"
+    ],
+    "mc_args": {
+      "query": "Execute"
+    }
+  },
+  {
+    "id": "L02",
+    "text": "Where is AddCommand defined?",
+    "category": "lookup",
+    "mc_tool": "query_codebase",
+    "baseline_terms": [
+      "AddCommand"
+    ],
+    "mc_args": {
+      "query": "AddCommand"
+    }
+  },
+  {
+    "id": "L03",
+    "text": "Where are flags parsed?",
+    "category": "lookup",
+    "mc_tool": "query_codebase",
+    "baseline_terms": [
+      "ParseFlags"
+    ],
+    "mc_args": {
+      "query": "ParseFlags"
+    }
+  },
+  {
+    "id": "L04",
+    "text": "Where is bash completion generated?",
+    "category": "lookup",
+    "mc_tool": "query_codebase",
+    "baseline_terms": [
+      "GenBashCompletion"
+    ],
+    "mc_args": {
+      "query": "GenBashCompletion"
+    }
+  },
+  {
+    "id": "L05",
+    "text": "Where are args validated?",
+    "category": "lookup",
+    "mc_tool": "query_codebase",
+    "baseline_terms": [
+      "ValidateArgs"
+    ],
+    "mc_args": {
+      "query": "ValidateArgs"
+    }
+  },
+  {
+    "id": "T01",
+    "text": "What calls executeCommand?",
+    "category": "trace",
+    "mc_tool": "get_call_chain",
+    "baseline_terms": [
+      "executeCommand"
+    ],
+    "mc_args": {
+      "function_name": "executeCommand",
+      "direction": "callers"
+    }
+  },
+  {
+    "id": "T02",
+    "text": "What calls AddCommand?",
+    "category": "trace",
+    "mc_tool": "get_call_chain",
+    "baseline_terms": [
+      "AddCommand"
+    ],
+    "mc_args": {
+      "function_name": "AddCommand",
+      "direction": "callers"
+    }
+  },
+  {
+    "id": "T03",
+    "text": "What calls Flags?",
+    "category": "trace",
+    "mc_tool": "get_call_chain",
+    "baseline_terms": [
+      "Flags"
+    ],
+    "mc_args": {
+      "function_name": "Flags",
+      "direction": "callers"
+    }
+  },
+  {
+    "id": "I01",
+    "text": "If I change command.go, what is affected?",
+    "category": "impact",
+    "mc_tool": "get_impact",
+    "baseline_terms": [
+      "Flags",
+      "AddCommand",
+      "PersistentFlags"
+    ],
+    "mc_args": {
+      "files": [
+        "command.go"
+      ]
+    }
+  },
+  {
+    "id": "I02",
+    "text": "If I change args.go, what is affected?",
+    "category": "impact",
+    "mc_tool": "get_impact",
+    "baseline_terms": [
+      "ExactArgs",
+      "MatchAll",
+      "MinimumNArgs"
+    ],
+    "mc_args": {
+      "files": [
+        "args.go"
+      ]
+    }
+  },
+  {
+    "id": "I03",
+    "text": "If I change flag_groups.go, what is affected?",
+    "category": "impact",
+    "mc_tool": "get_impact",
+    "baseline_terms": [
+      "processFlagForGroupAnnotation",
+      "sortedKeys",
+      "MarkFlagsMutuallyExclusive"
+    ],
+    "mc_args": {
+      "files": [
+        "flag_groups.go"
+      ]
+    }
+  }
+]

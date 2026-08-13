@@ -63,6 +63,44 @@ cd max-context && make build
 
 See `benchmark/runs/max-context/results.json` and `benchmark/runs/max-context/benchmark.md` for full per-question breakdowns.
 
+## Cross-repo: does it hold outside our own codebase?
+
+Every figure above is n=1 on max-context's own repo, the most self-flattering
+sample available. Run against three outside projects in three languages,
+indexed and measured identically:
+
+| Repo | Questions | Lookup | Trace | Impact | Blended |
+|---|---|---|---|---|---|
+| max-context (Go, self) | 20 | 32.1× | 15.5× | 6.5× | 11.3× |
+| cobra (Go) | 11 | 41.7× | 31.8× | 6.5× | 14.4× |
+| flask (Python) | 11 | 47.4× | 36.9× | 32.7× | 39.0× |
+| zod (TypeScript) | 11 | 43.9× | 8.3× | 148.2× | 93.7× |
+
+**The lookup result is the robust one.** "Where is X defined?" costs
+289–468 tokens regardless of repo, against a grep baseline that grows with the
+codebase — **32–47× across four repos and three languages, a spread of only
+1.5×**. That is the claim worth making.
+
+**The blended number is not meaningful, and neither is the impact column.**
+Both are dominated by how greppable the symbols in a question happen to be,
+which is a property of the repo's naming, not of max-context:
+
+- zod's `I03` greps for `unknown`, `string`, `_enum` — real symbols in the file
+  under test, but `string` in a TypeScript repo matches almost everything. That
+  one question costs the baseline 897,890 tokens and scores 798×, dragging
+  zod's impact average from roughly 4× to 148× and its blended figure to 93.7×.
+- The first version of these question sets derived grep terms from file
+  *basenames*, producing `app` for flask and `api` for zod. Those runs reported
+  129× and 113×. They are not in the table because the terms were strawmen.
+
+So: quote the lookup number, report per category, and treat any single blended
+figure — including the one at the top of this file — as an artefact of question
+mix. A benchmark whose headline moves 200× on one term choice is measuring the
+question set at least as much as the tool.
+
+The harness now refuses a question whose baseline terms match nothing, which is
+how cobra's original `flag_groups` question was caught scoring 0×.
+
 ## Roadmap
 
 - Extend both per-call and agent-session benchmarks to `flask`, `got`, `zod`, `cli/cli`, and `vitejs/vite` for cross-language evidence.

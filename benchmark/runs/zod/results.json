@@ -1,0 +1,123 @@
+{
+  "repo": "zod",
+  "questions": [
+    {
+      "id": "I01",
+      "text": "If I change v3/types.ts, what is affected?",
+      "category": "impact",
+      "mc_tokens": 4145,
+      "naive_tokens": 126359,
+      "skilled_tokens": 16637,
+      "naive_ratio": 30,
+      "skilled_ratio": 4
+    },
+    {
+      "id": "I02",
+      "text": "If I change v4/core/api.ts, what is affected?",
+      "category": "impact",
+      "mc_tokens": 925,
+      "naive_tokens": 83094,
+      "skilled_tokens": 3562,
+      "naive_ratio": 89,
+      "skilled_ratio": 3
+    },
+    {
+      "id": "I03",
+      "text": "If I change classic/schemas.ts, what is affected?",
+      "category": "impact",
+      "mc_tokens": 1125,
+      "naive_tokens": 1923582,
+      "skilled_tokens": 897890,
+      "naive_ratio": 1709,
+      "skilled_ratio": 798
+    },
+    {
+      "id": "L01",
+      "text": "Where is addIssueToContext defined?",
+      "category": "lookup",
+      "mc_tokens": 317,
+      "naive_tokens": 44262,
+      "skilled_tokens": 14343,
+      "naive_ratio": 139,
+      "skilled_ratio": 45
+    },
+    {
+      "id": "L02",
+      "text": "Where is convertSchema defined?",
+      "category": "lookup",
+      "mc_tokens": 306,
+      "naive_tokens": 6028,
+      "skilled_tokens": 3369,
+      "naive_ratio": 19,
+      "skilled_ratio": 11
+    },
+    {
+      "id": "L03",
+      "text": "Where is isTransforming defined?",
+      "category": "lookup",
+      "mc_tokens": 310,
+      "naive_tokens": 29403,
+      "skilled_tokens": 1692,
+      "naive_ratio": 94,
+      "skilled_ratio": 5
+    },
+    {
+      "id": "L04",
+      "text": "Where is _addCheck defined?",
+      "category": "lookup",
+      "mc_tokens": 350,
+      "naive_tokens": 42491,
+      "skilled_tokens": 3804,
+      "naive_ratio": 121,
+      "skilled_ratio": 10
+    },
+    {
+      "id": "L05",
+      "text": "Where is $constructor defined?",
+      "category": "lookup",
+      "mc_tokens": 1055,
+      "naive_tokens": 111842,
+      "skilled_tokens": 79387,
+      "naive_ratio": 106,
+      "skilled_ratio": 75
+    },
+    {
+      "id": "T01",
+      "text": "What calls addIssueToContext?",
+      "category": "trace",
+      "mc_tokens": 985,
+      "naive_tokens": 44262,
+      "skilled_tokens": 14343,
+      "naive_ratio": 44,
+      "skilled_ratio": 14
+    },
+    {
+      "id": "T02",
+      "text": "What calls _addCheck?",
+      "category": "trace",
+      "mc_tokens": 1344,
+      "naive_tokens": 42491,
+      "skilled_tokens": 3804,
+      "naive_ratio": 31,
+      "skilled_ratio": 2
+    },
+    {
+      "id": "T03",
+      "text": "What calls convertSchema?",
+      "category": "trace",
+      "mc_tokens": 259,
+      "naive_tokens": 6028,
+      "skilled_tokens": 3369,
+      "naive_ratio": 23,
+      "skilled_ratio": 13
+    }
+  ],
+  "summary": {
+    "question_count": 11,
+    "avg_mc_tokens": 1011,
+    "avg_naive_tokens": 223622,
+    "avg_skilled_tokens": 94745.45454545454,
+    "naive_savings_x": 221.18892185954502,
+    "skilled_savings_x": 93.71459401132992
+  }
+}

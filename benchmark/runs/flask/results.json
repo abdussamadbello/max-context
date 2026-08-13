@@ -1,0 +1,123 @@
+{
+  "repo": "flask",
+  "questions": [
+    {
+      "id": "I01",
+      "text": "If I change app.py, what is affected?",
+      "category": "impact",
+      "mc_tokens": 1110,
+      "naive_tokens": 186388,
+      "skilled_tokens": 22892,
+      "naive_ratio": 167,
+      "skilled_ratio": 20
+    },
+    {
+      "id": "I02",
+      "text": "If I change cli.py, what is affected?",
+      "category": "impact",
+      "mc_tokens": 651,
+      "naive_tokens": 30651,
+      "skilled_tokens": 3605,
+      "naive_ratio": 47,
+      "skilled_ratio": 5
+    },
+    {
+      "id": "I03",
+      "text": "If I change blueprints.py, what is affected?",
+      "category": "impact",
+      "mc_tokens": 161,
+      "naive_tokens": 273860,
+      "skilled_tokens": 36356,
+      "naive_ratio": 1700,
+      "skilled_ratio": 225
+    },
+    {
+      "id": "L01",
+      "text": "Where is add_url_rule defined?",
+      "category": "lookup",
+      "mc_tokens": 371,
+      "naive_tokens": 103303,
+      "skilled_tokens": 19385,
+      "naive_ratio": 278,
+      "skilled_ratio": 52
+    },
+    {
+      "id": "L02",
+      "text": "Where is ensure_sync defined?",
+      "category": "lookup",
+      "mc_tokens": 268,
+      "naive_tokens": 28505,
+      "skilled_tokens": 7257,
+      "naive_ratio": 106,
+      "skilled_ratio": 27
+    },
+    {
+      "id": "L03",
+      "text": "Where is load_app defined?",
+      "category": "lookup",
+      "mc_tokens": 265,
+      "naive_tokens": 13641,
+      "skilled_tokens": 2637,
+      "naive_ratio": 51,
+      "skilled_ratio": 9
+    },
+    {
+      "id": "L04",
+      "text": "Where is send_file defined?",
+      "category": "lookup",
+      "mc_tokens": 310,
+      "naive_tokens": 61934,
+      "skilled_tokens": 13445,
+      "naive_ratio": 199,
+      "skilled_ratio": 43
+    },
+    {
+      "id": "L05",
+      "text": "Where is url_for defined?",
+      "category": "lookup",
+      "mc_tokens": 440,
+      "naive_tokens": 142291,
+      "skilled_tokens": 35618,
+      "naive_ratio": 323,
+      "skilled_ratio": 80
+    },
+    {
+      "id": "T01",
+      "text": "What calls load_app?",
+      "category": "trace",
+      "mc_tokens": 107,
+      "naive_tokens": 13641,
+      "skilled_tokens": 2637,
+      "naive_ratio": 127,
+      "skilled_ratio": 24
+    },
+    {
+      "id": "T02",
+      "text": "What calls add_url_rule?",
+      "category": "trace",
+      "mc_tokens": 254,
+      "naive_tokens": 103303,
+      "skilled_tokens": 19385,
+      "naive_ratio": 406,
+      "skilled_ratio": 76
+    },
+    {
+      "id": "T03",
+      "text": "What calls ensure_sync?",
+      "category": "trace",
+      "mc_tokens": 433,
+      "naive_tokens": 28505,
+      "skilled_tokens": 7257,
+      "naive_ratio": 65,
+      "skilled_ratio": 16
+    }
+  ],
+  "summary": {
+    "question_count": 11,
+    "avg_mc_tokens": 397.27272727272725,
+    "avg_naive_tokens": 89638.36363636363,
+    "avg_skilled_tokens": 15497.636363636364,
+    "naive_savings_x": 225.63432494279175,
+    "skilled_savings_x": 39.01006864988559
+  }
+}

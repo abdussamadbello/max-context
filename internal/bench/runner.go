@@ -97,6 +97,14 @@ func Run(root string, questions []Question, opts RunOptions) (*Results, error) {
 		if err != nil {
 			return nil, fmt.Errorf("skilled baseline %s: %w", q.ID, err)
 		}
+		// A term that matches nothing is not a hard baseline, it is a broken
+		// question: the ratio collapses to zero and quietly drags the average
+		// down. The mirror of the empty-tool-response check below — neither side
+		// may score a question it did not actually answer.
+		if skilled == 0 || naive == 0 {
+			return nil, fmt.Errorf("%s: baseline_terms %v match nothing in %s; the question is stale or the term is wrong",
+				q.ID, q.Terms, root)
+		}
 		// Measured the same way as the baselines: run the thing, count what
 		// comes back.
 		resp, err := opts.InvokeTool(q.Tool, q.MCArgs)
