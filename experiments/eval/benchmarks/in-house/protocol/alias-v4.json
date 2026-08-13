@@ -9,7 +9,7 @@
   "repos": [
     {
       "name": "payments",
-      "clone_url": "file:///tmp/alias-bench/payments",
+      "clone_url": "fixtures/payments",
       "sha": "bc194b5a9ecf62a8d40117de8444898f472cc9c8",
       "lang": "python"
     },

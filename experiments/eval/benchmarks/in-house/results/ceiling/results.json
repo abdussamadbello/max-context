@@ -1,0 +1,256 @@
+{
+  "version": "ceiling-v1",
+  "probes": [
+    {
+      "task_id": "A01",
+      "repo": "payments",
+      "question": "List every function that calls post_transaction.",
+      "symbol": "post_transaction",
+      "gold": [
+        "charge_subscription",
+        "issue_refund",
+        "apply_late_fee",
+        "pay_salary",
+        "pay_bonus"
+      ],
+      "arms": [
+        {
+          "arm": "grep(one-shot)",
+          "tool_calls": 4,
+          "output_bytes": 518,
+          "predicted": [],
+          "found": [],
+          "missed": [
+            "apply_late_fee",
+            "charge_subscription",
+            "issue_refund",
+            "pay_bonus",
+            "pay_salary"
+          ],
+          "recall": 0,
+          "precision": 0,
+          "steps": [
+            {
+              "arm": "grep(one-shot)",
+              "detail": "rg post_transaction",
+              "bytes": 197
+            },
+            {
+              "arm": "grep(one-shot)",
+              "detail": "rg post_transaction\\s*\\(",
+              "bytes": 62
+            },
+            {
+              "arm": "grep(one-shot)",
+              "detail": "rg \\bpost_transaction\\b",
+              "bytes": 197
+            },
+            {
+              "arm": "grep(one-shot)",
+              "detail": "rg def post_transaction",
+              "bytes": 62
+            }
+          ]
+        },
+        {
+          "arm": "grep(alias-chained)",
+          "tool_calls": 6,
+          "output_bytes": 886,
+          "predicted": [
+            "apply_late_fee",
+            "charge_subscription",
+            "issue_refund",
+            "pay_bonus",
+            "pay_salary"
+          ],
+          "found": [
+            "apply_late_fee",
+            "charge_subscription",
+            "issue_refund",
+            "pay_bonus",
+            "pay_salary"
+          ],
+          "missed": [],
+          "recall": 1,
+          "precision": 1,
+          "steps": [
+            {
+              "arm": "grep(alias-chained)",
+              "detail": "rg post_transaction",
+              "bytes": 197
+            },
+            {
+              "arm": "grep(alias-chained)",
+              "detail": "rg post_transaction\\s*\\(",
+              "bytes": 62
+            },
+            {
+              "arm": "grep(alias-chained)",
+              "detail": "rg \\bpost_transaction\\b",
+              "bytes": 197
+            },
+            {
+              "arm": "grep(alias-chained)",
+              "detail": "rg def post_transaction",
+              "bytes": 62
+            },
+            {
+              "arm": "grep(alias-chained)",
+              "detail": "rg apply_entry\\s*\\(",
+              "bytes": 224,
+              "note": "follow-up: `post_transaction` is imported as `apply_entry`"
+            },
+            {
+              "arm": "grep(alias-chained)",
+              "detail": "rg record_payment\\s*\\(",
+              "bytes": 144,
+              "note": "follow-up: `post_transaction` is imported as `record_payment`"
+            }
+          ]
+        },
+        {
+          "arm": "max-context",
+          "tool_calls": 1,
+          "output_bytes": 660,
+          "predicted": [
+            "apply_late_fee",
+            "charge_subscription",
+            "issue_refund",
+            "pay_bonus",
+            "pay_salary"
+          ],
+          "found": [
+            "apply_late_fee",
+            "charge_subscription",
+            "issue_refund",
+            "pay_bonus",
+            "pay_salary"
+          ],
+          "missed": [],
+          "recall": 1,
+          "precision": 1,
+          "steps": [
+            {
+              "arm": "max-context",
+              "detail": "get_call_chain {\n            \"function_name\": \"post_transaction\",\n            \"direction\": \"callers\",\n            \"depth\": 3\n          }",
+              "bytes": 660
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "task_id": "A02",
+      "repo": "celery",
+      "question": "List every function or method that calls resolve_all, the task-annotation resolver defined in celery/app/annotations.py.",
+      "symbol": "resolve_all",
+      "gold": [
+        "annotate"
+      ],
+      "arms": [
+        {
+          "arm": "grep(one-shot)",
+          "tool_calls": 4,
+          "output_bytes": 784,
+          "predicted": [
+            "annotate",
+            "test_annotate"
+          ],
+          "found": [
+            "annotate"
+          ],
+          "missed": [],
+          "recall": 1,
+          "precision": 0.5,
+          "steps": [
+            {
+              "arm": "grep(one-shot)",
+              "detail": "rg resolve_all",
+              "bytes": 431
+            },
+            {
+              "arm": "grep(one-shot)",
+              "detail": "rg resolve_all\\s*\\(",
+              "bytes": 60
+            },
+            {
+              "arm": "grep(one-shot)",
+              "detail": "rg \\bresolve_all\\b",
+              "bytes": 233
+            },
+            {
+              "arm": "grep(one-shot)",
+              "detail": "rg def resolve_all",
+              "bytes": 60
+            }
+          ]
+        },
+        {
+          "arm": "grep(alias-chained)",
+          "tool_calls": 5,
+          "output_bytes": 877,
+          "predicted": [
+            "annotate",
+            "test_annotate"
+          ],
+          "found": [
+            "annotate"
+          ],
+          "missed": [],
+          "recall": 1,
+          "precision": 0.5,
+          "steps": [
+            {
+              "arm": "grep(alias-chained)",
+              "detail": "rg resolve_all",
+              "bytes": 431
+            },
+            {
+              "arm": "grep(alias-chained)",
+              "detail": "rg resolve_all\\s*\\(",
+              "bytes": 60
+            },
+            {
+              "arm": "grep(alias-chained)",
+              "detail": "rg \\bresolve_all\\b",
+              "bytes": 233
+            },
+            {
+              "arm": "grep(alias-chained)",
+              "detail": "rg def resolve_all",
+              "bytes": 60
+            },
+            {
+              "arm": "grep(alias-chained)",
+              "detail": "rg resolve_all_annotations\\s*\\(",
+              "bytes": 93,
+              "note": "follow-up: `resolve_all` is imported as `resolve_all_annotations`"
+            }
+          ]
+        },
+        {
+          "arm": "max-context",
+          "tool_calls": 1,
+          "output_bytes": 390,
+          "predicted": [
+            "annotate",
+            "test_annotate_decorator"
+          ],
+          "found": [
+            "annotate"
+          ],
+          "missed": [],
+          "recall": 1,
+          "precision": 0.5,
+          "steps": [
+            {
+              "arm": "max-context",
+              "detail": "get_call_chain {\n            \"function_name\": \"resolve_all\",\n            \"direction\": \"callers\",\n            \"depth\": 3\n          }",
+              "bytes": 390
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -195,3 +195,57 @@ jobs:
           bad = [h for h in hits if not h.get('line')]
           assert not bad, f'results missing a line number: {bad}'
           "
+
+  ceiling:
+    # The retrieval-ceiling A/B: does max-context actually surface answers a
+    # text search misses? It needs no model and no API key, so unlike the agent
+    # experiment it can run on every push — which is the only way the published
+    # numbers stay true as the tools change.
+    name: retrieval ceiling A/B
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          cache: true
+
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - name: Build max-context
+        env:
+          CGO_ENABLED: '1'
+        run: go build -o bin/max-context ./cmd/max-context
+
+      # The eval harness is a separate module, so the root `go test ./...` does
+      # not reach it. These assert the fixture still matches its answer key and
+      # that both arms behave as published.
+      - name: Ceiling tests
+        working-directory: experiments/eval/benchmarks/in-house
+        env:
+          MAX_CONTEXT_BIN: ${{ github.workspace }}/bin/max-context
+        run: go test ./internal/ceiling/ -v
+
+      # Local fixtures only: no network, so a GitHub outage cannot redden CI.
+      - name: Run the A/B and check the headline result
+        working-directory: experiments/eval/benchmarks/in-house
+        run: |
+          go run ./cmd/ceiling -mc "${{ github.workspace }}/bin/max-context"
+          python3 -c "
+          import json, sys
+          r = json.load(open('results/ceiling/results.json'))
+          a01 = next(p for p in r['probes'] if p['task_id'] == 'A01')
+          arms = {a['arm']: a for a in a01['arms']}
+          gold = len(a01['gold'])
+          mc, one, chain = arms['max-context'], arms['grep(one-shot)'], arms['grep(alias-chained)']
+          for name, arm in arms.items():
+              assert not arm.get('error'), f'{name} errored: {arm[\"error\"]}'
+          assert len(mc['found']) == gold, f'max-context recall {len(mc[\"found\"])}/{gold}'
+          assert len(one['found']) == 0, f'one-shot grep found {one[\"found\"]}; the alias probe is no longer testing aliasing'
+          assert len(chain['found']) == gold, f'chained grep recall {len(chain[\"found\"])}/{gold}; the baseline broke'
+          assert mc['tool_calls'] < chain['tool_calls'], 'max-context no longer reaches the answer in fewer calls'
+          print(f'A01: max-context {len(mc[\"found\"])}/{gold} in {mc[\"tool_calls\"]} call, '
+                f'chained grep {len(chain[\"found\"])}/{gold} in {chain[\"tool_calls\"]}, '
+                f'one-shot grep {len(one[\"found\"])}/{gold}')
+          "

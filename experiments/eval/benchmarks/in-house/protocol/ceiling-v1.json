@@ -1,0 +1,65 @@
+{
+  "version": "ceiling-v1",
+  "note": "Retrieval-ceiling probes: no LLM, no API key, no cost. Each probe asks which functions call a symbol, and scores what each arm's TOOLS surface against the same hand-verified gold set used by the agent protocol (alias-v4.json). This measures the upper bound on agent accuracy — a caller absent from every tool response cannot be named by any model — not agent accuracy itself. Gold sets are checked against alias-v4.json's keys by TestCeilingProbesMatchTheAnswerKeys; they cannot drift silently.",
+  "probes": [
+    {
+      "task_id": "A01",
+      "repo": "payments",
+      "lang": "python",
+      "repo_path": "fixtures/payments",
+      "question": "List every function that calls post_transaction.",
+      "symbol": "post_transaction",
+      "expected_symbols": [
+        "charge_subscription",
+        "issue_refund",
+        "apply_late_fee",
+        "pay_salary",
+        "pay_bonus"
+      ],
+      "grep_patterns": [
+        "post_transaction",
+        "post_transaction\\s*\\(",
+        "\\bpost_transaction\\b",
+        "def post_transaction"
+      ],
+      "mc_calls": [
+        {
+          "tool": "get_call_chain",
+          "args": {
+            "function_name": "post_transaction",
+            "direction": "callers",
+            "depth": 3
+          }
+        }
+      ]
+    },
+    {
+      "task_id": "A02",
+      "repo": "celery",
+      "lang": "python",
+      "clone_url": "https://github.com/celery/celery.git",
+      "sha": "90e2a13cbe2d3a40b93fe31ec9f09b64b33e0f64",
+      "question": "List every function or method that calls resolve_all, the task-annotation resolver defined in celery/app/annotations.py.",
+      "symbol": "resolve_all",
+      "expected_symbols": [
+        "annotate"
+      ],
+      "grep_patterns": [
+        "resolve_all",
+        "resolve_all\\s*\\(",
+        "\\bresolve_all\\b",
+        "def resolve_all"
+      ],
+      "mc_calls": [
+        {
+          "tool": "get_call_chain",
+          "args": {
+            "function_name": "resolve_all",
+            "direction": "callers",
+            "depth": 3
+          }
+        }
+      ]
+    }
+  ]
+}
