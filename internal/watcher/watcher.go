@@ -29,15 +29,16 @@ type Options struct {
 }
 
 type Watcher struct {
-	root    string
-	ignore  map[string]bool
-	exts    map[string]bool
-	w       *fsnotify.Watcher
-	ch      chan<- string
-	delay   time.Duration
-	mu      sync.Mutex
-	pending map[string]*time.Timer
-	done    chan struct{}
+	root     string
+	ignore   map[string]bool
+	exts     map[string]bool
+	w        *fsnotify.Watcher
+	ch       chan<- string
+	delay    time.Duration
+	mu       sync.Mutex
+	pending  map[string]*time.Timer
+	done     chan struct{}
+	stopOnce sync.Once
 }
 
 func New(root string, reindexCh chan<- string, opts ...*Options) (*Watcher, error) {
@@ -111,10 +112,10 @@ func (w *Watcher) addRecursive(dir string) error {
 }
 
 func (w *Watcher) run(ctx context.Context) {
+	defer w.stop()
 	for {
 		select {
 		case <-ctx.Done():
-			w.w.Close()
 			return
 		case ev, ok := <-w.w.Events:
 			if !ok {
@@ -126,6 +127,31 @@ func (w *Watcher) run(ctx context.Context) {
 				return
 			}
 		}
+	}
+}
+
+// stop closes the watcher and releases anything blocked in send. Safe to call
+// more than once.
+func (w *Watcher) stop() {
+	w.stopOnce.Do(func() {
+		close(w.done)
+		_ = w.w.Close()
+	})
+}
+
+// send hands a path to the indexing worker, waiting for room rather than
+// dropping the event.
+//
+// This used to be a non-blocking send with a `default:` that discarded the path
+// whenever the buffer was full — so a bulk change (a branch switch, a big
+// rebuild) silently left those files stale in an index that reports itself
+// healthy. Callers run on their own goroutine, never on the fsnotify event
+// loop, so waiting here cannot stall event delivery; w.done unblocks it at
+// shutdown so nothing leaks.
+func (w *Watcher) send(path string) {
+	select {
+	case w.ch <- path:
+	case <-w.done:
 	}
 }
 
@@ -152,10 +178,9 @@ func (w *Watcher) handle(ev fsnotify.Event) {
 	if base == ".reindex-queue" && filepath.Base(filepath.Dir(ev.Name)) == ".max-context" {
 		if ev.Op&(fsnotify.Create|fsnotify.Write) != 0 {
 			_ = os.Remove(ev.Name)
-			select {
-			case w.ch <- "":
-			default:
-			}
+			// On its own goroutine: handle runs on the fsnotify event loop, and
+			// blocking here would stop the watcher from seeing further events.
+			go w.send("")
 		}
 		return
 	}
@@ -177,9 +202,6 @@ func (w *Watcher) debounce(relPath string) {
 		w.mu.Lock()
 		delete(w.pending, relPath)
 		w.mu.Unlock()
-		select {
-		case w.ch <- relPath:
-		default:
-		}
+		w.send(relPath)
 	})
 }

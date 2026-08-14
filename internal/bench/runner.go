@@ -7,16 +7,24 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/maxcontext/max-context/internal/indexer"
 )
 
 // Question describes one benchmark probe. Curated per-repo in benchmark/questions/.
+//
+// There is deliberately no recorded token count for the max-context side. An
+// earlier version carried one, hand-written per question, while only the
+// baselines were computed by running grep+read — so the published ratio moved
+// when the repo grew and never when the tool output changed, and drifted until
+// it understated get_call_chain by up to 67x. Both sides are measured now.
 type Question struct {
-	ID               string   `json:"id"`
-	Text             string   `json:"text"`
-	Category         string   `json:"category"` // "lookup" | "trace" | "impact"
-	Tool             string   `json:"mc_tool"`
-	Terms            []string `json:"baseline_terms"`
-	MCResponseTokens int      `json:"mc_response_tokens"`
+	ID       string          `json:"id"`
+	Text     string          `json:"text"`
+	Category string          `json:"category"` // "lookup" | "trace" | "impact"
+	Tool     string          `json:"mc_tool"`
+	Terms    []string        `json:"baseline_terms"`
+	MCArgs   json.RawMessage `json:"mc_args"` // arguments the tool is invoked with
 }
 
 // QuestionResult captures both paths for one question.
@@ -48,6 +56,12 @@ type Results struct {
 type RunOptions struct {
 	OutDir string
 	Repo   string
+
+	// InvokeTool runs one max-context tool and returns the exact text the model
+	// would receive. Required: the max-context column is measured by calling
+	// this, never asserted. Injected rather than imported so this package keeps
+	// no dependency on the tool layer and can be tested with a stub.
+	InvokeTool func(tool string, args json.RawMessage) (string, error)
 }
 
 // Run executes both baseline paths for each question and writes results.json + benchmark.md to OutDir.
@@ -56,20 +70,50 @@ func Run(root string, questions []Question, opts RunOptions) (*Results, error) {
 		return nil, err
 	}
 
+	// Both baselines walk the same file set max-context indexes. Without this
+	// the comparison rewarded max-context for files it never indexed: grep paid
+	// for every byte under experiments/, the index did not.
+	filter, err := indexer.NewIgnoreMatcherWithExtra(root, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build repo filter: %w", err)
+	}
+
+	if opts.InvokeTool == nil {
+		return nil, fmt.Errorf("RunOptions.InvokeTool is required: the max-context side must be measured, not assumed")
+	}
+	counter, err := NewCounter()
+	if err != nil {
+		return nil, fmt.Errorf("token counter: %w", err)
+	}
+
 	res := &Results{Repo: opts.Repo}
 	var sumMC, sumNaive, sumSkilled float64
 	for _, q := range questions {
-		naive, err := NaiveBaseline(root, q.Terms)
+		naive, err := NaiveBaseline(root, q.Terms, filter)
 		if err != nil {
 			return nil, fmt.Errorf("naive baseline %s: %w", q.ID, err)
 		}
-		skilled, err := SkilledBaseline(root, q.Terms)
+		skilled, err := SkilledBaseline(root, q.Terms, filter)
 		if err != nil {
 			return nil, fmt.Errorf("skilled baseline %s: %w", q.ID, err)
 		}
-		mcTokens := q.MCResponseTokens
+		// A term that matches nothing is not a hard baseline, it is a broken
+		// question: the ratio collapses to zero and quietly drags the average
+		// down. The mirror of the empty-tool-response check below — neither side
+		// may score a question it did not actually answer.
+		if skilled == 0 || naive == 0 {
+			return nil, fmt.Errorf("%s: baseline_terms %v match nothing in %s; the question is stale or the term is wrong",
+				q.ID, q.Terms, root)
+		}
+		// Measured the same way as the baselines: run the thing, count what
+		// comes back.
+		resp, err := opts.InvokeTool(q.Tool, q.MCArgs)
+		if err != nil {
+			return nil, fmt.Errorf("invoke %s for %s: %w", q.Tool, q.ID, err)
+		}
+		mcTokens := counter.Count(resp)
 		if mcTokens == 0 {
-			mcTokens = 1
+			return nil, fmt.Errorf("%s: %s returned an empty response; the question or its mc_args is stale", q.ID, q.Tool)
 		}
 
 		qr := QuestionResult{

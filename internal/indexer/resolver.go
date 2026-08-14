@@ -134,13 +134,13 @@ func (c *ResolverCache) Invalidate() {
 
 func newEmptyResolver() *Resolver {
 	return &Resolver{
-		byPkgName:   map[[2]string][]funcDef{},
-		byRecvName:  map[[2]string][]funcDef{},
-		byName:      map[string][]funcDef{},
-		byTopName:   map[string][]funcDef{},
-		returnType:  map[[2]string]string{},
-		fieldType:   map[[2]string]map[string]int{},
-		globalType:  map[[2]string]map[string]int{},
+		byPkgName:        map[[2]string][]funcDef{},
+		byRecvName:       map[[2]string][]funcDef{},
+		byName:           map[string][]funcDef{},
+		byTopName:        map[string][]funcDef{},
+		returnType:       map[[2]string]string{},
+		fieldType:        map[[2]string]map[string]int{},
+		globalType:       map[[2]string]map[string]int{},
 		classRefs:        map[string]int{},
 		bases:            map[string][]string{},
 		repoRoots:        map[string]int{},

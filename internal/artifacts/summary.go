@@ -23,8 +23,8 @@ type SummaryData struct {
 	LastIndex      string
 	TotalFunctions int
 	TotalFiles     int
-	DirSummary    string
-	EntryPoints   string
+	DirSummary     string
+	EntryPoints    string
 }
 
 func WriteSummary(dir string, database *sql.DB) error {

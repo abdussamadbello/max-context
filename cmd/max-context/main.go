@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/maxcontext/max-context/internal/artifacts"
@@ -109,7 +110,8 @@ func watcherOptions(cfg *config.Config) *watcher.Options {
 	}
 }
 
-// runIndex performs full index and optionally starts the watcher (handled in indexer).
+// runIndex builds the full index and exits. It does not start the watcher —
+// that runs in MCP server mode (runServe) and under --watch.
 func runIndex(cfg *config.Config) error {
 	database, err := db.Open(cfg.DBPath)
 	if err != nil {
@@ -235,7 +237,19 @@ func runMCPServer(cfg *config.Config) error {
 }
 
 func runSetup(cfg *config.Config, target string) error {
-	return setup.Run(cfg.ProjectRoot, target)
+	report, err := setup.Run(cfg.ProjectRoot, target)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stdout, "Configured %s in %s:\n%s", target, cfg.ProjectRoot, report)
+	if skipped := report.Skipped(); len(skipped) > 0 {
+		fmt.Fprintf(os.Stdout, "\n%d file(s) needed manual attention — see SKIPPED above.\n", len(skipped))
+	}
+	for _, note := range report.Notes {
+		fmt.Fprintf(os.Stdout, "\nNote: %s\n", note)
+	}
+	fmt.Fprintf(os.Stdout, "\nNext: run `max-context --index` in this project, then start your editor.\n")
+	return nil
 }
 
 // runBench executes the benchmark harness against a question set and writes
@@ -262,9 +276,44 @@ func runBench(cfg *config.Config, args []string) error {
 	if err := json.Unmarshal(body, &questions); err != nil {
 		return fmt.Errorf("parse questions: %w", err)
 	}
+	// The max-context side of the benchmark is measured by invoking the real
+	// tools against the real index, exactly as the baselines run real greps.
+	database, err := db.Open(cfg.DBPath)
+	if err != nil {
+		return fmt.Errorf("open db (build the index with `max-context --index` first): %w", err)
+	}
+	defer database.Close()
+	if err := db.Migrate(database); err != nil {
+		return err
+	}
+	q, err := db.PrepareQueries(database)
+	if err != nil {
+		return err
+	}
+	defer q.Close()
+	handler := mcp.NewHandler()
+	tools.RegisterAll(handler, database, q, cfg.ProjectRoot)
+
+	invoke := func(tool string, args json.RawMessage) (string, error) {
+		if len(args) == 0 {
+			args = json.RawMessage("{}")
+		}
+		result, err := handler.Call(tool, args)
+		if err != nil {
+			return "", err
+		}
+		content, _ := result.([]mcp.ContentItem)
+		var b strings.Builder
+		for _, item := range content {
+			b.WriteString(item.Text)
+		}
+		return b.String(), nil
+	}
+
 	res, err := bench.Run(*repoFlag, questions, bench.RunOptions{
-		OutDir: *outFlag,
-		Repo:   repoName,
+		OutDir:     *outFlag,
+		Repo:       repoName,
+		InvokeTool: invoke,
 	})
 	if err != nil {
 		return err

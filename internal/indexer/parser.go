@@ -95,6 +95,7 @@ type ConstRecord struct {
 type TypeRecord struct {
 	Name       string
 	FilePath   string
+	Line       int // 1-based declaration line; 0 when the grammar gives no position
 	Kind       string
 	Definition string
 	Exported   bool
@@ -196,6 +197,7 @@ func parseGeneric(slashPath, lang string, groups []treesitter.CaptureGroup) *Par
 				res.Types = append(res.Types, TypeRecord{
 					Name:       name,
 					FilePath:   slashPath,
+					Line:       rowOf(g, "name"),
 					Kind:       "type",
 					Definition: truncate(def, 300),
 					Exported:   isExported(name),
@@ -250,7 +252,7 @@ func parseGo(slashPath string, groups []treesitter.CaptureGroup) *ParseResult {
 	}
 	var calls []rawCall
 	var fieldCalls []rawFieldCall
-	var typed []rawTyped          // params, receivers, and statically-typed locals
+	var typed []rawTyped              // params, receivers, and statically-typed locals
 	var calleeLocals []rawCalleeLocal // x := f() locals (9a), typed by the resolver
 
 	for _, g := range groups {
@@ -346,6 +348,7 @@ func parseGo(slashPath string, groups []treesitter.CaptureGroup) *ParseResult {
 			res.Types = append(res.Types, TypeRecord{
 				Name:       t["type.name"],
 				FilePath:   slashPath,
+				Line:       rowOf(g, "type.name"),
 				Kind:       "type",
 				Definition: truncate(t["type.def"], 300),
 				Exported:   isExported(t["type.name"]),
@@ -485,11 +488,26 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 	var fnSpans []*funcSpan
 	var clsSpans []*classSpan
 
-	type rawCall struct{ callee, recv string; line int }
-	type rawThisCall struct{ field, callee string; line int }
-	type rawTyped struct{ name, typ string; line int }
-	type rawCalleeLocal struct{ name, callee string; line int }
-	type rawSelfMethod struct{ callee string; line int }
+	type rawCall struct {
+		callee, recv string
+		line         int
+	}
+	type rawThisCall struct {
+		field, callee string
+		line          int
+	}
+	type rawTyped struct {
+		name, typ string
+		line      int
+	}
+	type rawCalleeLocal struct {
+		name, callee string
+		line         int
+	}
+	type rawSelfMethod struct {
+		callee string
+		line   int
+	}
 	var calls []rawCall
 	var thisCalls []rawThisCall
 	var typed []rawTyped
@@ -525,7 +543,7 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 			start, end := defRange(g, "class.name", "class.body")
 			clsSpans = append(clsSpans, &classSpan{name: t["class.name"], start: start, end: end})
 			res.Types = append(res.Types, TypeRecord{
-				Name: t["class.name"], FilePath: slashPath, Kind: "class",
+				Name: t["class.name"], FilePath: slashPath, Line: start, Kind: "class",
 				Exported: isExported(t["class.name"]),
 			})
 
@@ -583,7 +601,7 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 
 		case t["type.name"] != "" && t["type.def"] != "":
 			res.Types = append(res.Types, TypeRecord{
-				Name: t["type.name"], FilePath: slashPath, Kind: "type",
+				Name: t["type.name"], FilePath: slashPath, Line: rowOf(g, "type.name"), Kind: "type",
 				Definition: truncate(t["type.def"], 300), Exported: isExported(t["type.name"]),
 			})
 		}
@@ -726,13 +744,34 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 	var fnSpans []*funcSpan
 	var clsSpans []*classSpan
 
-	type rawCall struct{ callee, recv string; line int }
-	type rawSelfCall struct{ field, callee string; line int }
-	type rawTyped struct{ name, typ string; line int }
-	type rawField struct{ name, typ string; line int }   // class-level x: T
-	type rawSelfAssign struct{ field, ctor string; line int } // self.x = Ctor()
-	type rawCalleeLocal struct{ name, callee string; line int }
-	type rawSelfMethod struct{ callee string; line int }
+	type rawCall struct {
+		callee, recv string
+		line         int
+	}
+	type rawSelfCall struct {
+		field, callee string
+		line          int
+	}
+	type rawTyped struct {
+		name, typ string
+		line      int
+	}
+	type rawField struct {
+		name, typ string
+		line      int
+	} // class-level x: T
+	type rawSelfAssign struct {
+		field, ctor string
+		line        int
+	} // self.x = Ctor()
+	type rawCalleeLocal struct {
+		name, callee string
+		line         int
+	}
+	type rawSelfMethod struct {
+		callee string
+		line   int
+	}
 	var calls []rawCall
 	var selfCalls []rawSelfCall
 	var typed []rawTyped
@@ -933,7 +972,6 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 
 	return res
 }
-
 
 // enclosing returns the innermost function span containing the given line, or
 // nil if the line is at file scope (e.g. a package-level var initializer call).

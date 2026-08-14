@@ -33,8 +33,12 @@ func PrepareQueries(db *sql.DB) (*Queries, error) {
 
 	q.SearchFunctions, err = db.Prepare(`
 		SELECT f.id, f.name, f.file_path, f.start_line, f.end_line, f.language, f.kind, f.exported, f.code, f.docstring, f.signature,
-		       snippet(functions_fts, 2, '»', '«', '...', 30) AS snippet,
-		       bm25(functions_fts, 10.0, 5.0, 1.0, 2.0) AS rank
+		       snippet(functions_fts, 3, '»', '«', '...', 30) AS snippet,
+		       -- Columns: name, name_parts, file_path, code, docstring.
+		       -- name_parts ranks just under the raw name so "resolver cache"
+		       -- reaches ResolverCache; file_path is deliberately low so that a
+		       -- path match can no longer outrank a symbol whose name matches.
+		       bm25(functions_fts, 10.0, 8.0, 1.5, 1.0, 2.0) AS rank
 		FROM functions_fts
 		JOIN functions f ON f.id = functions_fts.rowid
 		WHERE functions_fts MATCH ?
@@ -46,9 +50,10 @@ func PrepareQueries(db *sql.DB) (*Queries, error) {
 	}
 
 	q.SearchTypes, err = db.Prepare(`
-		SELECT t.id, t.name, t.file_path, t.kind, t.definition, t.exported,
-		       snippet(types_fts, 2, '»', '«', '...', 30) AS snippet,
-		       bm25(types_fts, 10.0, 5.0, 1.0) AS rank
+		SELECT t.id, t.name, t.file_path, t.start_line, t.kind, t.definition, t.exported,
+		       snippet(types_fts, 3, '»', '«', '...', 30) AS snippet,
+		       -- Columns: name, name_parts, file_path, definition.
+		       bm25(types_fts, 10.0, 8.0, 1.5, 1.0) AS rank
 		FROM types_fts
 		JOIN types t ON t.id = types_fts.rowid
 		WHERE types_fts MATCH ?
@@ -62,7 +67,7 @@ func PrepareQueries(db *sql.DB) (*Queries, error) {
 	q.SearchDocuments, err = db.Prepare(`
 		SELECT d.id, d.file_path, d.title, d.kind,
 		       snippet(documents_fts, 2, '»', '«', '...', 30) AS snippet,
-		       bm25(documents_fts, 5.0, 3.0, 1.0) AS rank
+		       bm25(documents_fts, 5.0, 1.5, 1.0) AS rank
 		FROM documents_fts
 		JOIN documents d ON d.id = documents_fts.rowid
 		WHERE documents_fts MATCH ?
@@ -88,8 +93,8 @@ func PrepareQueries(db *sql.DB) (*Queries, error) {
 	}
 
 	q.InsertFunction, err = db.Prepare(`
-		INSERT INTO functions (name, file_path, start_line, end_line, language, exported, code, docstring, signature)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO functions (name, name_parts, file_path, start_line, end_line, language, exported, code, docstring, signature)
+		VALUES (?1, split_identifier(?1), ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("prepare InsertFunction: %w", err)
@@ -103,7 +108,7 @@ func PrepareQueries(db *sql.DB) (*Queries, error) {
 	}
 
 	q.InsertType, err = db.Prepare(`
-		INSERT INTO types (name, file_path, kind, definition, exported) VALUES (?, ?, ?, ?, ?)
+		INSERT INTO types (name, name_parts, file_path, kind, definition, exported) VALUES (?1, split_identifier(?1), ?2, ?3, ?4, ?5)
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("prepare InsertType: %w", err)

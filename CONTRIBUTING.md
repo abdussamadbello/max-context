@@ -12,7 +12,7 @@ make test          # runs the Go test suite
 make install       # installs to $HOME/.local/bin (override with PREFIX=)
 ```
 
-You need Go 1.22+ and a C toolchain (CGO is required for the SQLite driver and tree-sitter bindings).
+You need Go 1.22+ and a C toolchain (CGO is required for the tree-sitter bindings; the SQLite driver is pure Go).
 
 ## Submitting changes
 
@@ -26,11 +26,55 @@ You need Go 1.22+ and a C toolchain (CGO is required for the SQLite driver and t
 - `cmd/max-context/` — CLI entrypoint
 - `internal/` — private Go packages (indexer, MCP server, tools, watcher, etc.)
 - `pkg/treesitter/` — tree-sitter bindings (public API)
-- `.claude-plugin/`, `commands/`, `hooks/`, `skills/`, `templates/` — Claude Code plugin assets (the repo root is the plugin)
+- `.claude-plugin/`, `commands/`, `hooks/`, `skills/` — Claude Code plugin assets (the repo root is the plugin)
 - `benchmark/` — token-savings benchmark harness + question sets
 - `docs/` — public benchmark transcripts and screenshots
 
 See [README.md](README.md) for the architectural overview.
+
+## Adding an agent harness
+
+Harnesses are entries in `harnesses` in [`internal/setup/harness.go`](internal/setup/harness.go),
+not new files. A new one needs:
+
+- `Name` — the `max-context setup <name>` target
+- `MCPConfig` — where that harness reads its MCP server map, relative to the project root
+- `ServersKey` — the JSON key holding the server map, if it isn't `mcpServers`
+- `GuidancePath` / `Guidance` — the skill or rules file that tells the agent to use the tools
+- `Commands` / `CommandsDir` — how it wants the reindex/index/status commands written
+- `Format` — `FormatYAML` (Hermes) or `FormatTOML` (Codex) if the config is not JSON
+- `EntryStyle` — `EntryTypedArgv` if a server is `{"type":"local","command":["max-context"]}` rather than `{"command":"max-context","args":[]}` (opencode)
+- `HomeRelative` — if the harness only has a global config, so `MCPConfig` resolves against `$HOME` (Hermes)
+- `InstructionsKey` / `NoAgentsMD` — for harnesses that discover guidance through a config array rather than AGENTS.md (opencode)
+- `Note` — a step max-context cannot take for the user (Codex needs the project marked trusted); printed after the summary
+
+Guidance content is **not** a harness field. It is derived: MCP-tool phrasing
+when the harness registers a server, CLI phrasing when it does not, with Agent
+Skills frontmatter when the file is a `SKILL.md`. Edit the text in
+[`internal/setup/guidance/`](internal/setup/guidance/); it is embedded at build
+time. Deriving the style means guidance can never tell an agent to call tools
+the harness has no way to reach.
+- `Extra` — only for genuine one-offs (VS Code's hook scripts are the sole current case)
+
+A harness with no MCP support at all (pi) simply leaves `MCPConfig` empty: it
+gets the skill and the AGENTS.md block, and drives the tools through the
+one-shot CLI subcommands.
+
+Tests that touch a home-relative harness must call `fakeHome(t)` so the suite
+never writes to a real `~/.hermes`.
+
+`TestEveryHarnessConfiguresACleanProject` and `TestEveryHarnessIsIdempotent` pick
+up the new entry automatically. Get `ServersKey` right: writing the wrong key
+produces a config the harness silently ignores, which looks exactly like setup
+having worked.
+
+## Tool-definition budget
+
+MCP tool schemas are re-sent on every request, so their size is a per-turn cost
+in every session that loads the server. `TestToolSchemaBudget` fails if they
+grow past the budget — trim a description rather than raising it, and keep the
+cross-tool steering (`TestSchemasKeepCrossToolSteering` guards the parts the A/B
+runs tuned).
 
 ## Reporting bugs
 

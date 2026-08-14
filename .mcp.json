@@ -4,11 +4,6 @@
       "command": "max-context",
       "args": [],
       "env": {}
-    },
-    "max-context-bench": {
-      "command": "max-context",
-      "args": ["-project", "/tmp/bench-AmDJ/commander"],
-      "env": {}
     }
   }
 }

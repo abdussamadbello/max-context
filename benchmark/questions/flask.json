@@ -1,0 +1,149 @@
+[
+  {
+    "id": "L01",
+    "text": "Where is add_url_rule defined?",
+    "category": "lookup",
+    "mc_tool": "query_codebase",
+    "baseline_terms": [
+      "add_url_rule"
+    ],
+    "mc_args": {
+      "query": "add_url_rule"
+    }
+  },
+  {
+    "id": "L02",
+    "text": "Where is ensure_sync defined?",
+    "category": "lookup",
+    "mc_tool": "query_codebase",
+    "baseline_terms": [
+      "ensure_sync"
+    ],
+    "mc_args": {
+      "query": "ensure_sync"
+    }
+  },
+  {
+    "id": "L03",
+    "text": "Where is load_app defined?",
+    "category": "lookup",
+    "mc_tool": "query_codebase",
+    "baseline_terms": [
+      "load_app"
+    ],
+    "mc_args": {
+      "query": "load_app"
+    }
+  },
+  {
+    "id": "L04",
+    "text": "Where is send_file defined?",
+    "category": "lookup",
+    "mc_tool": "query_codebase",
+    "baseline_terms": [
+      "send_file"
+    ],
+    "mc_args": {
+      "query": "send_file"
+    }
+  },
+  {
+    "id": "L05",
+    "text": "Where is url_for defined?",
+    "category": "lookup",
+    "mc_tool": "query_codebase",
+    "baseline_terms": [
+      "url_for"
+    ],
+    "mc_args": {
+      "query": "url_for"
+    }
+  },
+  {
+    "id": "T01",
+    "text": "What calls load_app?",
+    "category": "trace",
+    "mc_tool": "get_call_chain",
+    "baseline_terms": [
+      "load_app"
+    ],
+    "mc_args": {
+      "function_name": "load_app",
+      "direction": "callers"
+    }
+  },
+  {
+    "id": "T02",
+    "text": "What calls add_url_rule?",
+    "category": "trace",
+    "mc_tool": "get_call_chain",
+    "baseline_terms": [
+      "add_url_rule"
+    ],
+    "mc_args": {
+      "function_name": "add_url_rule",
+      "direction": "callers"
+    }
+  },
+  {
+    "id": "T03",
+    "text": "What calls ensure_sync?",
+    "category": "trace",
+    "mc_tool": "get_call_chain",
+    "baseline_terms": [
+      "ensure_sync"
+    ],
+    "mc_args": {
+      "function_name": "ensure_sync",
+      "direction": "callers"
+    }
+  },
+  {
+    "id": "I01",
+    "text": "If I change app.py, what is affected?",
+    "category": "impact",
+    "mc_tool": "get_impact",
+    "baseline_terms": [
+      "ensure_sync",
+      "app_context",
+      "create_url_adapter"
+    ],
+    "mc_args": {
+      "files": [
+        "src/flask/app.py"
+      ]
+    }
+  },
+  {
+    "id": "I02",
+    "text": "If I change cli.py, what is affected?",
+    "category": "impact",
+    "mc_tool": "get_impact",
+    "baseline_terms": [
+      "load_app",
+      "_called_with_wrong_args",
+      "_load_plugin_commands"
+    ],
+    "mc_args": {
+      "files": [
+        "src/flask/cli.py"
+      ]
+    }
+  },
+  {
+    "id": "I03",
+    "text": "If I change blueprints.py, what is affected?",
+    "category": "impact",
+    "mc_tool": "get_impact",
+    "baseline_terms": [
+      "get_send_file_max_age",
+      "__init__",
+      "open_resource"
+    ],
+    "mc_args": {
+      "files": [
+        "src/flask/blueprints.py"
+      ]
+    }
+  }
+]

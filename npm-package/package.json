@@ -14,7 +14,7 @@
     "url": "https://github.com/maxcontext/max-context.git"
   },
   "keywords": ["mcp", "codebase", "index", "ai"],
-  "license": "MIT",
+  "license": "Apache-2.0",
   "engines": { "node": ">=18" },
   "optionalDependencies": {
     "adm-zip": "^0.5.16"

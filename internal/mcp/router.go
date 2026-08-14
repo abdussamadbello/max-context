@@ -5,14 +5,24 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
+// isNotification reports whether a message must not be answered. JSON-RPC 2.0
+// defines a notification as a request without an id, and the MCP spec sends the
+// post-handshake ack as "notifications/initialized". Replying to either — even
+// with an error — is a protocol violation, and strict clients surface it.
+func isNotification(req *JSONRPCRequest) bool {
+	return req.ID == nil || strings.HasPrefix(req.Method, "notifications/")
+}
+
 func (s *Server) handleMethod(req *JSONRPCRequest) *JSONRPCResponse {
+	if isNotification(req) {
+		return nil
+	}
 	switch req.Method {
 	case "initialize":
 		return s.handleInitialize(req.ID, req.Params)
-	case "initialized":
-		return &JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: nil}
 	case "tools/list":
 		return s.handleToolsList(req.ID)
 	case "tools/call":
@@ -21,8 +31,6 @@ func (s *Server) handleMethod(req *JSONRPCRequest) *JSONRPCResponse {
 		return s.handleResourcesList(req.ID, req.Params)
 	case "resources/read":
 		return s.handleResourcesRead(req.ID, req.Params)
-	case "notifications/cancelled":
-		return nil
 	case "ping":
 		return &JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]interface{}{}}
 	default:

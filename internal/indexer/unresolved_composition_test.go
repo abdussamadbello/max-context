@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/maxcontext/max-context/pkg/treesitter"
+	sitter "github.com/smacker/go-tree-sitter"
 )
 
 // classifyCallExpr buckets a Go call_expression by the SHAPE of its function
@@ -17,13 +17,14 @@ import (
 // resolver handles and the ones the current go.scm never even captures.
 //
 // Buckets:
-//   bare-call        f()                       — identifier
-//   sel-ident        x.M()                     — selector on a bare identifier (we capture this)
-//   sel-field        a.b.M()                   — selector on another selector (field/pkg-chain receiver)
-//   sel-chain        f().M()                   — selector on a call result (return-typed)
-//   sel-index        a[i].M()                  — selector on an index/slice expr
-//   sel-paren-other  (x).M(), x.y().z.M()      — any other selector operand
-//   other            type conversions, etc.
+//
+//	bare-call        f()                       — identifier
+//	sel-ident        x.M()                     — selector on a bare identifier (we capture this)
+//	sel-field        a.b.M()                   — selector on another selector (field/pkg-chain receiver)
+//	sel-chain        f().M()                   — selector on a call result (return-typed)
+//	sel-index        a[i].M()                  — selector on an index/slice expr
+//	sel-paren-other  (x).M(), x.y().z.M()      — any other selector operand
+//	other            type conversions, etc.
 func classifyCallExpr(n *sitter.Node, src []byte) string {
 	fn := n.ChildByFieldName("function")
 	if fn == nil {

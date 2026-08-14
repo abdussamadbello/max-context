@@ -42,7 +42,7 @@ func TestRenderFrontmatterCommand(t *testing.T) {
 
 func TestSetupClaudeCodeWritesCommands(t *testing.T) {
 	root := t.TempDir()
-	if err := setupClaudeCode(root); err != nil {
+	if err := applyHarness(t, "claude-code", root, nil); err != nil {
 		t.Fatalf("setupClaudeCode: %v", err)
 	}
 	for file, shell := range map[string]string{
@@ -63,7 +63,7 @@ func TestSetupClaudeCodeWritesCommands(t *testing.T) {
 
 func TestSetupVSCodeWritesPrompts(t *testing.T) {
 	root := t.TempDir()
-	if err := setupVSCode(root); err != nil {
+	if err := applyHarness(t, "vscode", root, nil); err != nil {
 		t.Fatalf("setupVSCode: %v", err)
 	}
 	for file, shell := range map[string]string{
@@ -85,7 +85,7 @@ func TestSetupVSCodeWritesPrompts(t *testing.T) {
 
 func TestSetupCursorWritesCommands(t *testing.T) {
 	root := t.TempDir()
-	if err := setupCursor(root); err != nil {
+	if err := applyHarness(t, "cursor", root, nil); err != nil {
 		t.Fatalf("setupCursor: %v", err)
 	}
 	for file, shell := range map[string]string{
@@ -106,7 +106,7 @@ func TestSetupCursorWritesCommands(t *testing.T) {
 
 func TestSetupWindsurfWritesWorkflows(t *testing.T) {
 	root := t.TempDir()
-	if err := setupWindsurf(root); err != nil {
+	if err := applyHarness(t, "windsurf", root, nil); err != nil {
 		t.Fatalf("setupWindsurf: %v", err)
 	}
 	for file, shell := range map[string]string{
@@ -144,7 +144,7 @@ func TestRenderSkillCommandsSection(t *testing.T) {
 
 func TestSetupCodexSkillHasCommands(t *testing.T) {
 	root := t.TempDir()
-	if err := setupCodex(root); err != nil {
+	if err := applyHarness(t, "codex", root, nil); err != nil {
 		t.Fatalf("setupCodex: %v", err)
 	}
 	p := filepath.Join(root, ".codex", "skills", "max-context", "SKILL.md")
@@ -159,7 +159,7 @@ func TestSetupCodexSkillHasCommands(t *testing.T) {
 
 func TestSetupAntigravitySkillHasCommands(t *testing.T) {
 	root := t.TempDir()
-	if err := setupAntigravity(root); err != nil {
+	if err := applyHarness(t, "antigravity", root, nil); err != nil {
 		t.Fatalf("setupAntigravity: %v", err)
 	}
 	p := filepath.Join(root, ".agent", "skills", "max-context", "SKILL.md")
@@ -175,7 +175,7 @@ func TestSetupAntigravitySkillHasCommands(t *testing.T) {
 func TestSetupCommandsAreIdempotent(t *testing.T) {
 	root := t.TempDir()
 	for i := 0; i < 2; i++ {
-		if err := setupClaudeCode(root); err != nil {
+		if err := applyHarness(t, "claude-code", root, nil); err != nil {
 			t.Fatalf("run %d: %v", i, err)
 		}
 	}
@@ -184,7 +184,7 @@ func TestSetupCommandsAreIdempotent(t *testing.T) {
 	if err := os.WriteFile(p, []byte("EDITED"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := setupClaudeCode(root); err != nil {
+	if err := applyHarness(t, "claude-code", root, nil); err != nil {
 		t.Fatalf("re-run: %v", err)
 	}
 	data, _ := os.ReadFile(p)

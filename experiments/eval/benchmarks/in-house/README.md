@@ -30,7 +30,26 @@ claim directly, and honestly reports where it does and doesn't hold.
   small by design — the claim is existence + direction + effect size on a defined sample, not a
   universal law.
 
-## Run it
+## The free half: `go run ./cmd/ceiling`
+
+The agent experiment below needs an API key and costs money per run, so it gets
+run rarely and its numbers age. The **retrieval ceiling** measures a weaker but
+objectively checkable thing with no model in the loop — whether each arm's tools
+surface the answer at all — so it costs nothing and runs on every push in CI.
+
+```bash
+go run ./cmd/ceiling            # committed fixtures only, no network
+go run ./cmd/ceiling -remote    # adds probes that clone a real upstream repo
+```
+
+It shares the hand-verified gold sets with the agent protocol, and a test fails
+if the two drift. See [CEILING.md](CEILING.md) for results — including a
+correction it turned up in this project's own A02 answer-key note.
+
+The two are complements, not substitutes: a ceiling bounds what any model could
+find; only the agent run below shows what a model actually does with it.
+
+## Run the agent experiment
 
 Prereqs: `go`, `git`, `ripgrep`, a built `max-context` binary, and `ANTHROPIC_API_KEY`.
 

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/maxcontext/max-context/pkg/treesitter"
+	sitter "github.com/smacker/go-tree-sitter"
 )
 
 // receiverOrigin classifies, for a sel-ident call x.M(), where x's binding comes
@@ -17,12 +17,13 @@ import (
 // inference (or another technique) would resolve it.
 //
 // Buckets (checked against the source of the enclosing function):
-//   recv-or-param   x is the method receiver or a function parameter (already resolved today)
-//   short-decl-call x := someCall(...)         — return-typed local (return-type inference target)
-//   short-decl-other x := &T{} / literal / etc. (typed-local; resolved today if T is a bare type)
-//   range-var       for x := range ...          — element-typed
-//   assigned        x = ... (plain assignment)
-//   field-or-global x is a struct field / package-level var / unknown
+//
+//	recv-or-param   x is the method receiver or a function parameter (already resolved today)
+//	short-decl-call x := someCall(...)         — return-typed local (return-type inference target)
+//	short-decl-other x := &T{} / literal / etc. (typed-local; resolved today if T is a bare type)
+//	range-var       for x := range ...          — element-typed
+//	assigned        x = ... (plain assignment)
+//	field-or-global x is a struct field / package-level var / unknown
 type selIdentSample struct {
 	recv   string
 	origin string

@@ -2,7 +2,6 @@ package setup
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -70,11 +69,11 @@ func renderFrontmatterCommand(c Command) string {
 }
 
 // writeClaudeCommands renders each command into .claude/commands/<name>.md.
-func writeClaudeCommands(root string) error {
+func writeClaudeCommands(root string, r *Report) error {
 	dir := filepath.Join(root, ".claude", "commands")
 	for _, c := range Commands {
 		path := filepath.Join(dir, c.Name+".md")
-		if err := writeIfNotExists(path, renderFrontmatterCommand(c)); err != nil {
+		if err := writeFileIfAbsent(path, renderFrontmatterCommand(c), 0644, r); err != nil {
 			return err
 		}
 	}
@@ -82,11 +81,11 @@ func writeClaudeCommands(root string) error {
 }
 
 // writeCursorCommands renders each command into .cursor/commands/<name>.md.
-func writeCursorCommands(root string) error {
+func writeCursorCommands(root string, r *Report) error {
 	dir := filepath.Join(root, ".cursor", "commands")
 	for _, c := range Commands {
 		path := filepath.Join(dir, c.Name+".md")
-		if err := writeIfNotExists(path, renderFrontmatterCommand(c)); err != nil {
+		if err := writeFileIfAbsent(path, renderFrontmatterCommand(c), 0644, r); err != nil {
 			return err
 		}
 	}
@@ -108,11 +107,11 @@ func renderVSCodePrompt(c Command) string {
 }
 
 // writeVSCodePrompts renders each command into .github/prompts/<name>.prompt.md.
-func writeVSCodePrompts(root string) error {
+func writeVSCodePrompts(root string, r *Report) error {
 	dir := filepath.Join(root, ".github", "prompts")
 	for _, c := range Commands {
 		path := filepath.Join(dir, c.Name+".prompt.md")
-		if err := writeIfNotExists(path, renderVSCodePrompt(c)); err != nil {
+		if err := writeFileIfAbsent(path, renderVSCodePrompt(c), 0644, r); err != nil {
 			return err
 		}
 	}
@@ -134,25 +133,13 @@ func renderWindsurfWorkflow(c Command) string {
 }
 
 // writeWindsurfCommands renders each command into .windsurf/workflows/<name>.md.
-func writeWindsurfCommands(root string) error {
+func writeWindsurfCommands(root string, r *Report) error {
 	dir := filepath.Join(root, ".windsurf", "workflows")
 	for _, c := range Commands {
 		path := filepath.Join(dir, c.Name+".md")
-		if err := writeIfNotExists(path, renderWindsurfWorkflow(c)); err != nil {
+		if err := writeFileIfAbsent(path, renderWindsurfWorkflow(c), 0644, r); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-// writeIfNotExists writes content to path only if it does not already exist,
-// creating parent directories. Mirrors the package's idempotent convention.
-func writeIfNotExists(path, content string) error {
-	if _, err := os.Stat(path); err == nil {
-		return nil // exists; never overwrite user edits
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(content), 0644)
 }

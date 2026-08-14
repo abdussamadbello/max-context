@@ -14,59 +14,56 @@ const MarkerEnd = "<!-- max-context end -->"
 // .max-context/ out of version control.
 const gitignoreEntry = ".max-context/"
 
-var cliTargets = []string{"claude-code", "vscode", "codex", "antigravity", "cursor", "windsurf", "all"}
+// Run configures the given CLI target (or all of them) for projectRoot and
+// returns a Report describing every file it created, updated, left alone, or
+// refused to touch. The caller is expected to show the report: a setup command
+// that exits silently gives the user no way to tell success from a no-op.
+func Run(projectRoot string, target string) (*Report, error) {
+	r := NewReport(projectRoot)
+	// Regardless of target, keep the index out of version control.
+	_ = ensureGitignore(projectRoot, r)
 
-func Run(projectRoot string, target string) error {
-	var ok bool
-	for _, t := range cliTargets {
-		if t == target {
-			ok = true
-			break
-		}
-	}
-	if !ok {
-		return fmt.Errorf("unknown setup target: %q", target)
-	}
-	// Regardless of CLI target, keep the index out of version control.
-	_ = ensureGitignore(projectRoot)
 	if target == "all" {
-		for _, t := range cliTargets {
-			if t == "all" {
-				continue
+		for _, h := range harnesses {
+			if err := h.apply(projectRoot, r); err != nil {
+				return r, fmt.Errorf("setup %s: %w", h.Name, err)
 			}
-			runOne(projectRoot, t)
 		}
-		return nil
+		return r, nil
 	}
-	return runOne(projectRoot, target)
+
+	h, ok := lookupHarness(target)
+	if !ok {
+		return nil, fmt.Errorf("unknown setup target %q; known targets: %s, all",
+			target, strings.Join(HarnessNames(), ", "))
+	}
+	return r, h.apply(projectRoot, r)
 }
 
-func runOne(root string, target string) error {
-	switch target {
-	case "claude-code":
-		return setupClaudeCode(root)
-	case "vscode":
-		return setupVSCode(root)
-	case "codex":
-		return setupCodex(root)
-	case "antigravity":
-		return setupAntigravity(root)
-	case "cursor":
-		return setupCursor(root)
-	case "windsurf":
-		return setupWindsurf(root)
-	}
-	return nil
-}
-
-func appendWithMarkers(filePath, content string) error {
-	existing, _ := os.ReadFile(filePath)
+// appendWithMarkers appends content to filePath inside sentinel markers, once.
+// Re-running is a no-op, so it is safe on a file the user also edits by hand.
+func appendWithMarkers(filePath, content string, r *Report) error {
+	existing, err := os.ReadFile(filePath)
 	s := string(existing)
 	if strings.Contains(s, MarkerStart) {
+		r.unchanged(filePath, "max-context block already present")
 		return nil
 	}
-	s = strings.TrimRight(s, "\n") + "\n\n" + MarkerStart + "\n" + content + "\n" + MarkerEnd + "\n"
-	return os.WriteFile(filePath, []byte(s), 0644)
+	created := os.IsNotExist(err)
+	s = strings.TrimRight(s, "\n")
+	if s != "" {
+		s += "\n"
+	}
+	s += "\n" + MarkerStart + "\n" + content + "\n" + MarkerEnd + "\n"
+	if err := os.WriteFile(filePath, []byte(strings.TrimLeft(s, "\n")), 0644); err != nil {
+		return err
+	}
+	if created {
+		r.created(filePath, "")
+	} else {
+		r.updated(filePath, "appended max-context block")
+	}
+	return nil
 }
 
 func ensureDir(dir string) error {
@@ -75,12 +72,13 @@ func ensureDir(dir string) error {
 
 // ensureGitignore appends gitignoreEntry to the project's .gitignore unless
 // .max-context is already ignored. Creates the file if absent. Idempotent.
-func ensureGitignore(root string) error {
+func ensureGitignore(root string, r *Report) error {
 	path := filepath.Join(root, ".gitignore")
-	existing, _ := os.ReadFile(path)
+	existing, readErr := os.ReadFile(path)
 	for _, line := range strings.Split(string(existing), "\n") {
 		switch strings.TrimSpace(line) {
 		case ".max-context/", ".max-context", "/.max-context/", "/.max-context":
+			r.unchanged(path, ".max-context already ignored")
 			return nil // already ignored in some accepted form
 		}
 	}
@@ -89,5 +87,13 @@ func ensureGitignore(root string) error {
 		s += "\n"
 	}
 	s += gitignoreEntry + "\n"
-	return os.WriteFile(path, []byte(s), 0644)
+	if err := os.WriteFile(path, []byte(s), 0644); err != nil {
+		return err
+	}
+	if os.IsNotExist(readErr) {
+		r.created(path, "")
+	} else {
+		r.updated(path, "ignored .max-context/")
+	}
+	return nil
 }

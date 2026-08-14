@@ -1,6 +1,6 @@
 # Maximum Context
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 [![Go 1.22+](https://img.shields.io/badge/Go-1.22+-00ADD8.svg)](./go.mod)
 [![GitHub Release](https://img.shields.io/github/v/release/maxcontext/max-context)](https://github.com/maxcontext/max-context/releases)
 [![MCP](https://img.shields.io/badge/MCP-stdio-8A2BE2.svg)](https://modelcontextprotocol.io)
@@ -15,9 +15,9 @@ AI coding agents waste 30–60% of their context window grepping and re-reading 
 - **No LLM at index time** — deterministic tree-sitter parsing; no API keys, no token spend on indexing
 - **Minimal surface, no breaking changes** — a small set of focused MCP tools, stable schema
 
-See [`BENCHMARK.md`](./BENCHMARK.md) for per-tool-call token savings vs naive and skilled Grep+Read baselines. The current skilled-baseline headline is **29.5× fewer tokens per deterministic query on max-context's own codebase**.
+See [`BENCHMARK.md`](./BENCHMARK.md) for per-tool-call token savings vs naive and skilled Grep+Read baselines, measured over the same file set the index covers. The most robust result is **32–47× fewer tokens on "where is X defined?" across four repos in three languages** (max-context, cobra, flask, zod) — that band holds because a lookup costs ~300–470 tokens whatever the repo, while grep grows with it. Blended per-repo figures range from 11× to 94×, but they are dominated by question mix and by how greppable a given symbol is, so `BENCHMARK.md` reports per category and explains which number to quote. Both sides are measured by running them: real greps for the baselines, real tool calls for max-context.
 
-For *agent-session* quality and cost — does an LLM actually do better with these tools? — see the causal A/B in [`experiments/eval/FINDINGS.md`](./experiments/eval/FINDINGS.md) (same model, same tasks, only the toolset differs; blind different-model judge; pre-registered). On the tasks measured so far it finds **equal answer quality to a skilled grep agent, at materially lower cost** — up to 94% fewer tokens (≈90% in aggregate) on call-graph / "what-calls-this" questions — plus a structural edge on **aliased imports** (`from m import f as g; g()`), where text search can't connect the call site to the definition and max-context can. Honest scope: small sample (1 repo family, 1 replicate); quality is a *tie*, not a win, except the alias case.
+For *agent-session* quality and cost — does an LLM actually do better with these tools? — see the causal A/B in [`experiments/eval/benchmarks/in-house/FINDINGS.md`](./experiments/eval/benchmarks/in-house/FINDINGS.md) (same model, same tasks, only the toolset differs; blind different-model judge; pre-registered). On the tasks measured so far it finds **equal answer quality to a skilled grep agent, at materially lower cost** — up to 94% fewer tokens (≈90% in aggregate) on call-graph / "what-calls-this" questions — plus a structural edge on **aliased imports** (`from m import f as g; g()`), where text search can't connect the call site to the definition and max-context can. Honest scope: small sample (1 repo family, 1 replicate); quality is a *tie*, not a win, except the alias case.
 
 ## How it works
 
@@ -45,7 +45,8 @@ Tree-sitter parses every supported language deterministically. Symbols and call 
 - **Focused MCP tools**: `get_definition` (exact-name, canonical definition), `query_codebase` (BM25 fuzzy symbol search with explicit next action), `get_call_chain` (recursive caller/callee traversal), `get_impact` (change blast radius), `get_architecture` (pre-computed project summary)
 - **Real-time index**: File watcher keeps the index current within 2 seconds of changes
 - **Multi-language**: TypeScript, JavaScript, Python, Go, Rust, Java (and more via Tree-sitter). Full call-graph resolution for Go, TypeScript/TSX, and Python; other languages are parsed with name-based call resolution — see [docs/LANGUAGES.md](docs/LANGUAGES.md) for the honest parsed-vs-resolved matrix.
-- **Universal CLI support**: One `max-context setup <cli>` configures Claude Code, VS Code Copilot, Codex CLI, Antigravity, Cursor, and Windsurf
+- **Universal harness support**: One `max-context setup <name>` configures Claude Code, VS Code Copilot, Codex CLI, Antigravity, Cursor, Windsurf, opencode, Hermes, and pi. Harnesses live in a registry (`internal/setup/harness.go`) — adding one is a table entry, not new code
+- **Small always-on footprint**: the five tool definitions total ~875 tokens, re-sent every request. A CI step prints the number and a test fails if it grows
 
 ## Install
 
@@ -89,7 +90,7 @@ Or add it manually to any MCP client config:
 # Build from source (optional)
 make build
 
-# Full index (builds index and starts watcher)
+# Full index (builds the index and exits; the watcher runs in server mode)
 max-context --index
 
 # MCP server mode (stdio; used by IDEs)
@@ -111,17 +112,20 @@ After installing `max-context` and ensuring it’s on your PATH:
 |-----|--------|
 | **Claude Code** | 1. Add MCP server (e.g. `max-context setup claude-code` or put `max-context` in `.mcp.json`). 2. Install plugin: `/plugin marketplace add <path-to-repo>` then `/plugin install max-context@max-context-local` (see [Claude Code Plugin](#claude-code-plugin) below). 3. In project: `max-context --index` then start Claude Code. |
 | **VS Code Copilot** | 1. `max-context setup vscode` (writes `.vscode/mcp.json`, `.github/hooks/`, skills). 2. `max-context --index` in project. 3. Open VS Code; MCP and hooks load. |
-| **Codex CLI** | 1. `max-context setup codex` (adds MCP to `.codex/config.toml`, skill to `.codex/skills/max-context/`). 2. `max-context --index`. 3. Use Codex in the project. |
+| **Codex CLI** | 1. `max-context setup codex` (adds `[mcp_servers.max-context]` to `.codex/config.toml`, skill to `.codex/skills/max-context/`). 2. `max-context --index`. 3. Use Codex in the project. Codex loads project config only for **trusted** projects — setup prints the `trust_level` snippet if you need it. |
 | **Antigravity** | 1. `max-context setup antigravity` (MCP config, `.agent/skills/max-context/`, rules). 2. `max-context --index`. 3. Run Antigravity in the project. |
 | **Cursor** | 1. `max-context setup cursor` (`.cursor/mcp.json`, `.cursor/rules/max-context.md`, AGENTS.md). 2. `max-context --index`. 3. Use Cursor; MCP and rules apply. |
 | **Windsurf** | 1. `max-context setup windsurf` (user MCP config, `.windsurf/rules/max-context.md`, workflows, AGENTS.md). 2. `max-context --index`. 3. Use Windsurf in the project. |
+| **opencode** | 1. `max-context setup opencode` (adds the server to `opencode.json` under `mcp`, writes `.opencode/max-context.md` and lists it under `instructions`). 2. `max-context --index`. 3. Run opencode in the project. |
+| **Hermes** | 1. `max-context setup hermes` (adds the server to the **global** `~/.hermes/config.yaml` under `mcp_servers`, plus a project skill). 2. `max-context --index`. 3. Run Hermes in the project. |
+| **pi** | 1. `max-context setup pi` (writes `.pi/skills/max-context/SKILL.md` and an AGENTS.md block). 2. `max-context --index`. 3. Run pi in the project. **pi ships no MCP client by design**, so it drives max-context through the one-shot CLI below. |
 
 ## Commands
 
 | Flag / Subcommand | Description |
 |-------------------|-------------|
 | (none) | Run MCP server on stdin/stdout |
-| `--index` | Build full index and start file watcher |
+| `--index` | Build full index and exit |
 | `--reindex` | Force full rebuild of index |
 | `--status` | Report index health, file count, symbol count |
 | `--watch` | Start only the file watcher |
@@ -144,8 +148,14 @@ max-context arch                                       # get_architecture
 max-context tool get_call_chain --json '{"function_name":"Migrate"}'  # generic form
 ```
 
-Global flags go before the subcommand (`max-context -project /repo query …`).
+Global flags go before the subcommand (`max-context -project /repo query …`);
+subcommand flags may go on either side of the positional argument.
 Build the index first with `max-context --index`.
+
+This CLI is also the whole integration for harnesses that do not speak MCP —
+[pi](https://github.com/earendil-works/pi) deliberately ships without an MCP
+client ("No MCP. Build CLI tools with READMEs"), so `max-context setup pi`
+installs a skill documenting these commands instead of tool definitions.
 
 ## Configuration (`.max-context/config.json`)
 
@@ -219,7 +229,7 @@ IDEs that support MCP Resources (e.g. VS Code Copilot) can list and read these i
 - `hooks/` — Claude Code plugin hooks (PreToolUse, SessionStart, PreCompact)
 - `commands/` — Plugin slash command (e.g. `/reindex`)
 - `skills/` — Plugin skills (`index-codebase`, `show-call-chain`)
-- `templates/` — Per-CLI skill/rules templates emitted by `max-context setup`
+- `internal/setup/guidance/` — the skill text `max-context setup` writes, embedded into the binary (MCP-tool and CLI variants)
 - `npm-package/` — npm wrapper `@maxcontext/cli` with postinstall binary download + SHA256
 - `scripts/install.sh` — Install script for curl\|sh
 - `Formula/` — Homebrew formula template; update SHA256 from `checksums.txt` after each release

@@ -1,7 +1,6 @@
 package setup
 
 import (
-	"os"
 	"path/filepath"
 )
 
@@ -66,36 +65,17 @@ echo "" >> "$DIR/summary.md"
 echo "--- Session preserved (pre-compact) $TS ---" >> "$DIR/summary.md"
 `
 
-func setupVSCode(root string) error {
-	ensureDir(filepath.Join(root, ".vscode"))
-	ensureDir(filepath.Join(root, ".github", "skills", "max-context"))
-	// Phase 5: shared hooks for VS Code Copilot (PreToolUse, SessionStart, PreCompact)
-	ensureDir(filepath.Join(root, ".github", "hooks", "scripts"))
-	hooksPath := filepath.Join(root, ".github", "hooks", "hooks.json")
-	if _, err := os.Stat(hooksPath); os.IsNotExist(err) {
-		if err := os.WriteFile(hooksPath, []byte(vscodeHooksJSON), 0644); err != nil {
-			return err
-		}
-	}
-	writeScriptIfNotExists(filepath.Join(root, ".github", "hooks", "scripts", "session-start.sh"), sessionStartScript)
-	writeScriptIfNotExists(filepath.Join(root, ".github", "hooks", "scripts", "pre-compact.sh"), preCompactScript)
-
-	mcpPath := filepath.Join(root, ".vscode", "mcp.json")
-	if _, err := os.Stat(mcpPath); os.IsNotExist(err) {
-		os.WriteFile(mcpPath, []byte(`{"mcpServers":{"max-context":{"command":"max-context","args":[]}}}`), 0644)
-	}
-	skillPath := filepath.Join(root, ".github", "skills", "max-context", "SKILL.md")
-	if _, err := os.Stat(skillPath); os.IsNotExist(err) {
-		os.WriteFile(skillPath, []byte("# Max Context\nUse query_codebase and get_architecture.\n"), 0644)
-	}
-	if err := writeVSCodePrompts(root); err != nil {
+// writeVSCodeHooks installs the shared hook definitions and their scripts:
+// grep interception, session-start context injection, and pre-compact summary
+// preservation. This is the one part of VS Code setup the harness table cannot
+// express, so it hangs off Harness.Extra.
+func writeVSCodeHooks(root string, r *Report) error {
+	if err := writeFileIfAbsent(filepath.Join(root, ".github", "hooks", "hooks.json"), vscodeHooksJSON, 0644, r); err != nil {
 		return err
 	}
-	return appendWithMarkers(filepath.Join(root, "AGENTS.md"), "Use max-context: query_codebase, get_architecture.")
-}
-
-func writeScriptIfNotExists(path, content string) {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		os.WriteFile(path, []byte(content), 0755)
+	scripts := filepath.Join(root, ".github", "hooks", "scripts")
+	if err := writeFileIfAbsent(filepath.Join(scripts, "session-start.sh"), sessionStartScript, 0755, r); err != nil {
+		return err
 	}
+	return writeFileIfAbsent(filepath.Join(scripts, "pre-compact.sh"), preCompactScript, 0755, r)
 }

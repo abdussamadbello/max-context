@@ -17,7 +17,20 @@ type getCallChainArgs struct {
 	// resolution confidence. Like get_impact, the low-confidence interface-dispatch
 	// fan-out is excluded by default and included only at a low min_confidence.
 	MinConfidence string `json:"min_confidence"`
+	// MaxResults caps each direction. Widely-called symbols produce enormous
+	// answers otherwise: tracing callers of `Open` on this repo returned 3,272
+	// tokens in one call, which is a poor trade for a tool whose value is
+	// context efficiency.
+	MaxResults *int `json:"max_results"`
 }
+
+// defaultCallChainResults caps each direction unless the caller asks for more.
+// Deep enough to answer "who calls this" for almost every real symbol, small
+// enough that a hub function cannot blow the context budget in one call.
+const (
+	defaultCallChainResults = 50
+	maxCallChainResults     = 200
+)
 
 type callChainNode struct {
 	Name       string `json:"name"`
@@ -55,18 +68,34 @@ func GetCallChainHandler(database *sql.DB) mcp.ToolHandler {
 		if direction == "" {
 			direction = "both"
 		}
+		limit := defaultCallChainResults
+		if a.MaxResults != nil {
+			limit = *a.MaxResults
+			if limit < 1 {
+				limit = 1
+			}
+			if limit > maxCallChainResults {
+				limit = maxCallChainResults
+			}
+		}
 
 		result := map[string]interface{}{
 			"function": a.FunctionName,
 			"depth":    depth,
 		}
+		truncated := false
 
 		if direction == "callers" || direction == "both" {
 			callers, err := queryCallChain(database, a.FunctionName, depth, "callers", a.MinConfidence)
 			if err != nil {
 				return nil, &mcp.RPCError{Code: mcp.CodeInternalError, Message: fmt.Sprintf("callers query failed: %v", err)}
 			}
-			result["callers"] = callers
+			kept, total := capNodes(callers, limit)
+			result["callers"] = kept
+			if total > len(kept) {
+				truncated = true
+				result["callers_total"] = total
+			}
 		}
 
 		if direction == "callees" || direction == "both" {
@@ -74,7 +103,23 @@ func GetCallChainHandler(database *sql.DB) mcp.ToolHandler {
 			if err != nil {
 				return nil, &mcp.RPCError{Code: mcp.CodeInternalError, Message: fmt.Sprintf("callees query failed: %v", err)}
 			}
-			result["callees"] = callees
+			kept, total := capNodes(callees, limit)
+			result["callees"] = kept
+			if total > len(kept) {
+				truncated = true
+				result["callees_total"] = total
+			}
+		}
+
+		// Never truncate silently: an agent that cannot tell a capped answer from
+		// a complete one will report a partial blast radius as the whole of it.
+		if truncated {
+			result["truncated"] = true
+			result["recommended_next_action"] = actionNarrowScope
+			result["note"] = fmt.Sprintf(
+				"Results capped at %d per direction, nearest first. The totals above are exact. "+
+					"To see more, raise max_results (up to %d); to see less and more precisely, "+
+					"lower depth or raise min_confidence.", limit, maxCallChainResults)
 		}
 
 		attachStaleness(result, database)
@@ -162,4 +207,15 @@ func queryCallChain(database *sql.DB, functionName string, depth int, direction,
 		nodes = []callChainNode{}
 	}
 	return nodes, nil
+}
+
+// capNodes trims a call-chain result to limit, returning the kept nodes and the
+// true total. Rows arrive ordered by depth then name, so the nodes nearest the
+// queried function are the ones kept.
+func capNodes(nodes []callChainNode, limit int) ([]callChainNode, int) {
+	total := len(nodes)
+	if total <= limit {
+		return nodes, total
+	}
+	return nodes[:limit], total
 }
