@@ -62,10 +62,16 @@ with a per-task one and move the headline ratio for a reason unrelated to either
 | 6 | 3,967 | 37,658 | 9,906 | 9.5× | 2.5× |
 
 **Read this as a cost, not a win.** The compiler is roughly 3× the cost of one
-tool call (1,214 avg) and only 2.5× cheaper than a skilled grep agent. It is
-worth its budget only if one package removes more than about three tool calls
-from a session — which this benchmark cannot answer, because it measures single
-calls. That is the locobench A/B's question.
+tool call and only 2.5× cheaper than a skilled grep agent. It is worth its
+budget only if one package removes more than about three tool calls from a
+session — which this benchmark cannot answer, because it measures single calls.
+That is the locobench A/B's question.
+
+The per-call figure that multiple is taken against is **1,311** — the tool
+average from a run of `benchmark/questions/max-context.json` at the same repo
+state as the six task questions, not the 1,214 in the TL;DR table above. The two
+tables are separate runs against a repo that has grown between them, and the
+ratio only means something when both sides come from the same one.
 
 ### The cost is a dial, not a measurement
 
