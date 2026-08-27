@@ -1,10 +1,14 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/maxcontext/max-context/pkg/treesitter"
 )
@@ -76,11 +80,50 @@ func Load(projectRoot string, f *Flags) (*Config, error) {
 	configPath := filepath.Join(absProject, ".max-context", "config.json")
 	if data, err := os.ReadFile(configPath); err == nil {
 		var cf ConfigFile
-		if json.Unmarshal(data, &cf) == nil {
-			cfg.ConfigFile = &cf
+		dec := json.NewDecoder(bytes.NewReader(data))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&cf); err != nil {
+			return nil, fmt.Errorf("parse %s: %w", configPath, err)
 		}
+		if err := dec.Decode(&struct{}{}); err != io.EOF {
+			return nil, fmt.Errorf("parse %s: trailing JSON content", configPath)
+		}
+		if err := validateConfigFile(&cf); err != nil {
+			return nil, fmt.Errorf("validate %s: %w", configPath, err)
+		}
+		cfg.ConfigFile = &cf
+	} else if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("read %s: %w", configPath, err)
 	}
 	return cfg, nil
+}
+
+func validateConfigFile(cf *ConfigFile) error {
+	if cf.WatchDebounceMs < 0 {
+		return fmt.Errorf("watchDebounceMs must be non-negative")
+	}
+	if cf.MaxFileSize < 0 {
+		return fmt.Errorf("maxFileSize must be non-negative")
+	}
+	for _, lang := range cf.Languages {
+		if len(treesitter.ExtensionsForLang(lang)) == 0 {
+			return fmt.Errorf("unsupported language %q", lang)
+		}
+	}
+	for _, pattern := range cf.Include {
+		if _, err := filepath.Match(filepath.ToSlash(strings.TrimSpace(pattern)), "probe/path.go"); err != nil {
+			return fmt.Errorf("invalid include glob %q: %w", pattern, err)
+		}
+	}
+	for _, pattern := range cf.Exclude {
+		pattern = strings.TrimPrefix(filepath.ToSlash(strings.TrimSpace(pattern)), "!")
+		if strings.ContainsAny(pattern, "*?[") {
+			if _, err := filepath.Match(pattern, "probe/path.go"); err != nil {
+				return fmt.Errorf("invalid exclude glob %q: %w", pattern, err)
+			}
+		}
+	}
+	return nil
 }
 
 // EffectiveMaxFileSize returns the configured maxFileSize, or DefaultMaxFileSize.

@@ -26,6 +26,7 @@ const debounceMs = 500
 type Options struct {
 	DebounceMs int      // event debounce in milliseconds (0 = default 500)
 	Extensions []string // restrict to these file extensions (nil = all supported)
+	OnError    func(error)
 }
 
 type Watcher struct {
@@ -38,6 +39,7 @@ type Watcher struct {
 	mu       sync.Mutex
 	pending  map[string]*time.Timer
 	done     chan struct{}
+	onError  func(error)
 	stopOnce sync.Once
 }
 
@@ -52,12 +54,16 @@ func New(root string, reindexCh chan<- string, opts ...*Options) (*Watcher, erro
 	}
 	delay := debounceMs * time.Millisecond
 	extList := treesitter.SupportedExtensions()
+	onError := func(error) {}
 	if len(opts) > 0 && opts[0] != nil {
 		if opts[0].DebounceMs > 0 {
 			delay = time.Duration(opts[0].DebounceMs) * time.Millisecond
 		}
 		if len(opts[0].Extensions) > 0 {
 			extList = opts[0].Extensions
+		}
+		if opts[0].OnError != nil {
+			onError = opts[0].OnError
 		}
 	}
 	exts := make(map[string]bool)
@@ -78,18 +84,27 @@ func New(root string, reindexCh chan<- string, opts ...*Options) (*Watcher, erro
 		delay:   delay,
 		pending: make(map[string]*time.Timer),
 		done:    make(chan struct{}),
+		onError: onError,
 	}, nil
 }
 
 func (w *Watcher) Start(ctx context.Context) error {
-	absRoot, _ := filepath.Abs(w.root)
+	absRoot, err := filepath.Abs(w.root)
+	if err != nil {
+		w.stop()
+		return err
+	}
 	if err := w.addRecursive(absRoot); err != nil {
+		w.stop()
 		return err
 	}
 	// Watch .max-context so we can react to .reindex-queue (Phase 4)
 	reindexDir := filepath.Join(absRoot, ".max-context")
 	if info, err := os.Stat(reindexDir); err == nil && info.IsDir() {
-		_ = w.w.Add(reindexDir)
+		if err := w.w.Add(reindexDir); err != nil {
+			w.stop()
+			return err
+		}
 	}
 	go w.run(ctx)
 	return nil
@@ -98,14 +113,16 @@ func (w *Watcher) Start(ctx context.Context) error {
 func (w *Watcher) addRecursive(dir string) error {
 	return filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return nil
+			return err
 		}
 		if info.IsDir() {
 			base := filepath.Base(path)
 			if w.ignore[base] {
 				return filepath.SkipDir
 			}
-			_ = w.w.Add(path)
+			if err := w.w.Add(path); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
@@ -122,10 +139,11 @@ func (w *Watcher) run(ctx context.Context) {
 				return
 			}
 			w.handle(ev)
-		case _, ok := <-w.w.Errors:
+		case err, ok := <-w.w.Errors:
 			if !ok {
 				return
 			}
+			w.onError(err)
 		}
 	}
 }
@@ -167,7 +185,9 @@ func (w *Watcher) handle(ev fsnotify.Event) {
 	}
 	if ev.Op&fsnotify.Create != 0 {
 		if info, err := os.Stat(ev.Name); err == nil && info.IsDir() {
-			_ = w.addRecursive(ev.Name)
+			if err := w.addRecursive(ev.Name); err != nil {
+				w.onError(err)
+			}
 			return
 		}
 	}
@@ -177,7 +197,10 @@ func (w *Watcher) handle(ev fsnotify.Event) {
 	// Phase 4: .max-context/.reindex-queue triggers full reindex (sentinel "")
 	if base == ".reindex-queue" && filepath.Base(filepath.Dir(ev.Name)) == ".max-context" {
 		if ev.Op&(fsnotify.Create|fsnotify.Write) != 0 {
-			_ = os.Remove(ev.Name)
+			if err := os.Remove(ev.Name); err != nil && !os.IsNotExist(err) {
+				w.onError(err)
+				return
+			}
 			// On its own goroutine: handle runs on the fsnotify event loop, and
 			// blocking here would stop the watcher from seeing further events.
 			go w.send("")

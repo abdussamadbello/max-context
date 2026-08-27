@@ -132,6 +132,7 @@ After installing `max-context` and ensuring it’s on your PATH:
 | `--version` | Print version and exit |
 | `setup <cli>` | Generate config for claude-code, vscode, codex, antigravity, cursor, windsurf, or all |
 | `query` / `def` / `calls` / `impact` / `arch` / `tool` | One-shot CLI access to the MCP tools (below) |
+| `context` | Experimental CLI-only token-budgeted context compiler |
 
 ## CLI tool access
 
@@ -141,16 +142,52 @@ a CLI over MCP tool definitions:
 
 ```bash
 max-context query "resolver cache" -n 5 -scope docs   # query_codebase
+max-context query schema -scope files -file-filter 'internal/**' # file-path search
 max-context def IndexFile                              # get_definition
 max-context calls Migrate -direction callers -depth 3  # get_call_chain
-max-context impact -from-git main..HEAD                # get_impact
+max-context impact -from-git main..HEAD -budget 2000   # budgeted get_impact
 max-context arch                                       # get_architecture
+max-context arch -focus indexer                        # focused subsystem view
 max-context tool get_call_chain --json '{"function_name":"Migrate"}'  # generic form
 ```
 
 Global flags go before the subcommand (`max-context -project /repo query …`);
 subcommand flags may go on either side of the positional argument.
 Build the index first with `max-context --index`.
+
+## Experimental context compiler
+
+The CLI-only `context` command routes a task across indexed code/docs, call
+relationships, architecture, and the current diff, then returns the
+highest-priority evidence that fits a hard response budget:
+
+```bash
+max-context context \
+  --task "change JWT refresh token expiration" \
+  --budget 4000
+
+# Reproducible intent and explicit changed-file hints:
+max-context context \
+  --task "update impact response budgeting" \
+  --intent change \
+  --changed-file internal/tools/get_impact.go \
+  --max-depth 2 \
+  --budget 2000
+```
+
+The JSON response reports `token_budget`, exact `tokens_used`, `complete`, every
+included evidence item's reason/confidence/cost, and exact omissions from the
+candidate set. Budgets currently use the compiled-in `cl100k_base` profile; the
+profile is named in every response because it is an approximation for models
+with a different tokenizer.
+
+Structural results remain primary. A bounded lexical fallback covers indexed
+configuration/prose and syntactically malformed source; it obeys the same
+include, exclude, ignore, language, and file-size scope as indexing.
+
+`context` is deliberately not an MCP tool yet, so it adds no permanent schema
+cost. It should only be promoted after session-level A/B evaluation shows that
+the packaged-context arm improves total task economics without reducing quality.
 
 This CLI is also the whole integration for harnesses that do not speak MCP —
 [pi](https://github.com/earendil-works/pi) deliberately ships without an MCP
@@ -176,6 +213,10 @@ Optional per-project settings, all keys optional:
 - **exclude** — extra gitignore-style exclude patterns on top of `.gitignore`/`.contextignore`.
 - **watchDebounceMs** — file-watcher debounce (default 500).
 - **maxFileSize** — skip files larger than this many bytes (default 1 MB).
+
+Invalid JSON, unknown keys/languages, negative numeric values, and malformed
+globs are rejected at startup so a typo cannot silently broaden or disable the
+configured index scope.
 
 Non-code files (markdown, YAML, JSON, TOML, proto, GraphQL, SQL, XML, Dockerfiles)
 are indexed as plain-text documents regardless of `languages`, searchable via

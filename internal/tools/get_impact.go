@@ -3,9 +3,12 @@ package tools
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
+	"github.com/maxcontext/max-context/internal/contextpack"
 	"github.com/maxcontext/max-context/internal/db"
 	"github.com/maxcontext/max-context/internal/gitdiff"
 	"github.com/maxcontext/max-context/internal/mcp"
@@ -22,6 +25,10 @@ type getImpactArgs struct {
 	// MinConfidence, when set, restricts the walk to edges at or above the given
 	// resolution confidence (e.g. "receiver-typed" excludes name-global guesses).
 	MinConfidence string `json:"min_confidence"`
+	// TokenBudget, when set, caps the complete serialized JSON response using the
+	// shared cl100k_base budget profile. An omitted value preserves the original
+	// uncapped response contract.
+	TokenBudget *int `json:"token_budget"`
 }
 
 // resolutionRank orders resolution markers by confidence (higher = stronger).
@@ -67,12 +74,18 @@ type impactedNode struct {
 }
 
 type impactStats struct {
-	ChangedFiles        int            `json:"changed_files"`
-	ChangedSymbols      int            `json:"changed_symbols"`
-	ImpactedSymbols     int            `json:"impacted_symbols"`
-	MaxDepthReached     int            `json:"max_depth_reached"`
-	Truncated           bool           `json:"truncated"`
-	ResolutionBreakdown map[string]int `json:"resolution_breakdown"`
+	ChangedFiles          int            `json:"changed_files"`
+	ChangedSymbols        int            `json:"changed_symbols"`
+	ImpactedSymbols       int            `json:"impacted_symbols"`
+	ReturnedImpactSymbols int            `json:"returned_impacted_symbols,omitempty"`
+	MaxDepthReached       int            `json:"max_depth_reached"`
+	Truncated             bool           `json:"truncated"`
+	ResolutionBreakdown   map[string]int `json:"resolution_breakdown"`
+}
+
+type impactOmitted struct {
+	Impacted               int  `json:"impacted"`
+	BeyondGraphSafetyLimit bool `json:"beyond_graph_safety_limit,omitempty"`
 }
 
 type impactResponse struct {
@@ -82,6 +95,11 @@ type impactResponse struct {
 	Stats            impactStats            `json:"stats"`
 	Staleness        map[string]interface{} `json:"staleness"`
 	StalenessWarning string                 `json:"staleness_warning,omitempty"`
+	TokenBudget      int                    `json:"token_budget,omitempty"`
+	TokensUsed       int                    `json:"tokens_used,omitempty"`
+	Complete         *bool                  `json:"complete,omitempty"`
+	Omitted          *impactOmitted         `json:"omitted,omitempty"`
+	RecommendedNext  string                 `json:"recommended_next_action,omitempty"`
 }
 
 // GetImpactHandler returns the MCP tool handler. The store provides SymbolsInFile and
@@ -93,6 +111,9 @@ func GetImpactHandler(store db.Store, projectRoot string) mcp.ToolHandler {
 			if err := json.Unmarshal(args, &a); err != nil {
 				return nil, &mcp.RPCError{Code: mcp.CodeInvalidParams, Message: err.Error()}
 			}
+		}
+		if a.TokenBudget != nil && *a.TokenBudget <= 0 {
+			return nil, &mcp.RPCError{Code: mcp.CodeInvalidParams, Message: "token_budget must be positive"}
 		}
 
 		depth := 2
@@ -159,6 +180,7 @@ func GetImpactHandler(store db.Store, projectRoot string) mcp.ToolHandler {
 		if err != nil {
 			return nil, &mcp.RPCError{Code: mcp.CodeInternalError, Message: fmt.Sprintf("impact query: %v", err)}
 		}
+		rankImpactNodes(impacted)
 
 		breakdown := map[string]int{}
 		for _, n := range impacted {
@@ -181,9 +203,73 @@ func GetImpactHandler(store db.Store, projectRoot string) mcp.ToolHandler {
 			Staleness:        staleObj,
 			StalenessWarning: staleWarn,
 		}
-		b, _ := json.Marshal(resp)
+		b, err := marshalImpactResponse(resp, impacted, truncated, a.TokenBudget)
+		if err != nil {
+			code := mcp.CodeInternalError
+			if errors.Is(err, contextpack.ErrBudgetTooSmall) {
+				code = mcp.CodeInvalidParams
+			}
+			return nil, &mcp.RPCError{Code: code, Message: err.Error()}
+		}
 		return []mcp.ContentItem{{Type: "text", Text: string(b)}}, nil
 	}
+}
+
+func marshalImpactResponse(base impactResponse, impacted []impactedNode, graphTruncated bool, tokenBudget *int) ([]byte, error) {
+	if tokenBudget == nil {
+		base.Impacted = impacted
+		return json.Marshal(base)
+	}
+	counter, err := contextpack.NewCounter()
+	if err != nil {
+		return nil, err
+	}
+	total := len(impacted)
+	fit, err := contextpack.FitJSONPrefix(counter, total, *tokenBudget, func(keep, tokensUsed int) ([]byte, error) {
+		resp := base
+		resp.Impacted = make([]impactedNode, keep)
+		copy(resp.Impacted, impacted[:keep])
+		resp.Stats.ReturnedImpactSymbols = keep
+		resp.Stats.Truncated = graphTruncated || keep < total
+		resp.TokenBudget = *tokenBudget
+		resp.TokensUsed = tokensUsed
+		complete := !resp.Stats.Truncated
+		resp.Complete = &complete
+		resp.Omitted = &impactOmitted{
+			Impacted:               total - keep,
+			BeyondGraphSafetyLimit: graphTruncated,
+		}
+		if !complete {
+			resp.RecommendedNext = actionNarrowScope
+		}
+		return json.Marshal(resp)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return fit.JSON, nil
+}
+
+// rankImpactNodes makes budget selection independent of recursive-CTE emission
+// order. Nearest and strongest structural evidence wins; tests get the tie-break
+// within an equal depth/confidence tier.
+func rankImpactNodes(nodes []impactedNode) {
+	sort.SliceStable(nodes, func(i, j int) bool {
+		a, b := nodes[i], nodes[j]
+		if a.Depth != b.Depth {
+			return a.Depth < b.Depth
+		}
+		if resolutionRank[a.ViaResolution] != resolutionRank[b.ViaResolution] {
+			return resolutionRank[a.ViaResolution] > resolutionRank[b.ViaResolution]
+		}
+		if isTestFile(a.File) != isTestFile(b.File) {
+			return isTestFile(a.File)
+		}
+		if a.File != b.File {
+			return a.File < b.File
+		}
+		return a.Symbol < b.Symbol
+	})
 }
 
 func queryImpact(database *sql.DB, seedIDs map[int64]string, depth int, direction string, includeTests bool, minConfidence string) ([]impactedNode, bool, int, error) {

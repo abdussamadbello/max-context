@@ -2,7 +2,8 @@
 // +build measure
 
 // Usage:
-//   go run -tags=measure ./scripts/measure_mc_tokens <questions.json> <repo-root>
+//
+//	go run -tags=measure ./scripts/measure_mc_tokens <questions.json> <repo-root>
 //
 // Spawns max-context as an MCP child process, drives one tools/call per question,
 // counts cl100k_base tokens in the JSON-RPC response, and writes a tightened
@@ -83,7 +84,8 @@ func main() {
 			"params": map[string]interface{}{"name": q.Tool, "arguments": args},
 		})
 		resp := readOne()
-		questions[i].MCResponseTokens = counter.Count(resp)
+		questions[i].MCResponseTokens, err = counter.Count(resp)
+		must(err, "count response tokens")
 		fmt.Fprintf(os.Stderr, "%s (%s): %d tokens\n", q.ID, q.Tool, questions[i].MCResponseTokens)
 	}
 

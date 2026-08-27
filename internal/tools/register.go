@@ -110,6 +110,7 @@ func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot st
 					"direction":      map[string]interface{}{"type": "string", "enum": []string{"callers", "callees", "both"}, "default": "callers"},
 					"include_tests":  map[string]interface{}{"type": "boolean", "default": true},
 					"min_confidence": confidence,
+					"token_budget":   map[string]interface{}{"type": "integer", "description": "Hard cap for the final JSON response (cl100k_base tokens)"},
 				},
 			},
 		},

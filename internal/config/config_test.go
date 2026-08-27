@@ -82,16 +82,25 @@ func TestConfigFileOverrides(t *testing.T) {
 	}
 }
 
-func TestUnknownLanguageIgnored(t *testing.T) {
-	cfg := loadWithConfigJSON(t, `{"languages": ["brainfuck", "py"]}`)
-	exts := cfg.LanguageExtensions()
-	want := map[string]bool{".py": true, ".pyi": true}
-	if len(exts) != len(want) {
-		t.Fatalf("LanguageExtensions = %v, want keys %v", exts, want)
-	}
-	for _, e := range exts {
-		if !want[e] {
-			t.Errorf("unexpected extension %q", e)
+func TestInvalidConfigIsRejected(t *testing.T) {
+	for _, body := range []string{
+		`{"languages": ["brainfuck", "py"]}`,
+		`{"watchDebounceMs": -1}`,
+		`{"maxFileSize": -1}`,
+		`{"include": ["src/[broken"]}`,
+		`{"unknownSetting": true}`,
+		`{"languages": ["go"]} trailing`,
+	} {
+		dir := t.TempDir()
+		mcDir := filepath.Join(dir, ".max-context")
+		if err := os.MkdirAll(mcDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(mcDir, "config.json"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Load(dir, &Flags{}); err == nil {
+			t.Errorf("Load accepted invalid config %s", body)
 		}
 	}
 }

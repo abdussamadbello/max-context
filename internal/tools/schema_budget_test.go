@@ -144,3 +144,20 @@ func TestEveryToolIsDescribed(t *testing.T) {
 		}
 	}
 }
+
+func TestExperimentalContextCompilerDoesNotExpandMCPToolSurface(t *testing.T) {
+	var schemas []struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(toolSchemas(t), &schemas); err != nil {
+		t.Fatal(err)
+	}
+	if len(schemas) != 5 {
+		t.Fatalf("MCP tool count = %d, want the established five-tool surface", len(schemas))
+	}
+	for _, schema := range schemas {
+		if schema.Name == "get_context" || schema.Name == "context" {
+			t.Fatalf("experimental context compiler leaked into MCP schema: %q", schema.Name)
+		}
+	}
+}

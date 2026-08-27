@@ -71,4 +71,22 @@ func TestProtocolHashStable(t *testing.T) {
 	if p.Hash() == h1 {
 		t.Error("hash should change when rubric criterion changes")
 	}
+
+	h2 = p.Hash()
+	p.ContextBudget = 4000
+	if p.Hash() == h2 {
+		t.Error("hash should change when context budget changes")
+	}
+
+	h2 = p.Hash()
+	p.Replicates++
+	if p.Hash() == h2 {
+		t.Error("hash should change when replicate count changes")
+	}
+
+	h2 = p.Hash()
+	p.Repos = append(p.Repos, Repo{Name: "fixture", SHA: "abc123"})
+	if p.Hash() == h2 {
+		t.Error("hash should change when repository provenance changes")
+	}
 }

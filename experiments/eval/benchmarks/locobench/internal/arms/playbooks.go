@@ -86,9 +86,8 @@ Choose the right tool for each step:
   blast radius, or get an architecture overview — prefer the index tools; they answer from a
   pre-built index without reading whole files. For a COMPLETE transitive caller set, trace to
   a sufficient depth so every indirect caller is included.
-- To read NON-CODE files (configs, schemas like .graphqls/.proto, SQL, docs, manifests) or to
-  inspect a file's exact contents/lines, use grep and read_file — the index covers code symbols
-  only, so file tools are how you reach everything else.
+- The index also searches supported configs, schemas, SQL, and docs. Use grep and read_file
+  when you need unsupported files or exact source surrounding an indexed result.
 - If a structural query and a text search disagree or come up empty, fall back to the other
   toolset rather than giving up. Always cite exact repo-relative file paths.
 
@@ -97,4 +96,21 @@ Stopping discipline (IMPORTANT):
   relevant code and understand the change required, STOP exploring and write the answer.
 - A good answer names the exact files and functions to change and explains each change.
   Produce it as soon as you can do that confidently, even if some details remain unverified.
+`
+
+// ContextPlaybook describes the deliberately one-shot compiler arm. The tool
+// constraint is the mechanism under test: can one ranked package replace an
+// iterative retrieval loop without reducing answer quality?
+const ContextPlaybook = `
+You have one tool for exploring the repository: compile_context.
+
+Call it exactly once. It compiles structural, lexical, graph, architecture, and test
+evidence for the current task into a ranked package under a fixed token budget.
+The package reports its token usage, confidence, completeness, and omitted evidence.
+
+After receiving the package, answer the task directly from the supplied evidence:
+- Name exact repo-relative files and symbols when the evidence supports them.
+- Explain the concrete changes required and relevant tests or impact.
+- Do not call the tool again; missing or omitted evidence is part of what this arm measures.
+- Do not invent details that are absent from the package. State material uncertainty briefly.
 `

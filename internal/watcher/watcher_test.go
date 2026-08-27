@@ -2,6 +2,7 @@ package watcher
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -351,5 +352,35 @@ func TestNewDefaultsDebounceWhenUnset(t *testing.T) {
 			t.Errorf("opts %+v: delay = %s, want %dms", opts, w.delay, debounceMs)
 		}
 		w.stop()
+	}
+}
+
+func TestStartFailsWhenProjectRootIsMissing(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "missing")
+	w, err := New(root, make(chan string, 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Start(context.Background()); err == nil {
+		t.Fatal("Start succeeded without a project root")
+	}
+}
+
+func TestWatcherReportsRuntimeErrors(t *testing.T) {
+	want := errors.New("queue overflow")
+	got := make(chan error, 1)
+	w, err := New(t.TempDir(), make(chan string, 1), &Options{OnError: func(err error) { got <- err }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer w.stop()
+	w.onError(want)
+	select {
+	case err := <-got:
+		if !errors.Is(err, want) {
+			t.Fatalf("reported error = %v, want %v", err, want)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("watcher error handler was not called")
 	}
 }

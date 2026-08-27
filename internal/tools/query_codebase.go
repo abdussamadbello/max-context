@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/maxcontext/max-context/internal/db"
@@ -69,6 +70,21 @@ func QueryCodebaseHandler(database *sql.DB, q *db.Queries, projectRoot string) m
 		if scope == "" {
 			scope = "all"
 		}
+		switch scope {
+		case "all", "functions", "types", "files", "docs":
+		default:
+			return nil, &mcp.RPCError{Code: mcp.CodeInvalidParams, Message: "scope must be one of: all, functions, types, files, docs"}
+		}
+		fileFilter := ""
+		var fileFilterRE *regexp.Regexp
+		if a.FileFilter != nil {
+			fileFilter = strings.TrimSpace(*a.FileFilter)
+			compiled, compileErr := compilePathGlob(fileFilter)
+			if compileErr != nil {
+				return nil, &mcp.RPCError{Code: mcp.CodeInvalidParams, Message: "invalid file_filter: " + compileErr.Error()}
+			}
+			fileFilterRE = compiled
+		}
 
 		// Over-fetch from FTS so the exact-name promotion below has a pool to
 		// find the right symbol in. bm25 ranks a long test name matching every
@@ -78,6 +94,17 @@ func QueryCodebaseHandler(database *sql.DB, q *db.Queries, projectRoot string) m
 		fetchLimit := limit * 8
 		if fetchLimit < 30 {
 			fetchLimit = 30
+		}
+		candidateLimit := fetchLimit
+		// Filtering happens after FTS ranking because SQLite's prepared MATCH
+		// statements are deliberately shared and compact. With a path filter, let
+		// SQLite stream the complete ranked match set and stop after enough
+		// in-filter candidates; limiting before filtering makes narrow filters lie.
+		if fileFilter != "" {
+			fetchLimit = -1
+			if candidateLimit < 500 {
+				candidateLimit = 500
+			}
 		}
 
 		// search runs all in-scope FTS lookups for one query string; prebuilt
@@ -89,6 +116,7 @@ func QueryCodebaseHandler(database *sql.DB, q *db.Queries, projectRoot string) m
 			}
 			var out []searchResult
 			if scope == "all" || scope == "functions" {
+				matched := 0
 				rows, err := fts(q.SearchFunctions, query, fetchLimit)
 				if err != nil {
 					return out, err
@@ -111,7 +139,13 @@ func QueryCodebaseHandler(database *sql.DB, q *db.Queries, projectRoot string) m
 							File: filePath, Line: startLine, Kind: kind, Name: name, Snippet: truncateSnippet(snippet.String),
 						}
 						annotateSearchResult(&r)
-						out = append(out, r)
+						if pathMatchesCompiled(r.File, fileFilterRE) {
+							out = append(out, r)
+							matched++
+							if matched == candidateLimit {
+								break
+							}
+						}
 					}
 				}
 				if rows != nil {
@@ -119,6 +153,7 @@ func QueryCodebaseHandler(database *sql.DB, q *db.Queries, projectRoot string) m
 				}
 			}
 			if scope == "all" || scope == "types" {
+				matched := 0
 				// Types search is best-effort: a failure here never fails the whole
 				// call (functions results may already be present). ftsSearch applies the
 				// same raw-then-sanitized fallback.
@@ -137,7 +172,13 @@ func QueryCodebaseHandler(database *sql.DB, q *db.Queries, projectRoot string) m
 								File: filePath, Line: startLine, Kind: "type/" + kind, Name: name, Snippet: truncateSnippet(snippet.String),
 							}
 							annotateSearchResult(&r)
-							out = append(out, r)
+							if pathMatchesCompiled(r.File, fileFilterRE) {
+								out = append(out, r)
+								matched++
+								if matched == candidateLimit {
+									break
+								}
+							}
 						}
 					}
 					rows.Close()
@@ -151,6 +192,10 @@ func QueryCodebaseHandler(database *sql.DB, q *db.Queries, projectRoot string) m
 				if scope == "all" && docLimit > 3 {
 					docLimit = 3
 				}
+				docCandidateLimit := docLimit
+				if fileFilter != "" {
+					docLimit = -1
+				}
 				rows, err := fts(q.SearchDocuments, query, docLimit)
 				if err == nil && rows != nil {
 					for rows.Next() {
@@ -163,9 +208,17 @@ func QueryCodebaseHandler(database *sql.DB, q *db.Queries, projectRoot string) m
 							if name == "" {
 								name = filepath.Base(filePath)
 							}
-							out = append(out, searchResult{
-								File: filePath, Kind: "document", Name: name, Snippet: truncateSnippet(snippet.String),
-							})
+							if pathMatchesCompiled(filePath, fileFilterRE) {
+								out = append(out, searchResult{
+									File: filePath, Kind: "document", Name: name, Snippet: truncateSnippet(snippet.String),
+								})
+								if docCandidateLimit > 0 {
+									docCandidateLimit--
+									if docCandidateLimit == 0 {
+										break
+									}
+								}
+							}
 						}
 					}
 					rows.Close()
@@ -174,7 +227,13 @@ func QueryCodebaseHandler(database *sql.DB, q *db.Queries, projectRoot string) m
 			return out, nil
 		}
 
-		results, err := search(a.Query, false)
+		var results []searchResult
+		var err error
+		if scope == "files" {
+			results, err = searchFiles(database, a.Query, fileFilterRE, limit)
+		} else {
+			results, err = search(a.Query, false)
+		}
 		if err != nil {
 			return nil, classifyFTSError(database, err)
 		}
@@ -183,7 +242,7 @@ func QueryCodebaseHandler(database *sql.DB, q *db.Queries, projectRoot string) m
 		// AND-matched nothing retries with compound tokens expanded to their word
 		// parts. Fallback-only, so default ranking stays exact-match.
 		expandedQuery := false
-		if len(results) == 0 {
+		if len(results) == 0 && scope != "files" {
 			if exp := expandFTSQuery(a.Query); exp != "" {
 				if expResults, expErr := search(exp, true); expErr == nil && len(expResults) > 0 {
 					results = expResults
@@ -197,7 +256,11 @@ func QueryCodebaseHandler(database *sql.DB, q *db.Queries, projectRoot string) m
 		// can re-issue a query with one of these to land on a real symbol.
 		var suggestions []string
 		if len(results) == 0 {
-			suggestions = nearbyTerms(database, a.Query)
+			if scope == "files" {
+				suggestions = nearbyFiles(database, a.Query, fileFilterRE)
+			} else {
+				suggestions = nearbyTerms(database, a.Query, fileFilterRE)
+			}
 		}
 
 		// Decisive stop-signal: when exactly one result's name matches the query
@@ -312,7 +375,7 @@ func exactNameMatches(query string, results []searchResult) []searchResult {
 	for _, r := range results {
 		// A document titled exactly like the query must never trigger the
 		// "definitive, stop searching" path reserved for symbol definitions.
-		if r.Kind == "document" {
+		if r.Kind == "document" || r.Kind == "file" {
 			continue
 		}
 		if len(terms) > 1 && equalFold(alphanumeric(r.Name), joined) {
@@ -411,7 +474,7 @@ func indexHasFunctions(database *sql.DB) bool {
 
 // nearbyTerms returns up to 5 indexed symbol names whose name contains any token
 // of length >= 3 from the user query. Cheap, no FTS dependency, degrades to empty.
-func nearbyTerms(database *sql.DB, query string) []string {
+func nearbyTerms(database *sql.DB, query string, fileFilter *regexp.Regexp) []string {
 	var terms []string
 	for _, t := range splitTerms(query) {
 		if len(t) >= 3 {
@@ -430,13 +493,13 @@ func nearbyTerms(database *sql.DB, query string) []string {
 		for prefixLen := len(t); prefixLen >= 3; prefixLen-- {
 			like := "%" + t[:prefixLen] + "%"
 			for _, table := range []string{"functions", "types"} {
-				rows, err := database.Query("SELECT DISTINCT name FROM "+table+" WHERE name LIKE ? COLLATE NOCASE LIMIT 5", like)
+				rows, err := database.Query("SELECT DISTINCT name, file_path FROM "+table+" WHERE name LIKE ? COLLATE NOCASE LIMIT 50", like)
 				if err != nil {
 					continue
 				}
 				for rows.Next() {
-					var name string
-					if rows.Scan(&name) == nil && !seen[name] {
+					var name, file string
+					if rows.Scan(&name, &file) == nil && pathMatchesCompiled(file, fileFilter) && !seen[name] {
 						seen[name] = true
 						out = append(out, name)
 						if len(out) >= 5 {

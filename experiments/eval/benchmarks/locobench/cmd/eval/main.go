@@ -1,10 +1,8 @@
-// Command eval runs the LoCoBench causal A/B: for each scenario, the same model
-// answers once with grep tools (Arm A) and once with max-context over stdio MCP
-// (Arm B). Both arms receive only the task (discovery mode strips LoCoBench's
-// pre-supplied file list); each gathers context its own way. Answers are graded
-// by a blind, different-model judge against the scenario's own ground_truth +
-// evaluation_criteria. Identical grading per arm → the measured delta is purely
-// "how the agent gathers context."
+// Command eval runs the LoCoBench causal comparison: for each scenario, the
+// same model answers with each selected retrieval arm. Every arm receives only
+// the task (discovery mode strips LoCoBench's pre-supplied file list); each
+// gathers context its own way. Answers are graded by a blind, different-model
+// judge against the scenario's own ground_truth + evaluation_criteria.
 //
 // Unlike the in-house eval, repos are NOT git-cloned: each scenario's project is
 // materialized from the extracted LoCoBench data on disk.
@@ -33,6 +31,7 @@ type backendOpts struct {
 	kind        string
 	awsRegion   string
 	awsProfile  string
+	baseURL     string
 	modelPrefix string
 	taskModel   string
 	judgeModel  string
@@ -47,24 +46,27 @@ func main() {
 		idList     = flag.String("id-list", "", "path to a newline-separated file of scenario ids to include (e.g. fair-fight-subset.txt); empty = all")
 		limit      = flag.Int("limit", 0, "max scenarios to run after filtering (0 = all)")
 		intentMode = flag.String("intent", "discovery", "prompt mode: discovery (strip file list) | full (verbatim task_prompt)")
-		armsFlag   = flag.String("arms", "grep,max-context", "comma-separated arms to run, paired per scenario: grep,max-context,hybrid")
+		armsFlag   = flag.String("arms", "grep,max-context", "comma-separated arms to run, paired per scenario: grep,max-context,context,hybrid")
 
-		outDir      = flag.String("out", "results", "output dir")
-		mcBin       = flag.String("mc-bin", "max-context", "path to max-context binary")
-		rgPath      = flag.String("rg", "rg", "path to ripgrep binary")
-		taskModelF  = flag.String("model", "claude-sonnet-4-6", "task model under test")
-		judgeModelF = flag.String("judge", "claude-haiku-4-5-20251001", "judge model (must differ from task model)")
-		maxTurns    = flag.Int("max-turns", 15, "per-run turn budget")
-		tokenBudget = flag.Int("token-budget", 0, "per-run total token guardrail (0 = unlimited)")
+		outDir        = flag.String("out", "results", "output dir")
+		mcBin         = flag.String("mc-bin", "max-context", "path to max-context binary")
+		rgPath        = flag.String("rg", "rg", "path to ripgrep binary")
+		taskModelF    = flag.String("model", "claude-sonnet-4-6", "task model under test")
+		judgeModelF   = flag.String("judge", "claude-haiku-4-5-20251001", "judge model (must differ from task model)")
+		maxTurns      = flag.Int("max-turns", 15, "per-run turn budget")
+		tokenBudget   = flag.Int("token-budget", 0, "per-run total token guardrail (0 = unlimited)")
+		contextBudget = flag.Int("context-budget", 4000, "compiled context-package budget in cl100k_base tokens")
 
-		backend    = flag.String("backend", "anthropic", "anthropic | bedrock")
+		backend    = flag.String("backend", "anthropic", "anthropic | bedrock | opencode")
+		baseURL    = flag.String("openai-base-url", "https://opencode.ai/zen/v1", "OpenAI-compatible API base URL (opencode)")
 		awsRegion  = flag.String("aws-region", "us-east-1", "AWS region (bedrock)")
 		awsProfile = flag.String("aws-profile", "", "AWS profile (bedrock)")
 		prefix     = flag.String("model-prefix", "", "prefix prepended to model ids (e.g. 'us.anthropic.' for Bedrock)")
 		taskOv     = flag.String("task-model", "", "override task model id entirely")
 		judgeOv    = flag.String("judge-model", "", "override judge model id entirely")
 
-		dryRun = flag.Bool("dry-run", false, "load + materialize + index, skip LLM calls")
+		dryRun            = flag.Bool("dry-run", false, "load + materialize + index, skip LLM calls")
+		providerPreflight = flag.Bool("provider-preflight", false, "verify one text+tool round trip, then exit without loading benchmark data")
 	)
 	flag.Parse()
 
@@ -79,8 +81,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	bo := backendOpts{kind: *backend, awsRegion: *awsRegion, awsProfile: *awsProfile,
+	bo := backendOpts{kind: *backend, awsRegion: *awsRegion, awsProfile: *awsProfile, baseURL: *baseURL,
 		modelPrefix: *prefix, taskModel: *taskOv, judgeModel: *judgeOv}
+	if *providerPreflight {
+		model := resolveModel(*taskModelF, *taskOv, *prefix)
+		if err := runProviderPreflight(bo, model); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	ids, err := loadIDList(*idList)
 	if err != nil {
@@ -91,7 +101,7 @@ func main() {
 	cfg := runConfig{
 		dataDir: *dataDir, outDir: *outDir, mcBin: *mcBin, rgPath: *rgPath,
 		taskModel: *taskModelF, judgeModel: *judgeModelF, maxTurns: *maxTurns,
-		tokenBudget: *tokenBudget, mode: mode, dryRun: *dryRun, arms: armsToRun,
+		tokenBudget: *tokenBudget, contextBudget: *contextBudget, mode: mode, dryRun: *dryRun, arms: armsToRun,
 		filter: filter{
 			langs: splitCSV(*filterLang), cats: splitCSV(*filterCat),
 			diffs: splitCSV(*filterDiff), limit: *limit, ids: ids,
@@ -129,13 +139,13 @@ func loadIDList(path string) (map[string]bool, error) {
 }
 
 type runConfig struct {
-	dataDir, outDir, mcBin, rgPath string
-	taskModel, judgeModel          string
-	maxTurns, tokenBudget          int
-	mode                           scenario.IntentMode
-	dryRun                         bool
-	arms                           []runlog.Arm
-	filter                         filter
+	dataDir, outDir, mcBin, rgPath       string
+	taskModel, judgeModel                string
+	maxTurns, tokenBudget, contextBudget int
+	mode                                 scenario.IntentMode
+	dryRun                               bool
+	arms                                 []runlog.Arm
+	filter                               filter
 }
 
 // parseArms parses the --arms CSV into validated arm identifiers, preserving
@@ -146,12 +156,13 @@ func parseArms(s string) ([]runlog.Arm, error) {
 		string(runlog.ArmGrep):       runlog.ArmGrep,
 		string(runlog.ArmMaxContext): runlog.ArmMaxContext,
 		string(runlog.ArmHybrid):     runlog.ArmHybrid,
+		string(runlog.ArmContext):    runlog.ArmContext,
 	}
 	var out []runlog.Arm
 	for _, p := range splitCSV(s) {
 		a, ok := valid[p]
 		if !ok {
-			return nil, fmt.Errorf("unknown arm %q (valid: grep, max-context, hybrid)", p)
+			return nil, fmt.Errorf("unknown arm %q (valid: grep, max-context, context, hybrid)", p)
 		}
 		out = append(out, a)
 	}
@@ -162,6 +173,19 @@ func parseArms(s string) ([]runlog.Arm, error) {
 }
 
 func run(cfg runConfig, bo backendOpts) error {
+	if cfg.maxTurns <= 0 {
+		return fmt.Errorf("max-turns must be positive")
+	}
+	if cfg.tokenBudget < 0 {
+		return fmt.Errorf("token-budget must be non-negative")
+	}
+	usesContext := hasArm(cfg.arms, runlog.ArmContext)
+	if usesContext && cfg.contextBudget <= 0 {
+		return fmt.Errorf("context-budget must be positive")
+	}
+	if cfg.filter.limit < 0 {
+		return fmt.Errorf("limit must be non-negative")
+	}
 	// Load + filter scenarios.
 	scenariosDir := filepath.Join(cfg.dataDir, "output", "scenarios")
 	scns, err := scenario.LoadDir(scenariosDir, cfg.filter.keep)
@@ -177,13 +201,25 @@ func run(cfg runConfig, bo backendOpts) error {
 	fmt.Printf("loaded %d scenario(s) after filtering\n", len(scns))
 
 	// Build a Protocol so the existing hash/audit machinery applies.
+	effectiveContextBudget := 0
+	if usesContext {
+		effectiveContextBudget = cfg.contextBudget
+	}
 	p := &spec.Protocol{
-		Version:    "locobench-2509.09614",
-		TaskModel:  cfg.taskModel,
-		JudgeModel: cfg.judgeModel,
-		Replicates: 1,
-		MaxTurns:   cfg.maxTurns,
-		TokenBudget: cfg.tokenBudget,
+		Version:       "locobench-2509.09614",
+		TaskModel:     cfg.taskModel,
+		JudgeModel:    cfg.judgeModel,
+		Replicates:    1,
+		MaxTurns:      cfg.maxTurns,
+		TokenBudget:   cfg.tokenBudget,
+		ContextBudget: effectiveContextBudget,
+		Arms:          armNames(cfg.arms),
+		Playbooks: map[string]string{
+			string(runlog.ArmGrep):       arms.GrepPlaybook,
+			string(runlog.ArmMaxContext): arms.MCPlaybook,
+			string(runlog.ArmHybrid):     arms.HybridPlaybook,
+			string(runlog.ArmContext):    arms.ContextPlaybook,
+		},
 		SystemSkeleton: "You are a senior software engineer working in an unfamiliar codebase. " +
 			"Use the available tools to investigate the code, then answer the task precisely and concretely.",
 	}
@@ -192,42 +228,21 @@ func run(cfg runConfig, bo backendOpts) error {
 		p.Tasks = append(p.Tasks, task)
 		p.Keys = append(p.Keys, key)
 	}
+	// Resolve backend model ids (mirrors in-house resolution).
+	p.TaskModel = resolveModel(p.TaskModel, bo.taskModel, bo.modelPrefix)
+	p.JudgeModel = resolveModel(p.JudgeModel, bo.judgeModel, bo.modelPrefix)
+	if p.TaskModel == p.JudgeModel {
+		return fmt.Errorf("judge model must differ from task model (got %q)", p.TaskModel)
+	}
+	fmt.Printf("task model: %s  judge model: %s\n", p.TaskModel, p.JudgeModel)
 	hash := p.Hash()
 	fmt.Printf("protocol hash (pre-registration): %s\n", hash)
 
-	// Resolve backend model ids (mirrors in-house resolution).
-	if bo.taskModel != "" {
-		p.TaskModel = bo.taskModel
-	} else {
-		p.TaskModel = bo.modelPrefix + p.TaskModel
-	}
-	if bo.judgeModel != "" {
-		p.JudgeModel = bo.judgeModel
-	} else {
-		p.JudgeModel = bo.modelPrefix + p.JudgeModel
-	}
-	fmt.Printf("task model: %s  judge model: %s\n", p.TaskModel, p.JudgeModel)
-
-	var client agent.Caller
-	switch bo.kind {
-	case "bedrock":
-		client = agent.NewBedrockClient(bo.awsRegion, bo.awsProfile)
-	default:
-		apiKey := os.Getenv("ANTHROPIC_API_KEY")
-		if apiKey == "" && !cfg.dryRun {
-			return fmt.Errorf("ANTHROPIC_API_KEY not set (use --dry-run, or --backend bedrock)")
-		}
-		client = agent.NewClient(apiKey)
+	client, err := newBackendClient(bo, cfg.dryRun)
+	if err != nil {
+		return err
 	}
 	judge := grade.NewJudge(client, p.JudgeModel)
-
-	// Preflight the grep arm so a broken baseline aborts loudly.
-	pfCtx, cancelPF := context.WithTimeout(context.Background(), 30*time.Second)
-	if err := arms.NewGrepArmWithRG(cfg.dataDir, cfg.rgPath).Preflight(pfCtx); err != nil {
-		cancelPF()
-		return fmt.Errorf("grep arm preflight failed: %w", err)
-	}
-	cancelPF()
 
 	if err := os.MkdirAll(filepath.Join(cfg.outDir, "transcripts"), 0o755); err != nil {
 		return err
@@ -236,23 +251,28 @@ func run(cfg runConfig, bo backendOpts) error {
 	manifest := runlog.Manifest{
 		ProtocolHash: hash, ProtocolFile: "(generated from scenarios: " + scenariosDir + ")",
 		TaskModel: p.TaskModel, JudgeModel: p.JudgeModel, Temperature: 0,
-		MaxTurns: p.MaxTurns, TokenBudget: p.TokenBudget, Replicates: 1,
+		MaxTurns: p.MaxTurns, TokenBudget: p.TokenBudget, ContextBudget: effectiveContextBudget, Replicates: 1,
+		Backend: bo.kind, BaseURL: manifestBaseURL(bo),
 		RepoSHAs: map[string]string{}, IndexSHAs: map[string]string{},
 		MaxContextBin: cfg.mcBin, RGVersion: rgVersionAt(cfg.rgPath),
-		StartedAt: time.Now().UTC().Format(time.RFC3339),
-		GrepPlaybook: arms.GrepPlaybook, MCPlaybook: arms.MCPlaybook,
+		StartedAt:    time.Now().UTC().Format(time.RFC3339),
+		GrepPlaybook: arms.GrepPlaybook, MCPlaybook: arms.MCPlaybook, ContextPlaybook: arms.ContextPlaybook,
 	}
 
 	// Resolve + index each scenario's project once (dedup by prefix: many
 	// scenarios share a project).
-	innerRoots := map[string]string{}   // scenario id -> inner project root (search/index target)
-	indexed := map[string]bool{}        // inner root -> already indexed
+	innerRoots := map[string]string{} // scenario id -> inner project root (search/index target)
+	indexed := map[string]bool{}      // inner root -> already indexed
+	firstInnerRoot := ""
 	for _, s := range scns {
 		_, inner, err := s.RepoRoot(cfg.dataDir)
 		if err != nil {
 			return fmt.Errorf("resolve project for %s: %w", s.ID, err)
 		}
 		innerRoots[s.ID] = inner
+		if firstInnerRoot == "" {
+			firstInnerRoot = inner
+		}
 		if !indexed[inner] {
 			if err := indexRepo(cfg.mcBin, inner); err != nil {
 				return fmt.Errorf("index %s: %w", inner, err)
@@ -261,6 +281,18 @@ func run(cfg runConfig, bo backendOpts) error {
 			manifest.IndexSHAs[filepath.Base(filepath.Dir(inner))] = "local-materialized"
 			fmt.Printf("prepared project %s\n", filepath.Base(filepath.Dir(inner)))
 		}
+	}
+
+	// Preflight ripgrep against an actual selected project. Running the search
+	// at cfg.dataDir would traverse every generated LoCoBench project and turn a
+	// constant-time integrity check into a scan of the full dataset.
+	if hasArm(cfg.arms, runlog.ArmGrep) || hasArm(cfg.arms, runlog.ArmHybrid) {
+		pfCtx, cancelPF := context.WithTimeout(context.Background(), 30*time.Second)
+		if err := arms.NewGrepArmWithRG(firstInnerRoot, cfg.rgPath).Preflight(pfCtx); err != nil {
+			cancelPF()
+			return fmt.Errorf("grep arm preflight failed: %w", err)
+		}
+		cancelPF()
 	}
 
 	if cfg.dryRun {
@@ -279,7 +311,7 @@ func run(cfg runConfig, bo backendOpts) error {
 		// cfg.arms so transcripts/checkpoints group predictably.
 		briefs := make([]string, 0, len(cfg.arms))
 		for _, arm := range cfg.arms {
-			rec := runTask(client, judge, p, task, key, arm, root, cfg.mcBin, cfg.rgPath, cfg.outDir)
+			rec := runTask(client, judge, p, task, key, arm, root, cfg.mcBin, cfg.rgPath, cfg.outDir, cfg.contextBudget)
 			records = append(records, rec)
 			briefs = append(briefs, fmt.Sprintf("%s=%s/%s", arm, rec.Status, scoreBrief(rec)))
 		}
@@ -296,7 +328,7 @@ func run(cfg runConfig, bo backendOpts) error {
 const pace = 5 * time.Second
 
 func runTask(client agent.Caller, judge *grade.Judge, p *spec.Protocol, task spec.Task, key spec.Key,
-	arm runlog.Arm, root, mcBin, rgPath, outDir string) runlog.RunRecord {
+	arm runlog.Arm, root, mcBin, rgPath, outDir string, contextBudget int) runlog.RunRecord {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
@@ -343,6 +375,8 @@ func runTask(client agent.Caller, judge *grade.Judge, p *spec.Protocol, task spe
 			return rec
 		}
 		exec = harm
+	case runlog.ArmContext:
+		exec = arms.NewContextArm(mcBin, root, task.Intent, contextBudget)
 	default:
 		exec = arms.NewGrepArmWithRG(root, rgPath)
 	}
@@ -386,9 +420,106 @@ func playbookFor(arm runlog.Arm) string {
 		return arms.MCPlaybook
 	case runlog.ArmHybrid:
 		return arms.HybridPlaybook
+	case runlog.ArmContext:
+		return arms.ContextPlaybook
 	default:
 		return arms.GrepPlaybook
 	}
+}
+
+func hasArm(arms []runlog.Arm, want runlog.Arm) bool {
+	for _, arm := range arms {
+		if arm == want {
+			return true
+		}
+	}
+	return false
+}
+
+func armNames(arms []runlog.Arm) []string {
+	out := make([]string, 0, len(arms))
+	for _, arm := range arms {
+		out = append(out, string(arm))
+	}
+	return out
+}
+
+func manifestBaseURL(bo backendOpts) string {
+	if bo.kind == "opencode" {
+		return bo.baseURL
+	}
+	return ""
+}
+
+func resolveModel(base, override, prefix string) string {
+	if override != "" {
+		return override
+	}
+	return prefix + base
+}
+
+func newBackendClient(bo backendOpts, allowEmptyKey bool) (agent.Caller, error) {
+	switch bo.kind {
+	case "bedrock":
+		return agent.NewBedrockClient(bo.awsRegion, bo.awsProfile), nil
+	case "opencode":
+		apiKey := os.Getenv("OPENCODE_KEY")
+		if apiKey == "" && !allowEmptyKey {
+			return nil, fmt.Errorf("OPENCODE_KEY not set (export it for this process or use --dry-run)")
+		}
+		return agent.NewOpenAICompatClient(bo.baseURL, apiKey), nil
+	case "anthropic":
+		apiKey := os.Getenv("ANTHROPIC_API_KEY")
+		if apiKey == "" && !allowEmptyKey {
+			return nil, fmt.Errorf("ANTHROPIC_API_KEY not set (use --dry-run, or --backend bedrock)")
+		}
+		return agent.NewClient(apiKey), nil
+	default:
+		return nil, fmt.Errorf("unknown backend %q (valid: anthropic, bedrock, opencode)", bo.kind)
+	}
+}
+
+type echoPreflight struct{ calls int }
+
+func (e *echoPreflight) Tools() []agent.Tool {
+	return []agent.Tool{{
+		Name: "echo", Description: "Return the supplied text.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"text":{"type":"string"}},"required":["text"]}`),
+	}}
+}
+
+func (e *echoPreflight) Execute(_ context.Context, name string, input json.RawMessage) (string, bool) {
+	if name != "echo" {
+		return "unknown tool: " + name, true
+	}
+	e.calls++
+	return string(input), false
+}
+
+func runProviderPreflight(bo backendOpts, model string) error {
+	client, err := newBackendClient(bo, false)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+	executor := &echoPreflight{}
+	result := agent.Run(ctx, client, agent.Config{
+		Model: model, MaxTokens: 256, Temperature: 0, MaxTurns: 3,
+		MaxRetries: 2, RetryWait: 5 * time.Second,
+	}, executor,
+		"This is a provider compatibility test. You must call the echo tool exactly once, then answer briefly.",
+		"Call echo with text hello, then reply with ok.")
+	if result.Status != agent.StatusCompleted {
+		return fmt.Errorf("provider preflight failed: status=%s retries=%d detail=%s", result.Status, result.Retries, result.ErrorDetail)
+	}
+	if executor.calls != 1 {
+		return fmt.Errorf("provider returned a final answer but did not complete one tool round trip (calls=%d)", executor.calls)
+	}
+	fmt.Printf("provider preflight passed: backend=%s model=%s tool_calls=%d turns=%d tokens=%d retries=%d\n",
+		bo.kind, model, result.ToolCallCount, result.TurnsToAnswer,
+		result.TotalInTokens+result.TotalOutTokens, result.Retries)
+	return nil
 }
 
 func indexRepo(mcBin, root string) error {

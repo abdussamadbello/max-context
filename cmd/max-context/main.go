@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -74,6 +75,8 @@ func run(cfg *config.Config) error {
 			return runCallsCmd(cfg, args[1:])
 		case "impact":
 			return runImpactCmd(cfg, args[1:])
+		case "context":
+			return runContextCmd(cfg, args[1:])
 		case "arch":
 			return runArchCmd(cfg, args[1:])
 		}
@@ -99,6 +102,7 @@ func indexerOptions(cfg *config.Config) *indexer.Options {
 		Include:     cfg.IncludeGlobs(),
 		Exclude:     cfg.ExcludeGlobs(),
 		MaxFileSize: cfg.EffectiveMaxFileSize(),
+		Version:     version,
 	}
 }
 
@@ -127,23 +131,21 @@ func runIndex(cfg *config.Config) error {
 	}
 	defer q.Close()
 	ctx := context.Background()
+	dir := filepath.Join(cfg.ProjectRoot, ".max-context")
 	if err := indexer.Index(ctx, cfg.ProjectRoot, database, q, indexerOptions(cfg)); err != nil {
+		artifacts.RecordIndexError(database, "", err.Error())
+		_ = artifacts.WriteIndexStatus(dir, database, version)
 		return err
 	}
 	// A clean full index clears any prior per-file failures and stamps the time.
-	artifacts.ClearAllIndexErrors(database)
+	artifacts.ClearErrorsAfterFullIndex(database)
 	artifacts.SetLastFullIndex(database, time.Now())
-	dir := filepath.Join(cfg.ProjectRoot, ".max-context")
-	_ = artifacts.WriteSummary(dir, database)
-	_ = artifacts.WriteArchitecture(dir, database)
-	var totalFuncs, totalFiles int
-	_ = database.QueryRow("SELECT COUNT(*) FROM functions").Scan(&totalFuncs)
-	_ = database.QueryRow("SELECT COUNT(DISTINCT file_path) FROM functions").Scan(&totalFiles)
-	h := artifacts.ReadIndexHealth(database)
-	_ = artifacts.WriteStatus(dir, &artifacts.Status{
-		Healthy: h.Healthy, LastFullIndex: h.LastFullIndex, LastIncrementalIndex: h.LastIncrementalIndex,
-		TotalFunctions: totalFuncs, TotalFiles: totalFiles, Version: version,
-	})
+	artifacts.ClearIndexError(database, artifacts.ArtifactErrorKey)
+	if err := artifacts.WriteIndexArtifacts(dir, database, version); err != nil {
+		artifacts.RecordIndexError(database, artifacts.ArtifactErrorKey, err.Error())
+		_ = artifacts.WriteIndexStatus(dir, database, version)
+		return err
+	}
 	fmt.Fprintf(os.Stdout, "Index complete.\n")
 	return nil
 }
@@ -195,7 +197,11 @@ func runStatus(cfg *config.Config) error {
 // runWatch starts only the file watcher (no MCP server); blocks until process exits.
 func runWatch(cfg *config.Config) error {
 	reindexCh := make(chan string, 100)
-	w, err := watcher.New(cfg.ProjectRoot, reindexCh, watcherOptions(cfg))
+	opts := watcherOptions(cfg)
+	opts.OnError = func(err error) {
+		fmt.Fprintf(os.Stderr, "max-context: watcher error: %v\n", err)
+	}
+	w, err := watcher.New(cfg.ProjectRoot, reindexCh, opts)
 	if err != nil {
 		return err
 	}
@@ -223,10 +229,13 @@ func runMCPServer(cfg *config.Config) error {
 	defer q.Close()
 
 	reindexCh := make(chan string, 100)
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	go indexer.RunWorker(ctx, cfg.ProjectRoot, database, q, reindexCh, indexerOptions(cfg))
-	if watcher, err := watcher.New(cfg.ProjectRoot, reindexCh, watcherOptions(cfg)); err == nil {
-		_ = watcher.Start(ctx)
+	if _, err := startProjectWatcher(ctx, cfg, database, reindexCh); err != nil {
+		// Keep serving the existing index, but make degraded freshness explicit in
+		// stderr and in every tool's staleness payload.
+		fmt.Fprintf(os.Stderr, "max-context: watcher unavailable: %v\n", err)
 	}
 
 	handler := mcp.NewHandler()
@@ -234,6 +243,25 @@ func runMCPServer(cfg *config.Config) error {
 	srv := mcp.NewServer(handler, schemas)
 	srv.SetProjectRoot(cfg.ProjectRoot) // Phase 6: MCP resources (summary, architecture)
 	return srv.Serve()
+}
+
+func startProjectWatcher(ctx context.Context, cfg *config.Config, database *sql.DB, reindexCh chan<- string) (*watcher.Watcher, error) {
+	opts := watcherOptions(cfg)
+	opts.OnError = func(err error) {
+		fmt.Fprintf(os.Stderr, "max-context: watcher error: %v\n", err)
+		artifacts.RecordIndexError(database, artifacts.WatcherErrorKey, err.Error())
+	}
+	w, err := watcher.New(cfg.ProjectRoot, reindexCh, opts)
+	if err != nil {
+		artifacts.RecordIndexError(database, artifacts.WatcherErrorKey, err.Error())
+		return nil, err
+	}
+	if err := w.Start(ctx); err != nil {
+		artifacts.RecordIndexError(database, artifacts.WatcherErrorKey, err.Error())
+		return nil, err
+	}
+	artifacts.ClearIndexError(database, artifacts.WatcherErrorKey)
+	return w, nil
 }
 
 func runSetup(cfg *config.Config, target string) error {

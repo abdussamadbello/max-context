@@ -126,7 +126,7 @@ func parseFlagsAnywhere(fs *flag.FlagSet, args []string) error {
 func runQueryCmd(cfg *config.Config, args []string) error {
 	fs := flag.NewFlagSet("query", flag.ContinueOnError)
 	n := fs.Int("n", 3, "max results (1-50)")
-	scope := fs.String("scope", "all", "all|functions|types|docs")
+	scope := fs.String("scope", "all", "all|functions|types|files|docs")
 	fileFilter := fs.String("file-filter", "", "glob to filter by file path")
 	if err := parseFlagsAnywhere(fs, args); err != nil {
 		return err
@@ -168,7 +168,7 @@ func runCallsCmd(cfg *config.Config, args []string) error {
 	return runTool(cfg, "get_call_chain", marshalArgs(a))
 }
 
-// runImpactCmd handles `max-context impact [-from-git REV] [-depth N] [-direction D] [files...]`.
+// runImpactCmd handles `max-context impact [-from-git REV] [-depth N] [-direction D] [-budget N] [files...]`.
 func runImpactCmd(cfg *config.Config, args []string) error {
 	fs := flag.NewFlagSet("impact", flag.ContinueOnError)
 	fromGit := fs.String("from-git", "", "git revision (e.g. HEAD or main..HEAD)")
@@ -176,8 +176,12 @@ func runImpactCmd(cfg *config.Config, args []string) error {
 	direction := fs.String("direction", "callers", "callers|callees|both")
 	includeTests := fs.Bool("include-tests", true, "include test files in results")
 	minConfidence := fs.String("min-confidence", "", "minimum call-edge resolution confidence")
+	budget := fs.Int("budget", 0, "hard response budget in cl100k_base tokens (0 = uncapped)")
 	if err := parseFlagsAnywhere(fs, args); err != nil {
 		return err
+	}
+	if *budget < 0 {
+		return fmt.Errorf("-budget must be non-negative")
 	}
 	a := map[string]interface{}{"depth": *depth, "direction": *direction, "include_tests": *includeTests}
 	if fs.NArg() > 0 {
@@ -187,6 +191,9 @@ func runImpactCmd(cfg *config.Config, args []string) error {
 	}
 	if *minConfidence != "" {
 		a["min_confidence"] = *minConfidence
+	}
+	if *budget > 0 {
+		a["token_budget"] = *budget
 	}
 	return runTool(cfg, "get_impact", marshalArgs(a))
 }

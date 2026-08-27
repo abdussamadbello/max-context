@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/maxcontext/max-context/internal/db"
@@ -122,6 +123,33 @@ func TestIndexDocFileLifecycle(t *testing.T) {
 	}
 	if _, _, ok := docRow(t, database, "notes.md"); ok {
 		t.Error("document row must be gone after file deletion")
+	}
+}
+
+func TestIndexDocFileRejectsNonUTF8WithoutDroppingLastGoodRow(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	database, _ := openIndexDB(t, root)
+	defer database.Close()
+	path := filepath.Join(root, "notes.md")
+	if err := os.WriteFile(path, []byte("# Good\nsearchable text"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := IndexDocFile(ctx, root, "notes.md", database); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte{0xff, 0xfe}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := IndexDocFile(ctx, root, "notes.md", database); err == nil {
+		t.Fatal("non-UTF-8 document should fail indexing")
+	}
+	var content string
+	if err := database.QueryRow(`SELECT content FROM documents WHERE file_path = ?`, "notes.md").Scan(&content); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(content, "searchable text") {
+		t.Fatalf("last good document row was not preserved: %q", content)
 	}
 }
 
