@@ -48,22 +48,32 @@ func WriteArchitecture(dir string, database *sql.DB) error {
 	rows, err := database.Query(`
 		SELECT language, COUNT(*) as cnt FROM functions GROUP BY language ORDER BY cnt DESC
 	`)
-	if err == nil {
-		for rows.Next() {
-			var lang string
-			var cnt int
-			if rows.Scan(&lang, &cnt) == nil {
-				b.WriteString(fmt.Sprintf("- %s: %d functions\n", lang, cnt))
-			}
-		}
-		rows.Close()
+	if err != nil {
+		return fmt.Errorf("query language counts: %w", err)
 	}
+	for rows.Next() {
+		var lang string
+		var cnt int
+		if err := rows.Scan(&lang, &cnt); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan language count: %w", err)
+		}
+		b.WriteString(fmt.Sprintf("- %s: %d functions\n", lang, cnt))
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("query language counts: %w", err)
+	}
+	rows.Close()
 
 	// PageRank over the call graph drives the ranked sections below: which
 	// functions the codebase structurally depends on, which directories carry
 	// that weight, and which files' imports matter most. Also makes the output
 	// deterministic (the old map iteration produced random section order).
 	ranked, rankErr := PageRankFunctions(database)
+	if rankErr != nil {
+		return fmt.Errorf("rank functions: %w", rankErr)
+	}
 	fileScores := FileScores(ranked)
 
 	// Directory map: top-level dirs with symbol counts, ordered by aggregate
@@ -78,44 +88,49 @@ func WriteArchitecture(dir string, database *sql.DB) error {
 		SELECT file_path, COUNT(*) as cnt FROM functions
 		GROUP BY file_path
 	`)
-	if err == nil {
-		dirCounts := make(map[string]int)
-		for dirRows.Next() {
-			var p string
-			var cnt int
-			if dirRows.Scan(&p, &cnt) == nil {
-				dirCounts[topLevelDir(p)] += cnt
-			}
+	if err != nil {
+		return fmt.Errorf("query directory map: %w", err)
+	}
+	dirCounts := make(map[string]int)
+	for dirRows.Next() {
+		var p string
+		var cnt int
+		if err := dirRows.Scan(&p, &cnt); err != nil {
+			dirRows.Close()
+			return fmt.Errorf("scan directory map: %w", err)
 		}
+		dirCounts[topLevelDir(p)] += cnt
+	}
+	if err := dirRows.Err(); err != nil {
 		dirRows.Close()
-		dirScores := make(map[string]float64)
-		for f, s := range fileScores {
-			dirScores[topLevelDir(f)] += s
+		return fmt.Errorf("query directory map: %w", err)
+	}
+	dirRows.Close()
+	dirScores := make(map[string]float64)
+	for f, s := range fileScores {
+		dirScores[topLevelDir(f)] += s
+	}
+	var dirs []dirEntry
+	for d, n := range dirCounts {
+		dirs = append(dirs, dirEntry{name: d, symbols: n, score: dirScores[d]})
+	}
+	sort.Slice(dirs, func(a, b int) bool {
+		if dirs[a].score != dirs[b].score {
+			return dirs[a].score > dirs[b].score
 		}
-		var dirs []dirEntry
-		for d, n := range dirCounts {
-			dirs = append(dirs, dirEntry{name: d, symbols: n, score: dirScores[d]})
-		}
-		sort.Slice(dirs, func(a, b int) bool {
-			if dirs[a].score != dirs[b].score {
-				return dirs[a].score > dirs[b].score
-			}
-			return dirs[a].name < dirs[b].name
-		})
-		for _, d := range dirs {
-			b.WriteString(fmt.Sprintf("- %s/: %d symbols\n", d.name, d.symbols))
-		}
+		return dirs[a].name < dirs[b].name
+	})
+	for _, d := range dirs {
+		b.WriteString(fmt.Sprintf("- %s/: %d symbols\n", d.name, d.symbols))
 	}
 
 	// Key functions: top PageRank — the symbols the call graph converges on.
 	b.WriteString("\n## Key functions (PageRank)\n\n")
-	if rankErr == nil {
-		for i, f := range ranked {
-			if i >= 15 {
-				break
-			}
-			b.WriteString(fmt.Sprintf("- %s (%s)\n", f.Name, f.FilePath))
+	for i, f := range ranked {
+		if i >= 15 {
+			break
 		}
+		b.WriteString(fmt.Sprintf("- %s (%s)\n", f.Name, f.FilePath))
 	}
 
 	// Module dependencies: imports of the highest-ranked files (instead of an
@@ -126,14 +141,20 @@ func WriteArchitecture(dir string, database *sql.DB) error {
 		impRows, err := database.Query(
 			`SELECT DISTINCT imported_path FROM imports WHERE file_path = ? ORDER BY imported_path LIMIT 5`, file)
 		if err != nil {
-			continue
+			return fmt.Errorf("query imports for %s: %w", file, err)
 		}
 		for impRows.Next() && depLines < 30 {
 			var to string
-			if impRows.Scan(&to) == nil {
-				b.WriteString(fmt.Sprintf("- %s -> %s\n", file, to))
-				depLines++
+			if err := impRows.Scan(&to); err != nil {
+				impRows.Close()
+				return fmt.Errorf("scan import for %s: %w", file, err)
 			}
+			b.WriteString(fmt.Sprintf("- %s -> %s\n", file, to))
+			depLines++
+		}
+		if err := impRows.Err(); err != nil {
+			impRows.Close()
+			return fmt.Errorf("query imports for %s: %w", file, err)
 		}
 		impRows.Close()
 		if depLines >= 30 {

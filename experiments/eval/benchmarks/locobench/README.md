@@ -41,17 +41,36 @@ go run ./cmd/eval --data data --lang go --category feature_implementation --limi
   --backend bedrock --aws-region us-east-1 --aws-profile <profile> \
   --task-model us.anthropic.claude-sonnet-4-6 \
   --judge-model us.anthropic.claude-haiku-4-5-20251001-v1:0
+
+# Live (OpenCode Zen): keep the key in this shell only; do not put it in a file.
+read -rsp 'OpenCode key: ' OPENCODE_KEY && export OPENCODE_KEY && echo
+go run ./cmd/eval --backend opencode --model nemotron-3-ultra-free --provider-preflight
+go run ./cmd/eval --data data --lang go --category feature_implementation --limit 1 \
+  --mc-bin "$MC" --rg "$(command -v rg)" \
+  --backend opencode --model nemotron-3-ultra-free \
+  --judge mimo-v2.5-free \
+  --arms grep,max-context,context --context-budget 4000
+unset OPENCODE_KEY
 ```
+
+After restoring the large LoCoBench dataset, run harness tests with
+`go test ./cmd/... ./internal/...`; `go test ./...` also descends into generated
+fixture repositories that happen to contain Go packages.
 
 Filters: `--lang` (go,typescript,…), `--category`, `--difficulty`, `--limit`,
 `--id-list <file>` (run an exact scenario set, e.g. `fair-fight-subset.txt`).
-`--arms grep,max-context,hybrid` selects which arms run, paired per scenario:
+`--arms grep,max-context,context,hybrid` selects which arms run, paired per scenario:
 - **grep** — baseline (ripgrep + read_file + list_files)
 - **max-context** — mc-only mechanism probe (the 5 MCP tools, no file reading)
+- **context** — one task-specific package from the CLI context compiler, capped by
+  `--context-budget` (default 4,000 tokens); repeated retrieval is unavailable by design
 - **hybrid** — REALISTIC deployment: grep+read+list AND the 5 MCP tools (what a
   host looks like with max-context installed; MCP tools are additive)
 
 Note: `rg` must be a real binary, not a shell function — pass `--rg` explicitly.
+Before treating judge scores as product evidence, manually verify the selected
+scenario's generated ground truth against its source. Some shipped LoCoBench
+keys describe vulnerabilities that are not present in the generated repository.
 
 ## Supporting tools
 

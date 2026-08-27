@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/maxcontext/max-context/internal/contextpack"
 	"github.com/maxcontext/max-context/internal/db"
 	"github.com/maxcontext/max-context/internal/mcp"
 )
@@ -126,6 +127,76 @@ func TestGetImpact_FromHEAD_DefaultCallers(t *testing.T) {
 	}
 	if names["Top"] != 2 {
 		t.Fatalf("missing depth-2 caller Top: %+v", names)
+	}
+}
+
+func TestGetImpact_TokenBudgetCapsFinalJSON(t *testing.T) {
+	root, store, cleanup := setupRepoWithIndex(t)
+	defer cleanup()
+
+	h := GetImpactHandler(store, root)
+	resp, err := h(json.RawMessage(`{"token_budget":190}`))
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	payload := resp.([]mcp.ContentItem)[0].Text
+	counter, _ := contextpack.NewCounter()
+	actual, err := counter.Count(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		TokenBudget int            `json:"token_budget"`
+		TokensUsed  int            `json:"tokens_used"`
+		Complete    bool           `json:"complete"`
+		Impacted    []impactedNode `json:"impacted"`
+		Omitted     struct {
+			Impacted int `json:"impacted"`
+		} `json:"omitted"`
+		Stats struct {
+			ImpactedSymbols       int `json:"impacted_symbols"`
+			ReturnedImpactSymbols int `json:"returned_impacted_symbols"`
+		} `json:"stats"`
+	}
+	if err := json.Unmarshal([]byte(payload), &out); err != nil {
+		t.Fatal(err)
+	}
+	if actual != out.TokensUsed || actual > out.TokenBudget {
+		t.Fatalf("actual=%d reported=%d budget=%d payload=%s", actual, out.TokensUsed, out.TokenBudget, payload)
+	}
+	if out.Stats.ReturnedImpactSymbols != len(out.Impacted) {
+		t.Fatalf("returned stats disagree with payload: %+v", out)
+	}
+	if out.Stats.ImpactedSymbols != len(out.Impacted)+out.Omitted.Impacted {
+		t.Fatalf("omission count is not exact: %+v", out)
+	}
+	if out.Omitted.Impacted == 0 {
+		t.Fatalf("fixture budget should exercise omission: %s", payload)
+	}
+	if out.Complete != (out.Omitted.Impacted == 0) {
+		t.Fatalf("complete flag disagrees with omissions: %+v", out)
+	}
+
+	if _, err := h(json.RawMessage(`{"token_budget":1}`)); err == nil {
+		t.Fatal("a budget smaller than response metadata must fail")
+	} else if rpcErr, ok := err.(*mcp.RPCError); !ok || rpcErr.Code != mcp.CodeInvalidParams {
+		t.Fatalf("small-budget error = %T %v", err, err)
+	}
+}
+
+func TestRankImpactNodesUsesPolicyTiers(t *testing.T) {
+	nodes := []impactedNode{
+		{File: "z.go", Symbol: "Weak", Depth: 1, ViaResolution: "name-global"},
+		{File: "a_test.go", Symbol: "StrongTest", Depth: 1, ViaResolution: "same-file"},
+		{File: "a.go", Symbol: "Deep", Depth: 2, ViaResolution: "same-file"},
+		{File: "b.go", Symbol: "Strong", Depth: 1, ViaResolution: "same-file"},
+	}
+	rankImpactNodes(nodes)
+	want := []string{"StrongTest", "Strong", "Weak", "Deep"}
+	for i, symbol := range want {
+		if nodes[i].Symbol != symbol {
+			t.Fatalf("ranked[%d] = %s, want %s: %+v", i, nodes[i].Symbol, symbol, nodes)
+		}
 	}
 }
 

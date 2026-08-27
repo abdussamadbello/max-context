@@ -22,7 +22,7 @@ type ToolExecutor interface {
 type RunStatus string
 
 const (
-	StatusCompleted     RunStatus = "completed"      // model produced a final answer within budget
+	StatusCompleted     RunStatus = "completed"       // model produced a final answer within budget
 	StatusTruncatedTurn RunStatus = "truncated_turns" // hit the max-turn cap before finishing
 	StatusToolLoop      RunStatus = "tool_loop"       // same tool+args repeated with no progress
 	StatusRateLimited   RunStatus = "rate_limited"    // exhausted retries on 429
@@ -116,6 +116,11 @@ func Run(ctx context.Context, c Caller, cfg Config, exec ToolExecutor, system, t
 			recordTurn(res, turn, out, nil)
 			return res
 		}
+		if out.StopReason == "max_tokens" {
+			recordTurn(res, turn, out, nil)
+			res.Status = StatusTruncatedTurn
+			return res
+		}
 
 		// Collect tool_use blocks; assistant message is appended verbatim.
 		msgs = append(msgs, Message{Role: "assistant", Content: out.Content})
@@ -175,7 +180,7 @@ func callWithRetry(ctx context.Context, c Caller, cfg Config, system string, too
 		}
 		lastErr = err
 		ae, ok := err.(*APIError)
-		if !ok || ae.Category != "rate_limited" {
+		if !ok || (ae.Category != "rate_limited" && ae.Category != "transient") {
 			return nil, err // hard error: don't retry
 		}
 		res.Retries++

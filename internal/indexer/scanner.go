@@ -47,19 +47,28 @@ func NewIgnoreMatcher(root string) (*IgnoreMatcher, error) {
 
 	// Read root-level ignore files
 	for _, name := range []string{".gitignore", ".contextignore", filepath.Join(".max-context", "ignore")} {
-		patterns = append(patterns, readIgnoreFile(filepath.Join(root, name), "")...)
+		loaded, err := readIgnoreFile(filepath.Join(root, name), "")
+		if err != nil {
+			return nil, err
+		}
+		patterns = append(patterns, loaded...)
 	}
 
 	// Walk one level of subdirectories for their .gitignore files
 	entries, err := os.ReadDir(root)
-	if err == nil {
-		for _, e := range entries {
-			if !e.IsDir() || DefaultIgnoreDirNames[e.Name()] {
-				continue
-			}
-			subGitignore := filepath.Join(root, e.Name(), ".gitignore")
-			patterns = append(patterns, readIgnoreFile(subGitignore, e.Name())...)
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range entries {
+		if !e.IsDir() || DefaultIgnoreDirNames[e.Name()] {
+			continue
 		}
+		subGitignore := filepath.Join(root, e.Name(), ".gitignore")
+		loaded, err := readIgnoreFile(subGitignore, e.Name())
+		if err != nil {
+			return nil, err
+		}
+		patterns = append(patterns, loaded...)
 	}
 
 	return &IgnoreMatcher{patterns: patterns}, nil
@@ -103,10 +112,13 @@ func matchesAnyGlob(globs []string, relPath string) bool {
 
 // readIgnoreFile reads a gitignore-style file and returns patterns.
 // If prefix is non-empty, it's prepended to each pattern (for subdirectory gitignores).
-func readIgnoreFile(path, prefix string) []string {
+func readIgnoreFile(path, prefix string) ([]string, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
 	}
 	defer f.Close()
 
@@ -123,7 +135,10 @@ func readIgnoreFile(path, prefix string) []string {
 		}
 		patterns = append(patterns, line)
 	}
-	return patterns
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
+	return patterns, nil
 }
 
 // isGlob returns true if the pattern contains glob metacharacters.
@@ -192,9 +207,6 @@ func (s *Scanner) Scan() ([]string, error) {
 	var out []string
 	err := filepath.Walk(s.Root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			if os.IsPermission(err) {
-				return nil
-			}
 			return err
 		}
 		if info.IsDir() {

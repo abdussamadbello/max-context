@@ -167,7 +167,7 @@ type CreateParams struct {
 // APIError categorizes failures so the run log can distinguish rate limits,
 // network faults, and hard API errors rather than collapsing them.
 type APIError struct {
-	Category   string // "rate_limited" | "api_error" | "network" | "decode"
+	Category   string // "rate_limited" | "transient" | "api_error" | "network" | "decode"
 	Message    string
 	RetryAfter string
 }

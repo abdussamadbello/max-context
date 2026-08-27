@@ -31,7 +31,11 @@ func NaiveBaseline(root string, terms []string, filter PathFilter) (int, error) 
 		if err != nil {
 			return 0, err
 		}
-		total += c.Count(strings.Join(grepLines, "\n"))
+		n, err := c.Count(strings.Join(grepLines, "\n"))
+		if err != nil {
+			return 0, fmt.Errorf("count grep output tokens: %w", err)
+		}
+		total += n
 		seen := map[string]bool{}
 		for _, m := range matchedFiles {
 			if seen[m.file] {
@@ -42,7 +46,11 @@ func NaiveBaseline(root string, terms []string, filter PathFilter) (int, error) 
 			if err != nil {
 				continue
 			}
-			total += c.Count(string(body))
+			n, err := c.Count(string(body))
+			if err != nil {
+				return 0, fmt.Errorf("count file tokens: %w", err)
+			}
+			total += n
 		}
 	}
 	return total, nil
@@ -62,7 +70,11 @@ func SkilledBaseline(root string, terms []string, filter PathFilter) (int, error
 		if err != nil {
 			return 0, err
 		}
-		total += c.Count(strings.Join(grepLines, "\n"))
+		n, err := c.Count(strings.Join(grepLines, "\n"))
+		if err != nil {
+			return 0, fmt.Errorf("count grep output tokens: %w", err)
+		}
+		total += n
 		for _, m := range matches {
 			body, err := windowAroundLine(m.file, m.line, 20)
 			if err != nil {
@@ -73,7 +85,11 @@ func SkilledBaseline(root string, terms []string, filter PathFilter) (int, error
 				continue
 			}
 			read[key] = true
-			total += c.Count(body)
+			n, err := c.Count(body)
+			if err != nil {
+				return 0, fmt.Errorf("count context-window tokens: %w", err)
+			}
+			total += n
 		}
 	}
 	return total, nil

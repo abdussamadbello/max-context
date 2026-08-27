@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/maxcontext/max-context/internal/config"
+	"github.com/maxcontext/max-context/internal/contextpack"
 	"github.com/maxcontext/max-context/internal/db"
 	"github.com/maxcontext/max-context/internal/indexer"
 )
@@ -129,5 +131,88 @@ func TestRunToolGenericAndErrors(t *testing.T) {
 	}
 	if err := runTool(cfg, "no_such_tool", json.RawMessage(`{}`)); err == nil {
 		t.Error("unknown tool must error")
+	}
+}
+
+func TestRunImpactCmdBudget(t *testing.T) {
+	cfg := indexedProject(t)
+	out, err := captureStdout(t, func() error {
+		return runImpactCmd(cfg, []string{"app.go", "-direction", "callees", "-budget", "500"})
+	})
+	if err != nil {
+		t.Fatalf("impact: %v", err)
+	}
+	var payload struct {
+		TokenBudget int `json:"token_budget"`
+		TokensUsed  int `json:"tokens_used"`
+	}
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("stdout is not JSON: %q", out)
+	}
+	counter, _ := contextpack.NewCounter()
+	actual, err := counter.Count(strings.TrimSpace(out))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if payload.TokenBudget != 500 || payload.TokensUsed != actual || actual > payload.TokenBudget {
+		t.Fatalf("budget metadata actual=%d payload=%+v", actual, payload)
+	}
+
+	if err := runImpactCmd(cfg, []string{"-budget", "-1", "app.go"}); err == nil {
+		t.Fatal("negative budget must fail")
+	}
+}
+
+func TestRunContextCmdProducesBudgetedPackage(t *testing.T) {
+	cfg := indexedProject(t)
+	out, err := captureStdout(t, func() error {
+		return runContextCmd(cfg, []string{
+			"change", "Greet", "behavior",
+			"-intent", "change",
+			"-changed-file", "app.go",
+			"-budget", "800",
+		})
+	})
+	if err != nil {
+		t.Fatalf("context: %v", err)
+	}
+	var payload struct {
+		Intent      string `json:"intent"`
+		TokenBudget int    `json:"token_budget"`
+		TokensUsed  int    `json:"tokens_used"`
+		Evidence    []struct {
+			Symbol string `json:"symbol"`
+			Kind   string `json:"kind"`
+		} `json:"evidence"`
+	}
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("stdout is not JSON: %q", out)
+	}
+	counter, _ := contextpack.NewCounter()
+	actual, err := counter.Count(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if payload.Intent != "change" || payload.TokenBudget != 800 || payload.TokensUsed != actual || actual > 800 {
+		t.Fatalf("invalid package metadata actual=%d payload=%+v", actual, payload)
+	}
+	foundGreet := false
+	for _, item := range payload.Evidence {
+		if item.Symbol == "Greet" {
+			foundGreet = true
+		}
+	}
+	if !foundGreet {
+		t.Fatalf("task anchor missing from evidence: %s", out)
+	}
+}
+
+func TestRunContextCmdValidation(t *testing.T) {
+	cfg := indexedProject(t)
+	if err := runContextCmd(cfg, nil); err == nil {
+		t.Fatal("missing task must fail")
+	}
+	if err := runContextCmd(cfg, []string{"task", "-intent", "invent"}); err == nil {
+		t.Fatal("invalid intent must fail")
 	}
 }

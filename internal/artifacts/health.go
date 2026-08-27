@@ -22,6 +22,12 @@ const (
 	// FullIndexErrorKey is the index_errors.file_path sentinel for a whole-repo
 	// (full) index failure, which has no single originating file.
 	FullIndexErrorKey = "<full-index>"
+	// WatcherErrorKey persists a watcher startup/runtime failure. A successful
+	// full index must not clear it: the snapshot may be fresh while automatic
+	// updates are still unavailable.
+	WatcherErrorKey = "<watcher>"
+	// ArtifactErrorKey records failures writing summary/architecture/status.
+	ArtifactErrorKey = "<artifacts>"
 )
 
 // ReadIndexHealth returns the current index health. Missing tables/keys (older
@@ -81,4 +87,11 @@ func ClearIndexError(database *sql.DB, filePath string) {
 // ClearAllIndexErrors clears every recorded failure (after a successful full reindex).
 func ClearAllIndexErrors(database *sql.DB) {
 	_, _ = database.Exec("DELETE FROM index_errors")
+}
+
+// ClearErrorsAfterFullIndex removes code/document/full-index failures after a
+// clean rebuild while preserving infrastructure failures whose condition is
+// independent of the rebuilt database (currently the filesystem watcher).
+func ClearErrorsAfterFullIndex(database *sql.DB) {
+	_, _ = database.Exec("DELETE FROM index_errors WHERE file_path != ?", WatcherErrorKey)
 }

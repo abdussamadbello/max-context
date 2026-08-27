@@ -23,6 +23,16 @@ type scriptedClient struct {
 	i         int
 }
 
+type transientThenSuccessClient struct{ calls int }
+
+func (c *transientThenSuccessClient) Create(_ context.Context, _ CreateParams) (*CreateResult, error) {
+	c.calls++
+	if c.calls == 1 {
+		return nil, &APIError{Category: "transient", Message: "temporary upstream failure"}
+	}
+	return textResp("recovered", "end_turn"), nil
+}
+
 func (s *scriptedClient) Create(_ context.Context, _ CreateParams) (*CreateResult, error) {
 	r := s.responses[s.i]
 	if s.i < len(s.responses)-1 {
@@ -98,6 +108,14 @@ func TestRun_TruncatedTurns(t *testing.T) {
 	}
 }
 
+func TestRun_TruncatedModelResponse(t *testing.T) {
+	sc := &scriptedClient{responses: []*CreateResult{textResp("partial", "max_tokens")}}
+	res := Run(context.Background(), sc, baseCfg(), fakeExec{}, "sys", "task")
+	if res.Status != StatusTruncatedTurn || res.FinalAnswer != "" {
+		t.Fatalf("result = %#v", res)
+	}
+}
+
 // Token budget guardrail halts the run.
 func TestRun_BudgetHalt(t *testing.T) {
 	resps := []*CreateResult{}
@@ -111,6 +129,19 @@ func TestRun_BudgetHalt(t *testing.T) {
 	res := Run(context.Background(), sc, cfg, exec, "sys", "task")
 	if res.Status != StatusBudgetHalt {
 		t.Fatalf("status=%s, want budget_halt", res.Status)
+	}
+}
+
+func TestRun_RetriesTransientProviderFailure(t *testing.T) {
+	client := &transientThenSuccessClient{}
+	cfg := baseCfg()
+	cfg.MaxRetries = 1
+	res := Run(context.Background(), client, cfg, fakeExec{}, "sys", "task")
+	if res.Status != StatusCompleted || res.FinalAnswer != "recovered" {
+		t.Fatalf("result = %#v", res)
+	}
+	if res.Retries != 1 || client.calls != 2 {
+		t.Fatalf("retries=%d calls=%d", res.Retries, client.calls)
 	}
 }
 

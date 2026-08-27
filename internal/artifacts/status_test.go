@@ -41,3 +41,14 @@ func TestWriteStatusAtomic(t *testing.T) {
 		t.Fatal("status.json should exist")
 	}
 }
+
+func TestWriteStatusReturnsFilesystemErrors(t *testing.T) {
+	root := t.TempDir()
+	notDir := filepath.Join(root, "not-a-directory")
+	if err := os.WriteFile(notDir, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteStatus(notDir, &Status{Healthy: true}); err == nil {
+		t.Fatal("WriteStatus swallowed filesystem error")
+	}
+}

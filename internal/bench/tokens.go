@@ -2,31 +2,15 @@
 // a naive/skilled Grep+Read baseline. Used by `max-context bench`.
 package bench
 
-import (
-	"fmt"
-	"sync"
+import "github.com/maxcontext/max-context/internal/contextpack"
 
-	"github.com/pkoukk/tiktoken-go"
-)
+// Counter is retained as a compatibility alias for the benchmark package.
+// Product code and benchmarks now share the same compiled-in tokenizer.
+type Counter = contextpack.Counter
 
-// Counter wraps a tiktoken encoder. Safe for concurrent use.
-type Counter struct {
-	mu  sync.Mutex
-	enc *tiktoken.Tiktoken
-}
-
-// NewCounter loads the cl100k_base encoding (matches modern OpenAI/Claude approximations).
+// NewCounter loads the compiled-in cl100k_base encoding. The vocabulary lives
+// in the Go module, so tests and benchmark runs never depend on a first-run
+// network download or a mutable machine cache.
 func NewCounter() (*Counter, error) {
-	enc, err := tiktoken.GetEncoding("cl100k_base")
-	if err != nil {
-		return nil, fmt.Errorf("load tiktoken encoding: %w", err)
-	}
-	return &Counter{enc: enc}, nil
-}
-
-// Count returns the number of cl100k_base tokens in s.
-func (c *Counter) Count(s string) int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return len(c.enc.Encode(s, nil, nil))
+	return contextpack.NewCounter()
 }

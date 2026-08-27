@@ -111,7 +111,10 @@ func Run(root string, questions []Question, opts RunOptions) (*Results, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invoke %s for %s: %w", q.Tool, q.ID, err)
 		}
-		mcTokens := counter.Count(resp)
+		mcTokens, err := counter.Count(resp)
+		if err != nil {
+			return nil, fmt.Errorf("count max-context response tokens for %s: %w", q.ID, err)
+		}
 		if mcTokens == 0 {
 			return nil, fmt.Errorf("%s: %s returned an empty response; the question or its mc_args is stale", q.ID, q.Tool)
 		}

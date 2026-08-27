@@ -23,11 +23,11 @@ import (
 )
 
 type scored struct {
-	status   string
-	inTok    int
-	points   int
-	maxPts   int
-	graded   bool
+	status string
+	inTok  int
+	points int
+	maxPts int
+	graded bool
 }
 
 func main() {
@@ -66,7 +66,7 @@ func main() {
 	}
 
 	arms := []runlog.Arm{}
-	for _, a := range []runlog.Arm{runlog.ArmGrep, runlog.ArmMaxContext, runlog.ArmHybrid} {
+	for _, a := range []runlog.Arm{runlog.ArmGrep, runlog.ArmMaxContext, runlog.ArmContext, runlog.ArmHybrid} {
 		if armsSeen[a] {
 			arms = append(arms, a)
 		}

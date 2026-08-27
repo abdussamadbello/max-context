@@ -164,7 +164,13 @@ func PrepareQueries(db *sql.DB) (*Queries, error) {
 	q.GetStats, err = db.Prepare(`
 		SELECT
 			(SELECT COUNT(*) FROM functions),
-			(SELECT COUNT(DISTINCT file_path) FROM functions),
+			(SELECT COUNT(*) FROM (
+				SELECT file_path FROM file_summaries
+				UNION SELECT file_path FROM functions
+				UNION SELECT file_path FROM types
+				UNION SELECT file_path FROM imports
+				UNION SELECT file_path FROM documents
+			)),
 			(SELECT COUNT(*) FROM types)
 	`)
 	if err != nil {

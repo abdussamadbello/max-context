@@ -1,6 +1,7 @@
 package indexer
 
 import (
+	"bytes"
 	"context"
 	"path/filepath"
 	"strings"
@@ -136,6 +137,7 @@ func ParseFile(ctx context.Context, filePath string, content []byte) (*ParseResu
 		return &ParseResult{}, nil
 	}
 
+	content = unwrapOuterMarkdownFence(content)
 	tree, err := treesitter.Parse(ctx, content, lang)
 	if err != nil {
 		return nil, err
@@ -158,6 +160,35 @@ func ParseFile(ctx context.Context, filePath string, content []byte) (*ParseResu
 	default:
 		return parseGeneric(slashPath, string(lang), groups), nil
 	}
+}
+
+// unwrapOuterMarkdownFence accepts source files exported as one Markdown code
+// block. Replacing only the fence lines preserves every source line number,
+// while allowing Tree-sitter to index otherwise valid code. Normal source and
+// files containing interior fenced examples are unchanged.
+func unwrapOuterMarkdownFence(content []byte) []byte {
+	lines := bytes.Split(content, []byte("\n"))
+	first, last := -1, -1
+	for i, line := range lines {
+		if len(bytes.TrimSpace(line)) != 0 {
+			first = i
+			break
+		}
+	}
+	for i := len(lines) - 1; i >= 0; i-- {
+		if len(bytes.TrimSpace(lines[i])) != 0 {
+			last = i
+			break
+		}
+	}
+	if first < 0 || last <= first || !bytes.HasPrefix(bytes.TrimSpace(lines[first]), []byte("```")) ||
+		!bytes.Equal(bytes.TrimSpace(lines[last]), []byte("```")) {
+		return content
+	}
+	copyLines := append([][]byte(nil), lines...)
+	copyLines[first] = nil
+	copyLines[last] = nil
+	return bytes.Join(copyLines, []byte("\n"))
 }
 
 // parseGeneric handles every language except Go. It uses the legacy capture

@@ -37,10 +37,10 @@ const (
 // Task is one experiment task. Authored from USER INTENT — it must NOT name a
 // max-context tool or pre-supply search terms (that would bias the arms).
 type Task struct {
-	ID         string   `json:"id"`
-	Repo       string   `json:"repo"`
-	Type       TaskType `json:"type"`
-	Intent     string   `json:"intent"`      // the user-facing task text (primary phrasing)
+	ID          string   `json:"id"`
+	Repo        string   `json:"repo"`
+	Type        TaskType `json:"type"`
+	Intent      string   `json:"intent"`      // the user-facing task text (primary phrasing)
 	Paraphrases []string `json:"paraphrases"` // ≥2 alternate phrasings; reduce prompt-sensitivity
 	// PlantedGrepWin marks tasks expected to favor grep (prose/"why"/dynamic
 	// dispatch). Reporting these honestly maps the boundary of where MC helps.
@@ -51,8 +51,8 @@ type Task struct {
 
 // RubricItem is one atomic, pre-registered grading criterion for edit tasks.
 type RubricItem struct {
-	ID       string `json:"id"`
-	Criterion string `json:"criterion"` // e.g. "names the correct primary file"
+	ID        string `json:"id"`
+	Criterion string `json:"criterion"`  // e.g. "names the correct primary file"
 	MaxPoints int    `json:"max_points"` // 1 for binary, 2 for ordinal
 }
 
@@ -75,16 +75,19 @@ type Key struct {
 
 // Protocol is the full pre-registered experiment, hashed before any run.
 type Protocol struct {
-	Version       string `json:"version"`
-	Repos         []Repo `json:"repos"`
-	Tasks         []Task `json:"tasks"`
-	Keys          []Key  `json:"keys"`
-	TaskModel     string `json:"task_model"`     // model under test
-	JudgeModel    string `json:"judge_model"`    // DIFFERENT model for judging
-	Replicates    int    `json:"replicates"`     // k runs per (task,arm)
-	MaxTurns      int    `json:"max_turns"`
-	TokenBudget   int    `json:"token_budget"`
-	SystemSkeleton string `json:"system_skeleton"` // shared prompt skeleton (both arms)
+	Version        string            `json:"version"`
+	Repos          []Repo            `json:"repos"`
+	Tasks          []Task            `json:"tasks"`
+	Keys           []Key             `json:"keys"`
+	TaskModel      string            `json:"task_model"`  // model under test
+	JudgeModel     string            `json:"judge_model"` // DIFFERENT model for judging
+	Replicates     int               `json:"replicates"`  // k runs per (task,arm)
+	MaxTurns       int               `json:"max_turns"`
+	TokenBudget    int               `json:"token_budget"`
+	ContextBudget  int               `json:"context_budget,omitempty"`
+	Arms           []string          `json:"arms,omitempty"`
+	Playbooks      map[string]string `json:"playbooks,omitempty"`
+	SystemSkeleton string            `json:"system_skeleton"` // shared prompt skeleton (both arms)
 }
 
 // Load reads a protocol JSON file.
@@ -110,22 +113,40 @@ func (p *Protocol) KeyFor(taskID string) (Key, bool) {
 	return Key{}, false
 }
 
-// Hash returns a stable SHA-256 of the protocol's grading-relevant content
-// (tasks + keys + models), so pre-registration can be proven: the hash is
+// Hash returns a stable SHA-256 of the protocol's grading-relevant content,
+// so pre-registration can be proven: the hash is
 // committed before running, and recomputed after to show nothing changed.
 func (p *Protocol) Hash() string {
-	// Marshal a canonicalized subset with sorted task/key order.
+	// Marshal a canonicalized subset with sorted repo/task/key order.
+	repos := append([]Repo(nil), p.Repos...)
+	sort.Slice(repos, func(i, j int) bool {
+		if repos[i].Name != repos[j].Name {
+			return repos[i].Name < repos[j].Name
+		}
+		return repos[i].SHA < repos[j].SHA
+	})
 	tasks := append([]Task(nil), p.Tasks...)
 	sort.Slice(tasks, func(i, j int) bool { return tasks[i].ID < tasks[j].ID })
 	keys := append([]Key(nil), p.Keys...)
 	sort.Slice(keys, func(i, j int) bool { return keys[i].TaskID < keys[j].TaskID })
 	canon := struct {
-		Version    string `json:"version"`
-		Tasks      []Task `json:"tasks"`
-		Keys       []Key  `json:"keys"`
-		TaskModel  string `json:"task_model"`
-		JudgeModel string `json:"judge_model"`
-	}{p.Version, tasks, keys, p.TaskModel, p.JudgeModel}
+		Version        string            `json:"version"`
+		Repos          []Repo            `json:"repos"`
+		Tasks          []Task            `json:"tasks"`
+		Keys           []Key             `json:"keys"`
+		TaskModel      string            `json:"task_model"`
+		JudgeModel     string            `json:"judge_model"`
+		Replicates     int               `json:"replicates"`
+		MaxTurns       int               `json:"max_turns"`
+		TokenBudget    int               `json:"token_budget"`
+		ContextBudget  int               `json:"context_budget"`
+		Arms           []string          `json:"arms"`
+		Playbooks      map[string]string `json:"playbooks"`
+		SystemSkeleton string            `json:"system_skeleton"`
+	}{
+		p.Version, repos, tasks, keys, p.TaskModel, p.JudgeModel, p.Replicates, p.MaxTurns,
+		p.TokenBudget, p.ContextBudget, p.Arms, p.Playbooks, p.SystemSkeleton,
+	}
 	b, _ := json.Marshal(canon)
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])

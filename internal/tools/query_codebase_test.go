@@ -3,6 +3,7 @@ package tools
 import (
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/maxcontext/max-context/internal/db"
@@ -445,5 +446,105 @@ func TestQueryCodebase_ExpansionFallback(t *testing.T) {
 	}
 	if !out.ExpandedQuery {
 		t.Error("expanded_query flag missing")
+	}
+}
+
+func TestQueryCodebase_FileFilterAndFilesScope(t *testing.T) {
+	dir := t.TempDir()
+	database, err := db.Open(filepath.Join(dir, "files.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	if err := db.Migrate(database); err != nil {
+		t.Fatal(err)
+	}
+	q, err := db.PrepareQueries(database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer q.Close()
+
+	for _, file := range []string{"internal/db/schema.go", "internal/http/schema.go", "cmd/schema.go"} {
+		if _, err := q.InsertFunction.Exec("Migrate", file, 1, 5, "go", 1, "func Migrate() {}", "", "Migrate()"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// File search uses the index inventory, so even a source file with no
+	// functions, types, or imports remains discoverable.
+	if _, err := q.InsertFileSummary.Exec("internal/empty/schema_notes.go", "go", 0, 0, 0, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.RebuildAllFTS(database); err != nil {
+		t.Fatal(err)
+	}
+	h := QueryCodebaseHandler(database, q, "")
+
+	resp, err := h(json.RawMessage(`{"query":"Migrate","file_filter":"internal/db/**"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		Results     []searchResult `json:"results"`
+		Suggestions []string       `json:"suggestions"`
+	}
+	if err := json.Unmarshal([]byte(resp.([]mcp.ContentItem)[0].Text), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Results) != 1 || out.Results[0].File != "internal/db/schema.go" {
+		t.Fatalf("filtered results = %+v", out.Results)
+	}
+
+	resp, err = h(json.RawMessage(`{"query":"Migrate","file_filter":"does-not-exist/**"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(resp.([]mcp.ContentItem)[0].Text), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Results) != 0 || len(out.Suggestions) != 0 {
+		t.Fatalf("out-of-filter result metadata = %+v", out)
+	}
+
+	resp, err = h(json.RawMessage(`{"query":"schema","scope":"files","file_filter":"internal/**/*.go","max_results":10}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(resp.([]mcp.ContentItem)[0].Text), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Results) != 3 {
+		t.Fatalf("file-scope results = %+v, want three internal files", out.Results)
+	}
+	for _, result := range out.Results {
+		if result.Kind != "file" || !strings.HasPrefix(result.File, "internal/") {
+			t.Errorf("unexpected file result: %+v", result)
+		}
+	}
+
+	if _, err := h(json.RawMessage(`{"query":"Migrate","scope":"made-up"}`)); err == nil {
+		t.Fatal("invalid scope should return invalid params")
+	} else if rpcErr, ok := err.(*mcp.RPCError); !ok || rpcErr.Code != mcp.CodeInvalidParams {
+		t.Fatalf("invalid scope error = %T %v", err, err)
+	}
+}
+
+func TestCompilePathGlob(t *testing.T) {
+	tests := []struct {
+		pattern string
+		path    string
+		want    bool
+	}{
+		{"*.go", "internal/db/schema.go", true},
+		{"src/**/*.ts", "src/store.ts", true},
+		{"src/**/*.ts", "src/lib/store.ts", true},
+		{"internal/db/**", "internal/http/schema.go", false},
+		{"internal/db/**", "internal/db/schema.go", true},
+		{"internal/[dt]b/**", "internal/db/schema.go", true},
+	}
+	for _, tt := range tests {
+		if got := pathMatchesFilter(tt.path, tt.pattern); got != tt.want {
+			t.Errorf("pathMatchesFilter(%q, %q) = %v, want %v", tt.path, tt.pattern, got, tt.want)
+		}
 	}
 }

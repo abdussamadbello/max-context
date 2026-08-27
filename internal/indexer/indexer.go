@@ -3,16 +3,16 @@ package indexer
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
-	"sync"
 	"time"
 	"unicode/utf8"
 
 	"github.com/maxcontext/max-context/internal/artifacts"
 	"github.com/maxcontext/max-context/internal/db"
+	"github.com/maxcontext/max-context/pkg/treesitter"
 )
 
 const batchSize = 500
@@ -25,6 +25,7 @@ type Options struct {
 	Include     []string // include globs (nil = everything)
 	Exclude     []string // extra exclude patterns (gitignore-style)
 	MaxFileSize int64    // skip files larger than this many bytes (0 = unlimited)
+	Version     string   // binary version written to generated status metadata
 }
 
 func optsOrNil(opts []*Options) *Options {
@@ -60,6 +61,10 @@ func (o *Options) skipsFile(root, relPath string, excl *IgnoreMatcher) bool {
 // RunWorker consumes paths from ch and reindexes each file. Empty string means full reindex (Phase 4: .reindex-queue).
 func RunWorker(ctx context.Context, root string, database *sql.DB, q *db.Queries, ch <-chan string, opts ...*Options) {
 	o := optsOrNil(opts)
+	artifactVersion := ""
+	if o != nil {
+		artifactVersion = o.Version
+	}
 	var excl *IgnoreMatcher
 	if o != nil && len(o.Exclude) > 0 {
 		excl = &IgnoreMatcher{patterns: o.Exclude}
@@ -82,22 +87,20 @@ func RunWorker(ctx context.Context, root string, database *sql.DB, q *db.Queries
 					// index that tools must be able to warn about.
 					fmt.Fprintf(os.Stderr, "max-context: full index failed: %v\n", err)
 					artifacts.RecordIndexError(database, "", err.Error())
+					if statusErr := artifacts.WriteIndexStatus(filepath.Join(root, ".max-context"), database, artifactVersion); statusErr != nil {
+						fmt.Fprintf(os.Stderr, "max-context: write failed-index status: %v\n", statusErr)
+					}
 				} else {
-					artifacts.ClearAllIndexErrors(database)
+					artifacts.ClearErrorsAfterFullIndex(database)
 					artifacts.SetLastFullIndex(database, time.Now())
+					artifacts.ClearIndexError(database, artifacts.ArtifactErrorKey)
+					if err := artifacts.WriteIndexArtifacts(filepath.Join(root, ".max-context"), database, artifactVersion); err != nil {
+						fmt.Fprintf(os.Stderr, "max-context: write index artifacts failed: %v\n", err)
+						artifacts.RecordIndexError(database, artifacts.ArtifactErrorKey, err.Error())
+						_ = artifacts.WriteIndexStatus(filepath.Join(root, ".max-context"), database, artifactVersion)
+					}
 				}
 				cache.Invalidate() // full reindex rewrote everything; rebuild lazily
-				dir := filepath.Join(root, ".max-context")
-				_ = artifacts.WriteSummary(dir, database)
-				_ = artifacts.WriteArchitecture(dir, database)
-				var totalFuncs, totalFiles int
-				_ = database.QueryRow("SELECT COUNT(*) FROM functions").Scan(&totalFuncs)
-				_ = database.QueryRow("SELECT COUNT(DISTINCT file_path) FROM functions").Scan(&totalFiles)
-				h := artifacts.ReadIndexHealth(database)
-				_ = artifacts.WriteStatus(dir, &artifacts.Status{
-					Healthy: h.Healthy, LastFullIndex: h.LastFullIndex, LastIncrementalIndex: h.LastIncrementalIndex,
-					TotalFunctions: totalFuncs, TotalFiles: totalFiles, Version: "0.1.0",
-				})
 				continue
 			}
 			if o.skipsFile(root, path, excl) {
@@ -138,7 +141,10 @@ func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries, op
 	if o != nil {
 		exclude, include, extensions, maxFileSize = o.Exclude, o.Include, o.Extensions, o.MaxFileSize
 	}
-	ignore, _ := NewIgnoreMatcherWithExtra(root, exclude)
+	ignore, err := NewIgnoreMatcherWithExtra(root, exclude)
+	if err != nil {
+		return fmt.Errorf("load ignore rules: %w", err)
+	}
 	sc := &Scanner{Root: root, Ignore: ignore, Extensions: extensions, Includes: include, MaxFileSize: maxFileSize, IncludeDocs: true}
 	scanned, err := sc.Scan()
 	if err != nil {
@@ -182,45 +188,8 @@ func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries, op
 		return err
 	}
 
-	// Parse files on a worker pool: tree-sitter parsing is CPU-bound and
-	// per-file independent (each Parse call creates its own parser; the
-	// compiled-query cache is mutex-protected). Results land in a slice
-	// indexed by file position, then aggregate in scan order below, so the
-	// output is byte-identical to the old sequential loop. All DB work stays
-	// on this goroutine.
-	parsed := make([]*ParseResult, len(files))
-	jobs := make(chan int)
-	var wg sync.WaitGroup
-	workers := runtime.NumCPU()
-	if workers > len(files) {
-		workers = len(files)
-	}
-	for w := 0; w < workers; w++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for i := range jobs {
-				if ctx.Err() != nil {
-					continue
-				}
-				content, err := os.ReadFile(filepath.Join(root, files[i]))
-				if err != nil {
-					continue
-				}
-				res, err := ParseFile(ctx, files[i], content)
-				if err != nil {
-					continue
-				}
-				parsed[i] = res
-			}
-		}()
-	}
-	for i := range files {
-		jobs <- i
-	}
-	close(jobs)
-	wg.Wait()
-	if err := ctx.Err(); err != nil {
+	parsed, err := parseSourceFiles(ctx, root, files)
+	if err != nil {
 		return err
 	}
 
@@ -248,6 +217,13 @@ func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries, op
 		// (kind=constant), so query_codebase + get_definition find them.
 		for _, c := range res.Consts {
 			allTypes = append(allTypes, constToType(c))
+		}
+	}
+	for i, res := range parsed {
+		if res != nil {
+			if err := insertFileSummary(tx, files[i], res); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -342,20 +318,52 @@ func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries, op
 	return tx.Commit()
 }
 
-// insertDocument reads one non-code file and writes its documents row. Unreadable
-// or non-UTF-8 files are skipped silently — never an index failure.
+// insertDocument reads one non-code file and writes its documents row. Read and
+// encoding failures abort the transaction so a partial index is never reported
+// as healthy.
 func insertDocument(tx *sql.Tx, root, relPath string) error {
 	kind, ok := DocKindForPath(relPath)
 	if !ok {
 		return nil
 	}
 	content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(relPath)))
-	if err != nil || !utf8.Valid(content) {
-		return nil
+	if err != nil {
+		return fmt.Errorf("read document %s: %w", relPath, err)
+	}
+	if !utf8.Valid(content) {
+		return fmt.Errorf("document %s is not valid UTF-8", relPath)
 	}
 	_, err = tx.Exec(
 		"INSERT INTO documents (file_path, title, kind, content) VALUES (?, ?, ?, ?)",
 		filepath.ToSlash(relPath), docTitle(relPath, content), kind, string(content),
+	)
+	return err
+}
+
+// insertFileSummary records every parsed source file, including files that have
+// no symbols or imports. Besides keeping the existing aggregate table useful,
+// this is the authoritative inventory used by query_codebase scope=files.
+func insertFileSummary(tx *sql.Tx, path string, res *ParseResult) error {
+	language := "unknown"
+	if lang, ok := treesitter.LanguageForPath(path); ok {
+		language = string(lang)
+	}
+	top := make([]string, 0, 5)
+	for _, fn := range res.Functions {
+		top = append(top, fn.Name)
+		if len(top) == 5 {
+			break
+		}
+	}
+	topJSON, err := json.Marshal(top)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(`
+		INSERT OR REPLACE INTO file_summaries
+			(file_path, language, function_count, type_count, import_count, top_functions, detected_patterns)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		filepath.ToSlash(path), language, len(res.Functions), len(res.Types)+len(res.Consts), len(res.Imports), string(topJSON), "[]",
 	)
 	return err
 }
@@ -377,6 +385,12 @@ func IndexDocFile(ctx context.Context, root, relPath string, database *sql.DB) e
 	path := filepath.ToSlash(relPath)
 	if _, err := tx.Exec("DELETE FROM documents WHERE file_path = ?", path); err != nil {
 		return err
+	}
+	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(relPath))); err != nil {
+		if os.IsNotExist(err) {
+			return tx.Commit()
+		}
+		return fmt.Errorf("stat document %s: %w", relPath, err)
 	}
 	if err := insertDocument(tx, root, relPath); err != nil {
 		return err
@@ -575,6 +589,9 @@ func IndexFile(ctx context.Context, root string, relPath string, database *sql.D
 
 	res, err := ParseFile(ctx, relPath, content)
 	if err != nil {
+		return err
+	}
+	if err := insertFileSummary(tx, path, res); err != nil {
 		return err
 	}
 

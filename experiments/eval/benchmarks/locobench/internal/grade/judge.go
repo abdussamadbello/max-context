@@ -12,10 +12,10 @@ import (
 
 // RubricScore is the judge's per-item scoring of one edit answer.
 type RubricScore struct {
-	Items     map[string]int `json:"items"`      // rubric item id -> points awarded
-	Total     int            `json:"total"`      // sum of awarded points
-	MaxTotal  int            `json:"max_total"`  // sum of max points
-	Reasoning string         `json:"reasoning"`  // judge's brief justification
+	Items     map[string]int `json:"items"`     // rubric item id -> points awarded
+	Total     int            `json:"total"`     // sum of awarded points
+	MaxTotal  int            `json:"max_total"` // sum of max points
+	Reasoning string         `json:"reasoning"` // judge's brief justification
 }
 
 // Judge scores an open-ended (edit) answer against a pre-registered rubric and a
@@ -54,11 +54,14 @@ func (j *Judge) Score(ctx context.Context, task spec.Task, key spec.Key, candida
 		task.Intent, key.ReferenceAnswer, strings.Join(rubricLines, "\n"), candidate)
 
 	out, err := j.client.Create(ctx, agent.CreateParams{
-		Model: j.model, MaxTokens: 1024, Temperature: 0, System: judgeSystem,
+		Model: j.model, MaxTokens: 4096, Temperature: 0, System: judgeSystem,
 		Messages: []agent.Message{{Role: "user", Content: []agent.ContentBlock{{Type: "text", Text: prompt}}}},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("judge call: %w", err)
+	}
+	if out.StopReason == "max_tokens" {
+		return nil, fmt.Errorf("judge exhausted its output-token budget")
 	}
 	var text string
 	for _, b := range out.Content {

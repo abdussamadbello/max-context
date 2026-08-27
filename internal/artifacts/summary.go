@@ -3,6 +3,7 @@ package artifacts
 import (
 	"bytes"
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"text/template"
@@ -32,19 +33,36 @@ func WriteSummary(dir string, database *sql.DB) error {
 		return err
 	}
 	var totalFuncs, totalFiles int
-	_ = database.QueryRow("SELECT COUNT(*) FROM functions").Scan(&totalFuncs)
-	_ = database.QueryRow("SELECT COUNT(DISTINCT file_path) FROM functions").Scan(&totalFiles)
-	rows, _ := database.Query("SELECT file_path FROM functions GROUP BY file_path ORDER BY file_path LIMIT 20")
-	var dirs []string
-	if rows != nil {
-		for rows.Next() {
-			var p string
-			if rows.Scan(&p) == nil {
-				dirs = append(dirs, p)
-			}
-		}
-		rows.Close()
+	if err := database.QueryRow("SELECT COUNT(*) FROM functions").Scan(&totalFuncs); err != nil {
+		return fmt.Errorf("count functions: %w", err)
 	}
+	if err := database.QueryRow(`SELECT COUNT(*) FROM (
+		SELECT file_path FROM file_summaries
+		UNION SELECT file_path FROM functions
+		UNION SELECT file_path FROM types
+		UNION SELECT file_path FROM imports
+		UNION SELECT file_path FROM documents
+	)`).Scan(&totalFiles); err != nil {
+		return fmt.Errorf("count files: %w", err)
+	}
+	rows, err := database.Query("SELECT file_path FROM functions GROUP BY file_path ORDER BY file_path LIMIT 20")
+	if err != nil {
+		return fmt.Errorf("list structure files: %w", err)
+	}
+	var dirs []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan structure file: %w", err)
+		}
+		dirs = append(dirs, p)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("list structure files: %w", err)
+	}
+	rows.Close()
 	dirSummary := "See architecture.md."
 	if len(dirs) > 0 {
 		var b bytes.Buffer
@@ -55,17 +73,24 @@ func WriteSummary(dir string, database *sql.DB) error {
 		}
 		dirSummary = b.String()
 	}
-	entryRows, _ := database.Query("SELECT DISTINCT file_path FROM functions WHERE file_path LIKE '%main.%' OR file_path LIKE '%index.%' LIMIT 10")
-	var entries []string
-	if entryRows != nil {
-		for entryRows.Next() {
-			var p string
-			if entryRows.Scan(&p) == nil {
-				entries = append(entries, p)
-			}
-		}
-		entryRows.Close()
+	entryRows, err := database.Query("SELECT DISTINCT file_path FROM functions WHERE file_path LIKE '%main.%' OR file_path LIKE '%index.%' LIMIT 10")
+	if err != nil {
+		return fmt.Errorf("list entry points: %w", err)
 	}
+	var entries []string
+	for entryRows.Next() {
+		var p string
+		if err := entryRows.Scan(&p); err != nil {
+			entryRows.Close()
+			return fmt.Errorf("scan entry point: %w", err)
+		}
+		entries = append(entries, p)
+	}
+	if err := entryRows.Err(); err != nil {
+		entryRows.Close()
+		return fmt.Errorf("list entry points: %w", err)
+	}
+	entryRows.Close()
 	entryPoints := "None."
 	if len(entries) > 0 {
 		var b bytes.Buffer
