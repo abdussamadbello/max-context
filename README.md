@@ -227,11 +227,12 @@ are indexed as plain-text documents regardless of `languages`, searchable via
 When used as a **Claude Code plugin** (install from this repo), you get:
 
 - **PreToolUse hook** — Suggests using `query_codebase` instead of Grep/Read for codebase search
+- **UserPromptSubmit hook** — Compiles a token-budgeted context package for the prompt and injects it (opt-in, see below)
 - **SessionStart hook** — Injects `.max-context/summary.md` and `architecture.md` into context
 - **PreCompact hook** — Appends a session-preserved note to `summary.md` before context compaction
 - **/reindex** — Slash command to run `max-context --reindex` or touch `.max-context/.reindex-queue`
 
-`max-context setup <cli>` also generates `reindex`, `index`, and `status` commands for each editor in its native format — slash commands for Claude Code (`.claude/commands/`), Cursor (`.cursor/commands/`), and VS Code Copilot (`.github/prompts/*.prompt.md`); workflows for Windsurf (`.windsurf/workflows/`); and a documented **Commands** section in the skill file for Codex and Antigravity.
+`max-context setup <cli>` also generates `reindex`, `index`, `status`, and `context` commands for each editor in its native format — slash commands for Claude Code (`.claude/commands/`), Cursor (`.cursor/commands/`), and VS Code Copilot (`.github/prompts/*.prompt.md`); workflows for Windsurf (`.windsurf/workflows/`); and a documented **Commands** section in the skill file for Codex, Antigravity, Hermes, and pi.
 
 **Install (local):** This repo is a local marketplace. In Claude Code, run:
 1. **Add marketplace:** `/plugin marketplace add ./max-context` — use the path to the **repo root** (e.g. `./max-context`, `~/max-context`, or `/home/.../max-context`). Valid formats: `./path`, `owner/repo`, or `https://...`.
@@ -241,7 +242,36 @@ Ensure the `max-context` binary is on your PATH so the MCP server can start. The
 
 ## VS Code Copilot Hooks
 
-Run `max-context setup vscode` to create `.github/hooks/hooks.json` and `.github/hooks/scripts/` (SessionStart, PreCompact, PreToolUse) so VS Code Copilot gets the same grep-interception and session-start context as Claude Code. The hook format is shared; script paths use `${CLAUDE_PROJECT_DIR}/.github/hooks/scripts/`. In this repo, the same hook definitions live under `hooks/` (Claude Code plugin) and `.github/hooks/` (VS Code / project).
+Run `max-context setup vscode` to create `.github/hooks/hooks.json` and `.github/hooks/scripts/` (SessionStart, PreCompact, PreToolUse, UserPromptSubmit) so VS Code Copilot gets the same grep-interception and session-start context as Claude Code. The hook format is shared; script paths use `${CLAUDE_PROJECT_DIR}/.github/hooks/scripts/`. In this repo, the same hook definitions live under `hooks/` (Claude Code plugin) and `.github/hooks/` (VS Code / project).
+
+## Reaching the context compiler from any harness
+
+`context` is a CLI command, not an MCP tool, so it reaches each harness through
+whichever of these layers that harness supports — no per-harness code:
+
+| Layer | Reaches | How |
+|---|---|---|
+| Command file | all 9 setup targets | `max-context setup <cli>` writes a `context` slash command, prompt file, workflow, or skill section |
+| Guidance | all 9 setup targets | the generated SKILL.md / rules file documents when to prefer it over repeated searching |
+| Hook | claude-code, vscode | `UserPromptSubmit` compiles the package automatically, before the agent starts searching |
+
+The hook is **opt-in**, because compiling on every prompt spends budget whether
+or not the task needs retrieval:
+
+```bash
+export MAX_CONTEXT_AUTO_CONTEXT=1        # off unless set
+export MAX_CONTEXT_CONTEXT_BUDGET=2000   # cl100k_base tokens, default 2000
+```
+
+It stays silent — printing nothing, exit 0 — when the index is missing,
+unhealthy, or rebuilding, when `max-context` or `jq` is not on PATH, and for
+prompts under 24 characters (`yes`, `go on`) that name nothing retrievable. A
+hook that breaks the session it decorates is worse than no hook.
+
+Promoting `context` to a sixth MCP tool would reach every MCP-speaking harness
+at once, but tool schemas are re-sent every turn — that permanent cost should be
+paid only once the A/B evaluation in `experiments/eval/benchmarks/locobench`
+shows the packaged-context arm improves total task economics.
 
 ## MCP Resources
 

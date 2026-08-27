@@ -1,13 +1,38 @@
 package setup
 
 import (
+	_ "embed"
 	"path/filepath"
+	"strings"
 )
+
+// The context compiler hook is embedded rather than written as a string literal
+// so the script setup installs is the same reviewable file the Claude Code
+// plugin ships. The plugin reads its copy from hooks/scripts/, which //go:embed
+// cannot reach across package boundaries; TestContextCompilerHookDoesNotDrift
+// asserts the two stay byte-identical.
+//
+//go:embed hooks/context-compiler.sh
+var rawContextCompilerHook string
+
+var contextCompilerHook = normaliseNewlines(rawContextCompilerHook)
 
 // VS Code hooks (Phase 5): same behavior as Claude Code plugin, using .github/hooks and CLAUDE_PROJECT_DIR.
 const vscodeHooksJSON = `{
-  "description": "Max-context: suggest query_codebase, inject architecture at session start, persist summary before compact.",
+  "description": "Max-context: suggest query_codebase, inject architecture at session start, compile task context per prompt, persist summary before compact.",
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PROJECT_DIR}/.github/hooks/scripts/context-compiler.sh",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Grep|Read",
@@ -77,5 +102,15 @@ func writeVSCodeHooks(root string, r *Report) error {
 	if err := writeFileIfAbsent(filepath.Join(scripts, "session-start.sh"), sessionStartScript, 0755, r); err != nil {
 		return err
 	}
-	return writeFileIfAbsent(filepath.Join(scripts, "pre-compact.sh"), preCompactScript, 0755, r)
+	if err := writeFileIfAbsent(filepath.Join(scripts, "pre-compact.sh"), preCompactScript, 0755, r); err != nil {
+		return err
+	}
+	return writeFileIfAbsent(filepath.Join(scripts, "context-compiler.sh"), contextCompilerHook, 0755, r)
+}
+
+// contextCompilerHookIsOptIn reports whether the embedded hook still refuses to
+// run unless MAX_CONTEXT_AUTO_CONTEXT is set. The compiler is experimental and
+// costs budget on every prompt; setup must never install it hot by default.
+func contextCompilerHookIsOptIn() bool {
+	return strings.Contains(contextCompilerHook, `"${MAX_CONTEXT_AUTO_CONTEXT:-0}" != "1"`)
 }

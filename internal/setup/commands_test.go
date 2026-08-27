@@ -8,8 +8,8 @@ import (
 )
 
 func TestCommandsCatalog(t *testing.T) {
-	if len(Commands) != 3 {
-		t.Fatalf("expected 3 commands, got %d", len(Commands))
+	if len(Commands) != 4 {
+		t.Fatalf("expected 4 commands, got %d", len(Commands))
 	}
 	names := map[string]string{}
 	for _, c := range Commands {
@@ -19,6 +19,7 @@ func TestCommandsCatalog(t *testing.T) {
 		"reindex": "max-context --reindex",
 		"index":   "max-context --index",
 		"status":  "max-context --status",
+		"context": `max-context context --task "<the task>" --budget 4000`,
 	} {
 		if names[name] != shell {
 			t.Errorf("command %q: want shell %q, got %q", name, shell, names[name])

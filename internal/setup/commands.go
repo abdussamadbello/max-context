@@ -38,8 +38,26 @@ var statusCmd = Command{
 	Body:        "Reports whether the index is healthy and how many files and symbols are indexed.",
 }
 
+// contextCmd is the one catalog entry that is not an MCP tool. The compiler is
+// deliberately CLI-only while its session economics are evaluated, so the
+// command file is how every harness reaches it — including the five that have
+// no MCP client, and the four whose hooks can run it automatically.
+var contextCmd = Command{
+	Name:        "context",
+	Description: "Compile a token-budgeted context package for a task (experimental).",
+	Shell:       `max-context context --task "<the task>" --budget 4000`,
+	Body: "Routes one task across indexed code, docs, call relationships, architecture, and " +
+		"the current diff, then returns the highest-priority evidence that fits a hard budget. " +
+		"Substitute the real task text for `<the task>`.\n\n" +
+		"Use it to start a task with the evidence already in hand instead of searching for it. " +
+		"The response reports `tokens_used`, `complete`, and what was omitted, so a truncated " +
+		"package is visible rather than silent.\n\n" +
+		"Budgets use the `cl100k_base` profile, which is an approximation for models tokenising " +
+		"differently — the profile is named in every response.",
+}
+
 // Commands is the canonical catalog rendered into every IDE.
-var Commands = []Command{reindexCmd, indexCmd, statusCmd}
+var Commands = []Command{reindexCmd, indexCmd, statusCmd, contextCmd}
 
 // renderSkillCommandsSection renders the catalog as a "## Commands" markdown
 // block for editors without a native command mechanism (Codex, Antigravity).
