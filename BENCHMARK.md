@@ -50,6 +50,48 @@ Track these separately from this benchmark:
 
 The current A/B findings (`experiments/eval/benchmarks/in-house/FINDINGS.md`) show the important distinction: early max-context responses were cheap per call but expensive per session because the model looped; after terser responses, `get_definition`, impact steering, loop guards, and canonical overloaded-symbol ranking, the loop behavior is explicitly guarded against. The published runs find **equal answer quality to a skilled grep agent** on the tasks measured, at **up to 94% fewer tokens (≈90% in aggregate)** on call-graph / "what-calls-this" questions, plus a strict recall win on **aliased imports** (a controlled task where grep found 0 of 5 callers and max-context found all 5). Honest scope: small sample (1 repo family, 1 replicate); quality is a tie, not a broad win.
 
+## Context compiler
+
+The experimental `max-context context` command is measured by its own question
+set, deliberately kept out of the table above: its questions are whole tasks
+rather than single lookups, so averaging the two would blend a per-call cost
+with a per-task one and move the headline ratio for a reason unrelated to either.
+
+| Questions | context per task (avg) | Naive (avg) | Skilled (avg) | vs Naive | vs Skilled |
+|---|---|---|---|---|---|
+| 6 | 3,967 | 37,658 | 9,906 | 9.5× | 2.5× |
+
+**Read this as a cost, not a win.** The compiler is roughly 3× the cost of one
+tool call (1,214 avg) and only 2.5× cheaper than a skilled grep agent. It is
+worth its budget only if one package removes more than about three tool calls
+from a session — which this benchmark cannot answer, because it measures single
+calls. That is the locobench A/B's question.
+
+### The cost is a dial, not a measurement
+
+Sweeping the budget over the same six tasks shows the compiler spends whatever
+it is given, up to a ceiling set by the per-kind caps rather than the budget:
+
+| Budget | Avg used | Utilisation | Complete | Avg omitted |
+|---|---|---|---|---|
+| 1,000 | 974 | 97.4% | 0/6 | 78 |
+| 2,000 | 1,957 | 97.9% | 0/6 | 74 |
+| 4,000 | 3,967 | 99.2% | 0/6 | 66 |
+| 8,000 | 7,756 | 96.9% | 0/6 | 54 |
+| 16,000 | 10,220 | 63.9% | 0/6 | 51 |
+
+So "what does a package cost?" has no answer independent of the budget you set,
+and any comparison against it must state the budget. Above ~10K tokens the
+budget stops binding and `evidenceKindCaps` does.
+
+**Known defect surfaced by this sweep:** `complete` is `Omitted.Total == 0`, and
+`Omitted.Total` counts candidates dropped by the per-kind caps as well as those
+dropped for budget (`internal/contextpack/package.go`, the cap `continue` above
+the budget trial). At 16,000 tokens the package uses 64% of its budget and still
+reports `complete: false` with ~51 omissions that no budget can admit. A caller
+raising the budget to clear that flag will pay more and never clear it. The two
+omission causes need separating before the flag means anything.
+
 ## Reproduce
 
 ```bash
@@ -57,6 +99,9 @@ git clone https://github.com/maxcontext/max-context
 cd max-context && make build
 ./bin/max-context --index
 ./bin/max-context bench -repo . -questions benchmark/questions/max-context.json -out benchmark/runs/max-context
+
+# Context compiler (separate question set, task-shaped):
+./bin/max-context bench -repo . -questions benchmark/questions/max-context-context.json -out benchmark/runs/max-context-context
 ```
 
 ## Per-repo results

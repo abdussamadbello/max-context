@@ -1,0 +1,68 @@
+[
+  {
+    "id": "C01",
+    "text": "Change how the file watcher debounces filesystem events.",
+    "category": "task",
+    "mc_tool": "context",
+    "baseline_terms": ["debounce", "watchDebounceMs"],
+    "mc_args": {
+      "task": "change how the file watcher debounces filesystem events",
+      "budget": 4000
+    }
+  },
+  {
+    "id": "C02",
+    "text": "Add a new source language to the indexer.",
+    "category": "task",
+    "mc_tool": "context",
+    "baseline_terms": ["LanguageExtensions", "parser"],
+    "mc_args": {
+      "task": "add a new source language to the indexer",
+      "budget": 4000
+    }
+  },
+  {
+    "id": "C03",
+    "text": "Change how the token budget is enforced in tool responses.",
+    "category": "task",
+    "mc_tool": "context",
+    "baseline_terms": ["token_budget", "TokenBudget"],
+    "mc_args": {
+      "task": "change how the token budget is enforced in tool responses",
+      "budget": 4000
+    }
+  },
+  {
+    "id": "C04",
+    "text": "Debug why the index reports unhealthy after a partial reindex.",
+    "category": "task",
+    "mc_tool": "context",
+    "baseline_terms": ["reindexInProgress", "healthy"],
+    "mc_args": {
+      "task": "debug why the index reports unhealthy after a partial reindex",
+      "budget": 4000
+    }
+  },
+  {
+    "id": "C05",
+    "text": "Review how MCP tool schemas are registered and budgeted.",
+    "category": "task",
+    "mc_tool": "context",
+    "baseline_terms": ["RegisterAll", "ToolSchema"],
+    "mc_args": {
+      "task": "review how MCP tool schemas are registered and budgeted",
+      "budget": 4000
+    }
+  },
+  {
+    "id": "C06",
+    "text": "Understand how setup writes configuration for each harness.",
+    "category": "task",
+    "mc_tool": "context",
+    "baseline_terms": ["Harness", "mcpConfigPath"],
+    "mc_args": {
+      "task": "understand how setup writes configuration for each harness",
+      "budget": 4000
+    }
+  }
+]
