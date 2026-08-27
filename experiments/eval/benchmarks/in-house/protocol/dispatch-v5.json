@@ -1,0 +1,63 @@
+{
+  "version": "dispatch-v5",
+  "task_model": "claude-sonnet-4-6",
+  "judge_model": "claude-haiku-4-5-20251001",
+  "replicates": 1,
+  "max_turns": 15,
+  "token_budget": 0,
+  "system_skeleton": "You are answering a question about a codebase. Use the tools available to you. Name each calling function.",
+  "repos": [
+    {
+      "name": "dispatch",
+      "clone_url": "fixtures/dispatch",
+      "sha": "",
+      "lang": "go"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "D01",
+      "repo": "dispatch",
+      "type": "impact",
+      "intent": "List every function that delivers a notification by calling Send through the Notifier interface. Name each calling function.",
+      "paraphrases": [
+        "Which functions dispatch through the Notifier interface to reach a Send implementation?",
+        "Enumerate the callers that reach EmailNotifier.Send or SMSNotifier.Send, by enclosing function."
+      ]
+    },
+    {
+      "id": "D02",
+      "repo": "dispatch",
+      "type": "impact",
+      "intent": "List every function that delivers a notification by calling Send through the Notifier interface. Name each calling function.",
+      "paraphrases": [
+        "Which functions dispatch through the Notifier interface to reach a Send implementation?",
+        "Enumerate the callers that reach EmailNotifier.Send or SMSNotifier.Send, by enclosing function."
+      ]
+    }
+  ],
+  "keys": [
+    {
+      "task_id": "D01",
+      "expected_symbols": [
+        "DeliverAlert",
+        "BroadcastAll"
+      ],
+      "oracle": "hand-authored controlled repo. Notifier declared notifier.go:6 with one method, Send. Implementations: EmailNotifier.Send (email.go:8), SMSNotifier.Send (sms.go:10). Interface-dispatched call sites: pipeline.go:8 (DeliverAlert, receiver is the Notifier parameter n), pipeline.go:13 (BroadcastAll, receiver is the range variable n over []Notifier). MetricsBuffer.Send (metrics.go:15) is NOT a Notifier use: FlushMetrics (metrics.go:21) calls it on the concrete type at metrics.go:22, so FlushMetrics is a false positive for this question and is deliberately excluded from the gold set. No call site names EmailNotifier or SMSNotifier.",
+      "oracle_version": "manual (controlled)",
+      "human_verified": true,
+      "notes": "INTERFACE DISPATCH test, default-confidence arm. D01 and D02 share this repo, question, and gold set and differ only in the max-context arm's min_confidence: D01 runs the shipped default (interface-dispatch edges excluded), D02 opts in. The pair measures what the flag buys. FlushMetrics is the precision decoy: it calls a method named Send, so any arm matching on the bare name surfaces it."
+    },
+    {
+      "task_id": "D02",
+      "expected_symbols": [
+        "DeliverAlert",
+        "BroadcastAll"
+      ],
+      "oracle": "Identical repo, question, and gold set as D01; see that key's oracle for the full site list. This task differs only in that the max-context arm passes min_confidence=interface-dispatch, opting into the low-confidence interface fan-out that the default excludes.",
+      "oracle_version": "manual (controlled)",
+      "human_verified": true,
+      "notes": "INTERFACE DISPATCH test, opt-in arm. Paired with D01."
+    }
+  ]
+}

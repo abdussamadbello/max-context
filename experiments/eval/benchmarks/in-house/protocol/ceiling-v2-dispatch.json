@@ -1,0 +1,63 @@
+{
+  "version": "ceiling-v2-dispatch",
+  "note": "Interface-dispatch retrieval-ceiling probes: no LLM, no API key, no cost. Aliasing (ceiling-v1) defeats text search but is rare — one qualifying case in 16 repos surveyed. Interface dispatch has the same mechanism, a call site whose text names nothing about the code that runs, and is common in every language with interfaces. D01 and D02 are the same question over the same fixture and differ only in the max-context arm's min_confidence: D01 is the shipped default, D02 opts into the interface-dispatch fan-out. The delta between them is what the flag buys. Gold sets are checked against dispatch-v5.json by VerifyAgainstKeys and cannot drift silently.",
+  "probes": [
+    {
+      "task_id": "D01",
+      "repo": "dispatch",
+      "lang": "go",
+      "repo_path": "fixtures/dispatch",
+      "question": "List every function that delivers a notification by calling Send through the Notifier interface.",
+      "symbol": "Send",
+      "expected_symbols": [
+        "DeliverAlert",
+        "BroadcastAll"
+      ],
+      "grep_patterns": [
+        "EmailNotifier\\.Send",
+        "SMSNotifier\\.Send",
+        "\\.Send\\(",
+        "\\bSend\\b"
+      ],
+      "mc_calls": [
+        {
+          "tool": "get_call_chain",
+          "args": {
+            "function_name": "Send",
+            "direction": "callers",
+            "depth": 3
+          }
+        }
+      ]
+    },
+    {
+      "task_id": "D02",
+      "repo": "dispatch",
+      "lang": "go",
+      "repo_path": "fixtures/dispatch",
+      "question": "List every function that delivers a notification by calling Send through the Notifier interface.",
+      "symbol": "Send",
+      "expected_symbols": [
+        "DeliverAlert",
+        "BroadcastAll"
+      ],
+      "grep_patterns": [
+        "EmailNotifier\\.Send",
+        "SMSNotifier\\.Send",
+        "\\.Send\\(",
+        "\\bSend\\b"
+      ],
+      "mc_calls": [
+        {
+          "tool": "get_call_chain",
+          "args": {
+            "function_name": "Send",
+            "direction": "callers",
+            "depth": 3,
+            "min_confidence": "interface-dispatch"
+          }
+        }
+      ]
+    }
+  ]
+}

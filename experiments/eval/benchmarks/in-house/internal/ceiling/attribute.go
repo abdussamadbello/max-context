@@ -10,6 +10,27 @@ import (
 // defRe matches a Python function definition, capturing its indentation and name.
 var defRe = regexp.MustCompile(`^(\s*)(?:async\s+)?def\s+(\w+)`)
 
+// goFuncRe matches a Go function or method definition, capturing its
+// indentation and name. The optional parenthesised group is the receiver, so
+// `func (e *EmailNotifier) Send(...)` captures Send rather than the receiver.
+var goFuncRe = regexp.MustCompile(`^(\s*)func\s+(?:\([^)]*\)\s*)?(\w+)`)
+
+// defPatternFor picks the definition pattern for a file's language. Attribution
+// that silently matches nothing scores the baseline at zero on every hit it
+// found, which reads as a retrieval failure and is really a harness failure —
+// the strawman this harness exists not to be. An unknown extension therefore
+// returns false, and the caller reports it rather than scoring it as a miss.
+func defPatternFor(path string) (*regexp.Regexp, bool) {
+	switch {
+	case strings.HasSuffix(path, ".py"):
+		return defRe, true
+	case strings.HasSuffix(path, ".go"):
+		return goFuncRe, true
+	default:
+		return nil, false
+	}
+}
+
 // enclosingFunc returns the name of the function containing the given 1-based
 // line, or "" if the line sits at module level.
 //
@@ -19,23 +40,27 @@ var defRe = regexp.MustCompile(`^(\s*)(?:async\s+)?def\s+(\w+)`)
 // whether the call site is REACHABLE at all, not whether attribution is tedious.
 //
 // The walk is indentation-based so nested defs attribute to the innermost
-// enclosing function, and a hit ON a `def` line (the definition itself, not a
-// call) attributes to whatever encloses it — module level for a top-level def,
-// which correctly scores as "no caller found".
-func enclosingFunc(lines []string, line int) string {
+// enclosing function, and a hit ON a definition line (the definition itself,
+// not a call) attributes to whatever encloses it — file level for a top-level
+// definition, which correctly scores as "no caller found".
+func enclosingFunc(path string, lines []string, line int) string {
+	re, ok := defPatternFor(path)
+	if !ok {
+		return ""
+	}
 	if line < 1 || line > len(lines) {
 		return ""
 	}
 	target := lines[line-1]
 	indent := leadingWidth(target)
-	// A hit on the def line itself belongs to the def's parent scope, so treat
-	// its indentation as the def's own.
+	// A hit on the definition line itself belongs to its parent scope, so treat
+	// its indentation as the definition's own.
 	for i := line - 2; i >= 0; i-- {
 		l := lines[i]
 		if strings.TrimSpace(l) == "" {
 			continue
 		}
-		m := defRe.FindStringSubmatch(l)
+		m := re.FindStringSubmatch(l)
 		if m == nil {
 			continue
 		}

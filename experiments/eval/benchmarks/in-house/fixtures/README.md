@@ -19,6 +19,27 @@ it exists to isolate one mechanism, and no frequency claim rests on it. See
 `../CEILING.md`, which reports the real-repo probe where the same mechanism
 does *not* defeat grep.
 
+## `dispatch/` — controlled interface-dispatch fixture
+
+A hand-authored Go repo for tasks D01/D02. `Notifier` declares one method,
+`Send`; `EmailNotifier` and `SMSNotifier` implement it.
+
+| File | Role |
+|---|---|
+| `pipeline.go` | `DeliverAlert` (interface-typed parameter) and `BroadcastAll` (range over `[]Notifier`) — the gold callers |
+| `email.go`, `sms.go` | the two implementations, never named at a call site |
+| `metrics.go` | `MetricsBuffer.Send` + `FlushMetrics` — the **precision decoy** |
+
+The decoy is the point of the fixture. `MetricsBuffer` has a `Send` method and is
+never used as a `Notifier`, so any arm matching on the bare method name surfaces
+`FlushMetrics` and loses precision. `BroadcastAll` uses a range variable
+deliberately: that binding form is one max-context does not resolve, so the
+fixture measures the gap rather than hiding it.
+
+Unlike `payments/`, this fixture does **not** defeat text search — the method
+name is present at the call site. See `../DISPATCH.md`, which reports the
+refutation and the three defects the probe found.
+
 ## Do not edit casually
 
 The answer key in `../protocol/alias-v4.json` cites exact file paths, line
