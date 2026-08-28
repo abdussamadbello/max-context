@@ -451,32 +451,12 @@ func parseGo(slashPath string, groups []treesitter.CaptureGroup) *ParseResult {
 			FilePath:     slashPath,
 			Line:         c.line,
 		}
-		if c.recv != "" {
-			switch {
-			case imports[c.recv] != "":
-				cr.ReceiverKind = "import"
-				// Candidate package = last segment of the import path (the
-				// conventional Go package name). The resolver links pkg.Func()
-				// to that package's Func only on a unique match; otherwise the
-				// call stays import-qualified (no false edge if the name differs).
-				cr.ReceiverPackage = lastPathSegment(strings.Trim(imports[c.recv], "\"'`"))
-			default:
-				s := enclosing(spans, c.line)
-				if s != nil {
-					if typ, ok := s.types[c.recv]; ok {
-						cr.ReceiverKind = "var"
-						cr.ReceiverType = typ
-					} else if callee, ok := s.fromCallee[c.recv]; ok {
-						// 9a: x := callee(); x.M() — resolver types x from callee's return.
-						cr.ReceiverKind = "from-callee"
-						cr.ReceiverFromCallee = callee
-					}
-				}
-				// 9b: package-global receiver (no local binding found).
-				if cr.ReceiverKind == "" {
-					cr.ReceiverKind = "maybe-global"
-				}
-			}
+		// Candidate package = last segment of the import path (the conventional
+		// Go package name). The resolver links pkg.Func() to that package's Func
+		// only on a unique match; otherwise the call stays import-qualified, so a
+		// differing name yields no false edge.
+		if path := cr.classifyReceiver(c.recv, imports, spans, c.line); path != "" {
+			cr.ReceiverPackage = lastPathSegment(strings.Trim(path, "\"'`"))
 		}
 		res.Calls = append(res.Calls, cr)
 	}
@@ -484,23 +464,13 @@ func parseGo(slashPath string, groups []treesitter.CaptureGroup) *ParseResult {
 	// Build field-receiver call edges (9b): base.field.M().
 	for _, fc := range fieldCalls {
 		cr := CallRecord{
-			CalleeName:    fc.callee,
-			ReceiverName:  fc.base + "." + fc.field,
-			ReceiverField: fc.field,
-			Language:      string(treesitter.LangGo),
-			FilePath:      slashPath,
-			Line:          fc.line,
+			CalleeName: fc.callee,
+			Language:   string(treesitter.LangGo),
+			FilePath:   slashPath,
+			Line:       fc.line,
 		}
-		// Type the base; the resolver then looks up base-type's field type.
-		if s := enclosing(spans, fc.line); s != nil {
-			if typ, ok := s.types[fc.base]; ok {
-				cr.ReceiverKind = "field"
-				cr.ReceiverType = typ // base's type; ReceiverField names the field
-			}
-		}
-		if cr.ReceiverKind == "" {
-			cr.ReceiverKind = "unresolved-field"
-		}
+		// Go has no self/this: every base is an ordinary identifier.
+		cr.classifyFieldReceiver(fc.base, fc.field, nil, spans, nil, fc.line)
 		res.Calls = append(res.Calls, cr)
 	}
 
@@ -536,8 +506,8 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 		line         int
 	}
 	type rawThisCall struct {
-		field, callee string
-		line          int
+		base, field, callee string
+		line                int
 	}
 	type rawTyped struct {
 		name, typ string
@@ -636,7 +606,11 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 			calleeLocals = append(calleeLocals, rawCalleeLocal{name: t["localcall.name"], callee: t["localcall.callee"], line: rowOf(g, "localcall.name")})
 
 		case t["callthis.callee"] != "":
-			thisCalls = append(thisCalls, rawThisCall{field: t["callthis.field"], callee: t["callthis.callee"], line: rowOf(g, "callthis.callee")})
+			base := t["callthis.base"]
+			if base == "" {
+				base = "this" // the (this) node captures no text
+			}
+			thisCalls = append(thisCalls, rawThisCall{base: base, field: t["callthis.field"], callee: t["callthis.callee"], line: rowOf(g, "callthis.callee")})
 
 		case t["callselfmethod.callee"] != "":
 			selfMethods = append(selfMethods, rawSelfMethod{callee: t["callselfmethod.callee"], line: rowOf(g, "callselfmethod.callee")})
@@ -716,48 +690,15 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 	// Bare / member-ident calls.
 	for _, c := range calls {
 		cr := CallRecord{CalleeName: c.callee, ReceiverName: c.recv, Language: lang, FilePath: slashPath, Line: c.line}
-		if c.recv == "" {
-			// Bare call to a named-imported symbol -> resolve cross-file to origin.
-			if sym, ok := importedSymbols[c.callee]; ok {
-				cr.ImportedOrigin = sym.origin
-				cr.ImportedModuleRoot = sym.root
-			}
-		}
-		if c.recv != "" {
-			switch {
-			case imports[c.recv] != "":
-				cr.ReceiverKind = "import"
-			default:
-				s := enclosing(fnSpans, c.line)
-				if s != nil {
-					if typ, ok := s.types[c.recv]; ok {
-						cr.ReceiverKind = "var"
-						cr.ReceiverType = typ
-					} else if callee, ok := s.fromCallee[c.recv]; ok {
-						cr.ReceiverKind = "from-callee"
-						cr.ReceiverFromCallee = callee
-					}
-				}
-				if cr.ReceiverKind == "" {
-					cr.ReceiverKind = "maybe-global"
-				}
-			}
-		}
+		cr.linkBareImportedCall(c.callee, importedSymbols)
+		cr.classifyReceiver(c.recv, imports, fnSpans, c.line)
 		res.Calls = append(res.Calls, cr)
 	}
 
 	// this.field.m() — base type is the enclosing class.
 	for _, tc := range thisCalls {
-		cr := CallRecord{
-			CalleeName: tc.callee, ReceiverName: "this." + tc.field, ReceiverField: tc.field,
-			Language: lang, FilePath: slashPath, Line: tc.line,
-		}
-		if cs := enclosingClass(clsSpans, tc.line); cs != nil {
-			cr.ReceiverKind = "field"
-			cr.ReceiverType = cs.name
-		} else {
-			cr.ReceiverKind = "unresolved-field"
-		}
+		cr := CallRecord{CalleeName: tc.callee, Language: lang, FilePath: slashPath, Line: tc.line}
+		cr.classifyFieldReceiver(tc.base, tc.field, selfKeyword("this"), fnSpans, clsSpans, tc.line)
 		res.Calls = append(res.Calls, cr)
 	}
 
@@ -814,8 +755,8 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 		line         int
 	}
 	type rawSelfCall struct {
-		field, callee string
-		line          int
+		recv, field, callee string
+		line                int
 	}
 	type rawTyped struct {
 		name, typ string
@@ -923,7 +864,7 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 			calleeLocals = append(calleeLocals, rawCalleeLocal{name: t["localcall.name"], callee: t["localcall.callee"], line: rowOf(g, "localcall.name")})
 
 		case t["callself.callee"] != "":
-			selfCalls = append(selfCalls, rawSelfCall{field: t["callself.field"], callee: t["callself.callee"], line: rowOf(g, "callself.callee")})
+			selfCalls = append(selfCalls, rawSelfCall{recv: t["callself.recv"], field: t["callself.field"], callee: t["callself.callee"], line: rowOf(g, "callself.callee")})
 
 		case t["callselfmethod.callee"] != "" && t["callselfmethod.recv"] == "self":
 			selfMethods = append(selfMethods, rawSelfMethod{callee: t["callselfmethod.callee"], line: rowOf(g, "callselfmethod.callee")})
@@ -986,49 +927,15 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 
 	for _, c := range calls {
 		cr := CallRecord{CalleeName: c.callee, ReceiverName: c.recv, Language: lang, FilePath: slashPath, Line: c.line}
-		if c.recv == "" {
-			// Bare call: if the name was imported from another module, record the
-			// original symbol so the resolver can link cross-file (incl. aliases).
-			if sym, ok := importedSymbols[c.callee]; ok {
-				cr.ImportedOrigin = sym.origin
-				cr.ImportedModuleRoot = sym.root
-			}
-		}
-		if c.recv != "" {
-			switch {
-			case imports[c.recv] != "":
-				cr.ReceiverKind = "import"
-			default:
-				s := enclosing(fnSpans, c.line)
-				if s != nil {
-					if typ, ok := s.types[c.recv]; ok {
-						cr.ReceiverKind = "var"
-						cr.ReceiverType = typ
-					} else if callee, ok := s.fromCallee[c.recv]; ok {
-						cr.ReceiverKind = "from-callee"
-						cr.ReceiverFromCallee = callee
-					}
-				}
-				if cr.ReceiverKind == "" {
-					cr.ReceiverKind = "maybe-global"
-				}
-			}
-		}
+		cr.linkBareImportedCall(c.callee, importedSymbols)
+		cr.classifyReceiver(c.recv, imports, fnSpans, c.line)
 		res.Calls = append(res.Calls, cr)
 	}
 
 	// self.field.method() — base type is the enclosing class.
 	for _, sc := range selfCalls {
-		cr := CallRecord{
-			CalleeName: sc.callee, ReceiverName: "self." + sc.field, ReceiverField: sc.field,
-			Language: lang, FilePath: slashPath, Line: sc.line,
-		}
-		if cs := enclosingClass(clsSpans, sc.line); cs != nil {
-			cr.ReceiverKind = "field"
-			cr.ReceiverType = cs.name
-		} else {
-			cr.ReceiverKind = "unresolved-field"
-		}
+		cr := CallRecord{CalleeName: sc.callee, Language: lang, FilePath: slashPath, Line: sc.line}
+		cr.classifyFieldReceiver(sc.recv, sc.field, selfKeyword("self"), fnSpans, clsSpans, sc.line)
 		res.Calls = append(res.Calls, cr)
 	}
 

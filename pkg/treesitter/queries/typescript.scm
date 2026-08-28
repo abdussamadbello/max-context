@@ -100,7 +100,18 @@
 (call_expression
   function: (member_expression
     object: (member_expression
-      object: (this)
+      object: (this) @callthis.base
+      property: (property_identifier) @callthis.field)
+    property: (property_identifier) @callthis.callee))
+
+; base.field.m() where base is an ordinary identifier — the field's type comes
+; from the base's type, not from the enclosing class. Go handled this shape and
+; TypeScript did not, so a field held on a parameter resolved in one language
+; and not the other.
+(call_expression
+  function: (member_expression
+    object: (member_expression
+      object: (identifier) @callthis.base
       property: (property_identifier) @callthis.field)
     property: (property_identifier) @callthis.callee))
 
