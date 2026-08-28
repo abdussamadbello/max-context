@@ -281,9 +281,17 @@ func parseGo(slashPath string, groups []treesitter.CaptureGroup) *ParseResult {
 		name, callee string
 		line         int
 	}
+	// rawRange is a binding whose type comes from another identifier's element
+	// type: `for _, n := range ns` and `n := ns[0]`.
+	type rawRange struct {
+		name, src string
+		line      int
+	}
 	var calls []rawCall
 	var fieldCalls []rawFieldCall
 	var typed []rawTyped              // params, receivers, and statically-typed locals
+	var elems []rawTyped              // identifier -> ELEMENT type of its collection
+	var ranges []rawRange             // range/index bindings, typed from elems below
 	var calleeLocals []rawCalleeLocal // x := f() locals (9a), typed by the resolver
 
 	for _, g := range groups {
@@ -342,6 +350,15 @@ func parseGo(slashPath string, groups []treesitter.CaptureGroup) *ParseResult {
 
 		case t["local.name"] != "" && t["local.type"] != "":
 			typed = append(typed, rawTyped{name: t["local.name"], typ: t["local.type"], line: rowOf(g, "local.name")})
+
+		case t["elem.name"] != "" && t["elem.type"] != "":
+			// The identifier's own type is the collection; the ELEMENT type is
+			// recorded separately so a range or index binding over it can be
+			// typed without claiming the collection is that type itself.
+			elems = append(elems, rawTyped{name: t["elem.name"], typ: t["elem.type"], line: rowOf(g, "elem.name")})
+
+		case t["range.name"] != "" && t["range.src"] != "":
+			ranges = append(ranges, rawRange{name: t["range.name"], src: t["range.src"], line: rowOf(g, "range.name")})
 
 		case t["localcall.name"] != "" && t["localcall.callee"] != "":
 			calleeLocals = append(calleeLocals, rawCalleeLocal{
@@ -405,6 +422,32 @@ func parseGo(slashPath string, groups []treesitter.CaptureGroup) *ParseResult {
 	for _, ty := range typed {
 		if s := enclosing(spans, ty.line); s != nil {
 			s.types[ty.name] = ty.typ
+		}
+	}
+	// Element types are scoped like any other binding, but kept out of s.types:
+	// `ns []Notifier` means ns is a slice, not a Notifier, and typing ns as one
+	// would invent a method call the code never makes.
+	elemTypes := map[*funcSpan]map[string]string{}
+	for _, e := range elems {
+		s := enclosing(spans, e.line)
+		if s == nil {
+			continue
+		}
+		if elemTypes[s] == nil {
+			elemTypes[s] = map[string]string{}
+		}
+		elemTypes[s][e.name] = e.typ
+	}
+	// A range or index binding takes its collection's element type. Bindings
+	// whose source is untyped stay untyped rather than guessing, so an
+	// unresolvable range produces no edge instead of a wrong one.
+	for _, rg := range ranges {
+		s := enclosing(spans, rg.line)
+		if s == nil {
+			continue
+		}
+		if typ, ok := elemTypes[s][rg.src]; ok {
+			s.types[rg.name] = typ
 		}
 	}
 	// Package-level statically-typed vars (var x T at file scope) -> package_vars.

@@ -481,16 +481,41 @@ func nullStr(s string) interface{} {
 	return s
 }
 
+// interfaceReceiverType returns the interface type a call dispatches through,
+// or "" when the receiver is not an interface value.
+//
+// A plain `var` receiver carries its own type. A `field` receiver carries the
+// type of the BASE — `h.n.Send()` records Holder, not the type of n — so the
+// field's declared type has to be looked up before it can be recognised as an
+// interface. Gating on ReceiverKind=="var" alone silently excluded every
+// interface held in a struct field, which is how most long-lived dependencies
+// are actually stored.
+func interfaceReceiverType(resolver *Resolver, c CallRecord) string {
+	switch c.ReceiverKind {
+	case "var":
+		return c.ReceiverType
+	case "field":
+		if c.ReceiverType == "" || c.ReceiverField == "" {
+			return ""
+		}
+		if ft, ok := resolver.fieldTypeOf([2]string{c.ReceiverType, c.ReceiverField}); ok {
+			return ft
+		}
+	}
+	return ""
+}
+
 // insertInterfaceDispatchEdges emits a low-confidence 'interface-dispatch' edge
 // from the caller to each concrete implementation of an interface-method call —
 // e.g. n.Send() where n is statically an interface — so get_impact can fan out
 // to implementations on request. No-op for non-interface receivers, so the
 // default call graph is unchanged. Called alongside the primary insertCall.
 func insertInterfaceDispatchEdges(tx *sql.Tx, resolver *Resolver, c CallRecord, callerID int64) error {
-	if c.ReceiverKind != "var" || c.ReceiverType == "" {
+	ifaceType := interfaceReceiverType(resolver, c)
+	if ifaceType == "" {
 		return nil
 	}
-	for _, id := range resolver.interfaceMethodImpls(c.ReceiverType, c.CalleeName) {
+	for _, id := range resolver.interfaceMethodImpls(ifaceType, c.CalleeName) {
 		if _, err := tx.Exec(
 			"INSERT INTO calls (caller_id, callee_id, callee_name, file_path, line, resolution, receiver_name) VALUES (?, ?, ?, ?, ?, ?, ?)",
 			callerID, id, c.CalleeName, c.FilePath, c.Line, resInterfaceDispatch, nullStr(c.ReceiverName),

@@ -111,6 +111,21 @@ func GetCallChainHandler(database *sql.DB) mcp.ToolHandler {
 			}
 		}
 
+		// Never exclude silently either. The default filter drops the
+		// interface-dispatch fan-out, so a method reached only through an
+		// interface returns no callers at all — indistinguishable from having
+		// none. Worse, when an unrelated type shares the method name, the one
+		// row that survives is the wrong one. Say the edges exist and name the
+		// argument that shows them.
+		if edgeMarkersAtOrAbove(a.MinConfidence) == nil {
+			if n := countInterfaceDispatchEdges(database, a.FunctionName, direction); n > 0 {
+				result["interface_dispatch_excluded"] = n
+				result["interface_dispatch_hint"] = fmt.Sprintf(
+					"%d edge(s) reach %s through an interface and are excluded at the default confidence. "+
+						"Re-run with min_confidence \"interface-dispatch\" to include them.", n, a.FunctionName)
+			}
+		}
+
 		// Never truncate silently: an agent that cannot tell a capped answer from
 		// a complete one will report a partial blast radius as the whole of it.
 		if truncated {
@@ -126,6 +141,39 @@ func GetCallChainHandler(database *sql.DB) mcp.ToolHandler {
 		b, _ := json.Marshal(result)
 		return []mcp.ContentItem{{Type: "text", Text: string(b)}}, nil
 	}
+}
+
+// countInterfaceDispatchEdges counts the direct interface-dispatch edges the
+// default confidence filter hides for one symbol. Direct edges only: this
+// answers "is there something behind the filter", not "how large is the fan-out
+// at depth", and paying for a recursive walk to phrase a hint would cost more
+// than the hint saves.
+func countInterfaceDispatchEdges(database *sql.DB, functionName, direction string) int {
+	const dispatch = "interface-dispatch"
+	var q string
+	switch direction {
+	case "callers":
+		q = `SELECT COUNT(*) FROM calls e JOIN functions f ON f.id = e.callee_id
+		     WHERE f.name = ? AND e.resolution = ?`
+	case "callees":
+		q = `SELECT COUNT(*) FROM calls e JOIN functions f ON f.id = e.caller_id
+		     WHERE f.name = ? AND e.resolution = ?`
+	default: // both
+		q = `SELECT COUNT(*) FROM calls e
+		     WHERE e.resolution = ? AND (
+		       e.callee_id IN (SELECT id FROM functions WHERE name = ?)
+		       OR e.caller_id IN (SELECT id FROM functions WHERE name = ?))`
+		var n int
+		if err := database.QueryRow(q, dispatch, functionName, functionName).Scan(&n); err != nil {
+			return 0
+		}
+		return n
+	}
+	var n int
+	if err := database.QueryRow(q, functionName, dispatch).Scan(&n); err != nil {
+		return 0
+	}
+	return n
 }
 
 func queryCallChain(database *sql.DB, functionName string, depth int, direction, minConfidence string) ([]callChainNode, error) {

@@ -37,7 +37,23 @@ concrete type.
 **max-context loses on this probe, at both settings.** It is cheaper — 1 call and
 a quarter of the bytes — and it is wrong.
 
-## Why the hypothesis was wrong
+### After the fixes below (run 2026-08-28)
+
+| Probe | Arm | Recall | Precision | Calls | Bytes |
+|---|---|---|---|---|---|
+| D02 | grep (one-shot) | 1.00 | 0.67 | 4 | 930 |
+| D02 | max-context (`min_confidence: interface-dispatch`) | **1.00** | **0.67** | **1** | **463** |
+| D01 | max-context (shipped default) | 0.00 | 0.00 | 1 | 469 |
+
+Opted in, max-context now returns **exactly grep's answer set** — same recall,
+same precision, same three names — in 1 call instead of 4 and 463 bytes instead
+of 930. The loss is gone; what is left is the ties-on-quality, wins-on-cost
+shape this project's other results have.
+
+D01 still scores 0.00 because the default still excludes the fan-out. It no
+longer does so silently: see defect 1.
+
+## Why the hypothesis was wrong (still true after the fixes)
 
 Aliasing and interface dispatch hide *different* things, and only one of them is
 the thing grep reads.
@@ -59,26 +75,58 @@ moat.
 Losing to grep here is a bug, not a market. Each of these is independently
 reproducible.
 
-**1. The shipped default returns zero true callers.** `get_call_chain` and
-`get_impact` both exclude `interface-dispatch` edges by default
-(`get_call_chain.go:136`, `get_impact.go:292`). On D01 the only thing returned is
-`FlushMetrics` — the decoy — for a recall of 0.00. Whatever the right default is,
-"finds only the wrong answer" is not it.
+**1. The shipped default returns zero true callers.** *(mitigated, not flipped)*
+`get_call_chain` and `get_impact` both exclude `interface-dispatch` edges by
+default. On D01 the only thing returned is `FlushMetrics` — the decoy — for a
+recall of 0.00. Whatever the right default is, "finds only the wrong answer" is
+not it.
 
-**2. Only 2 of 5 receiver-binding forms resolve.** With the flag on, measured
-directly against a fixture holding all five:
+The default is unchanged: on a repo with twenty implementations behind one
+interface the fan-out is genuinely noisy, and this fixture is too small to
+justify flipping it globally. What changed is that it no longer happens in
+silence. When the filter hides dispatch edges for the queried symbol, the
+response says so and names the argument that reveals them:
 
-| Binding | Example | Resolves |
-|---|---|---|
-| Interface-typed parameter | `func F(n Notifier)` → `n.Send()` | yes |
-| Explicit local declaration | `var n Notifier = &Email{}` | yes |
-| Range variable | `for _, n := range ns` (`ns []Notifier`) | **no** |
-| Struct field | `h.n.Send()` | **no** |
-| Short assignment | `n := ns[0]` | **no** |
+```json
+"interface_dispatch_excluded": 6,
+"interface_dispatch_hint": "6 edge(s) reach Send through an interface and are
+  excluded at the default confidence. Re-run with min_confidence
+  \"interface-dispatch\" to include them."
+```
 
-This is why D02 scores 0.50 and not 1.00: `BroadcastAll` ranges over
-`[]Notifier`. Resolution handles bindings whose interface type is written down
-and misses every form that requires inferring it.
+An empty caller list and "no callers exist" were indistinguishable before. This
+follows the same rule the truncation path already had: never narrow an answer
+without saying so.
+
+**2. Only 2 of 5 receiver-binding forms resolved.** *(fixed)* With the flag on,
+measured against a fixture holding every form:
+
+| Binding | Example | Was | Now |
+|---|---|---|---|
+| Interface-typed parameter | `func F(n Notifier)` → `n.Send()` | yes | yes |
+| Explicit local declaration | `var n Notifier = &Email{}` | yes | yes |
+| Range variable | `for _, n := range ns` (`ns []Notifier`) | **no** | yes |
+| Short assignment | `n := ns[0]` | **no** | yes |
+| Struct field | `h.n.Send()` | **no** | yes |
+| Map range | `for _, n := range m` (`map[string]Notifier`) | **no** | yes |
+
+Resolution handled bindings whose interface type was written down and missed
+every form requiring inference — which covers the ordinary ways interfaces are
+held. Two root causes:
+
+- **No element types.** `ns []Notifier` was not captured at all: the Go query
+  matched `type_identifier` and `pointer_type` but no `slice_type`, `array_type`,
+  or `map_type`. A range variable over `ns` therefore had nothing to infer from.
+  Element types are now captured separately from the identifier's own type — `ns`
+  is a slice, not a `Notifier`, and typing it as one would invent a call the code
+  never makes.
+- **Field receivers never tried dispatch.** The fan-out was gated on
+  `ReceiverKind == "var"`, and a field receiver records the type of the *base*
+  (`Holder`), not of the field. The field's declared type is now resolved before
+  the interface check.
+
+A binding whose source type is unknown still produces no edge rather than a
+guess; `TestUnresolvableRangeProducesNoEdge` pins that.
 
 **3. A single-line interface declaration disabled resolution entirely.** *(fixed)*
 
@@ -106,7 +154,7 @@ keeps it that way so the probe measures dispatch resolution rather than this
 bug. It was a silent whole-class failure in real repositories: every interface
 written on one line resolved nothing, with nothing in the output to say why.
 
-Defects 1 and 2 are open.
+Defect 1 is mitigated (the exclusion is now reported); defect 2 is fixed.
 
 ## An API gap this exposed
 
