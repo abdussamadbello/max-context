@@ -80,7 +80,7 @@ This is why D02 scores 0.50 and not 1.00: `BroadcastAll` ranges over
 `[]Notifier`. Resolution handles bindings whose interface type is written down
 and misses every form that requires inferring it.
 
-**3. A single-line interface declaration disables resolution entirely.**
+**3. A single-line interface declaration disabled resolution entirely.** *(fixed)*
 
 ```go
 type Notifier interface{ Send(msg string) error }   // 0 callers resolved
@@ -89,8 +89,24 @@ type Notifier interface {                           // resolves
 }
 ```
 
-Same semantics, formatting-only difference, and the interface's method set is
-never extracted in the first form. Confirmed on two otherwise-identical trees.
+Same semantics, formatting-only difference, and the interface's method set was
+never extracted in the first form — so no concrete type satisfied it and its
+dispatch fan-out was empty. Confirmed on two otherwise-identical trees.
+
+`ifaceMethodRe` in `internal/indexer/resolver.go` anchored a method declaration
+to the start of a line, and in the single-line form the method follows `{` on
+the same line. It now also accepts a method after the opening brace or after a
+semicolon separating methods, so `interface{ Send(m string) error; Close() error }`
+yields both. `TestExtractInterfaceMethods` covers all the declaration forms; the
+function previously had no test at all, which is how the bug shipped.
+
+This does not move the numbers in the table above — the fixture declares
+`Notifier` across multiple lines, and `TestDispatchInterfaceIsDeclaredMultiLine`
+keeps it that way so the probe measures dispatch resolution rather than this
+bug. It was a silent whole-class failure in real repositories: every interface
+written on one line resolved nothing, with nothing in the output to say why.
+
+Defects 1 and 2 are open.
 
 ## An API gap this exposed
 

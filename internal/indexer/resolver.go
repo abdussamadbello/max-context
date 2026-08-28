@@ -414,9 +414,16 @@ func (r *Resolver) loadInterfaces(q rowQuerier) error {
 	return rows.Err()
 }
 
-// ifaceMethodRe matches a method declaration line inside a Go interface body:
-// an identifier at line start (after whitespace) immediately followed by '('.
-var ifaceMethodRe = regexp.MustCompile(`(?m)^\s*([A-Za-z_]\w*)\s*\(`)
+// ifaceMethodRe matches a method declaration inside a Go interface body: an
+// identifier immediately followed by '(', positioned at the start of a line, or
+// after the opening brace, or after a semicolon separating methods on one line.
+//
+// Anchoring on line start alone silently dropped every method of a single-line
+// interface — `interface{ Send(msg string) error }` yielded no methods at all,
+// so no concrete type ever satisfied it and the interface-dispatch fan-out was
+// empty for that declaration. The two forms are identical Go; only the
+// formatting differed. See experiments/eval/benchmarks/in-house/DISPATCH.md.
+var ifaceMethodRe = regexp.MustCompile(`(?m)(?:^|[{;])\s*([A-Za-z_]\w*)\s*\(`)
 
 func extractInterfaceMethods(def string) []string {
 	var out []string
