@@ -59,3 +59,60 @@ func bindElementTypes(spans []*funcSpan, elems []typedIdent, bindings []derivedB
 		}
 	}
 }
+
+// Lexical scope chain.
+//
+// enclosing returns the INNERMOST span containing a line, which is right for
+// asking "which function is this call in" and wrong for asking "what is this
+// identifier's type". A nested function sees the bindings of the function it is
+// written inside; looking only at the innermost span loses every one of them.
+//
+// The bug was invisible because it is grammar-shaped. Python's `def inner()`
+// produces a span, so a closure over a typed parameter resolved nothing, while
+// the same code in Go — where the nested form is an anonymous literal and no
+// span is created — resolved fine. TypeScript failed with a nested `function`
+// declaration and succeeded with a function expression. Three languages, three
+// different-looking symptoms, one missing rule.
+
+// enclosingChain returns every span containing line, innermost first, so a
+// lookup can walk outward the way lexical scoping does.
+func enclosingChain(spans []*funcSpan, line int) []*funcSpan {
+	var chain []*funcSpan
+	for _, s := range spans {
+		if line >= s.start && line <= s.end {
+			chain = append(chain, s)
+		}
+	}
+	// Innermost first: a span nested inside another has a later start and an
+	// earlier end, so ordering by width puts the tightest scope at the front.
+	for i := 1; i < len(chain); i++ {
+		for j := i; j > 0 && spanWidth(chain[j]) < spanWidth(chain[j-1]); j-- {
+			chain[j], chain[j-1] = chain[j-1], chain[j]
+		}
+	}
+	return chain
+}
+
+func spanWidth(s *funcSpan) int { return s.end - s.start }
+
+// lookupLocalType resolves an identifier's type from the nearest scope that
+// binds it, shadowing correctly: an inner binding wins over an outer one.
+func lookupLocalType(spans []*funcSpan, line int, name string) (string, bool) {
+	for _, s := range enclosingChain(spans, line) {
+		if typ, ok := s.types[name]; ok {
+			return typ, true
+		}
+	}
+	return "", false
+}
+
+// lookupFromCallee resolves an identifier bound by `x := f()` from the nearest
+// scope that binds it.
+func lookupFromCallee(spans []*funcSpan, line int, name string) (string, bool) {
+	for _, s := range enclosingChain(spans, line) {
+		if callee, ok := s.fromCallee[name]; ok {
+			return callee, true
+		}
+	}
+	return "", false
+}

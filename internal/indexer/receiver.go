@@ -29,18 +29,18 @@ func (cr *CallRecord) classifyReceiver(recv string, imports map[string]string, s
 		cr.ReceiverKind = "import"
 		return path
 	}
-	if s := enclosing(spans, line); s != nil {
-		if typ, ok := s.types[recv]; ok {
-			cr.ReceiverKind = "var"
-			cr.ReceiverType = typ
-			return ""
-		}
-		if callee, ok := s.fromCallee[recv]; ok {
-			// x := callee(); x.M() — the resolver types x from callee's return.
-			cr.ReceiverKind = "from-callee"
-			cr.ReceiverFromCallee = callee
-			return ""
-		}
+	// Walk the lexical scope chain, not just the innermost span: a call inside a
+	// nested function still sees the enclosing function's bindings.
+	if typ, ok := lookupLocalType(spans, line, recv); ok {
+		cr.ReceiverKind = "var"
+		cr.ReceiverType = typ
+		return ""
+	}
+	if callee, ok := lookupFromCallee(spans, line, recv); ok {
+		// x := callee(); x.M() — the resolver types x from callee's return.
+		cr.ReceiverKind = "from-callee"
+		cr.ReceiverFromCallee = callee
+		return ""
 	}
 	cr.ReceiverKind = "maybe-global"
 	return ""
@@ -95,12 +95,10 @@ func (cr *CallRecord) classifyFieldReceiver(
 	}
 
 	// An ordinary base: its own type must be known before the field's can be.
-	if s := enclosing(spans, line); s != nil {
-		if typ, ok := s.types[base]; ok {
-			cr.ReceiverKind = "field"
-			cr.ReceiverType = typ // the BASE's type; ReceiverField names the field
-			return
-		}
+	if typ, ok := lookupLocalType(spans, line, base); ok {
+		cr.ReceiverKind = "field"
+		cr.ReceiverType = typ // the BASE's type; ReceiverField names the field
+		return
 	}
 	cr.ReceiverKind = "unresolved-field"
 }

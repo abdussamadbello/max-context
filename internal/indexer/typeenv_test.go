@@ -179,3 +179,76 @@ func keysOf(m map[string]bool) []string {
 	}
 	return out
 }
+
+// A nested function sees the bindings of the function it is written inside.
+// `enclosing` returns only the innermost span, so a call inside a closure lost
+// every enclosing binding — and the symptom was grammar-shaped, which is why it
+// went unnoticed: Python's `def inner()` makes a span and failed, Go's
+// anonymous literal makes none and passed, TypeScript failed with a nested
+// declaration and passed with a function expression.
+func TestNestedScopeSeesEnclosingBindings(t *testing.T) {
+	for _, tc := range []struct{ name, file, src, method, wantCaller string }{
+		{
+			name: "python closure", file: "a.py", method: "query", wantCaller: "inner",
+			src: "class Conn:\n    def query(self, s: str) -> None:\n        pass\n\n\ndef outer(c: Conn):\n    def inner():\n        c.query(\"x\")\n    return inner\n",
+		},
+		{
+			name: "typescript nested declaration", file: "a.ts", method: "query", wantCaller: "inner",
+			src: "export class Conn {\n  query(s: string): void {}\n}\n\nexport function outer(c: Conn): void {\n  function inner(): void {\n    c.query(\"x\");\n  }\n  inner();\n}\n",
+		},
+		{
+			name: "go func literal", file: "a.go", method: "Query", wantCaller: "Outer",
+			src: "package a\n\ntype Conn struct{}\n\nfunc (c *Conn) Query(s string) error { return nil }\n\nfunc Outer(c *Conn) error {\n\thelper := func() error {\n\t\treturn c.Query(\"x\")\n\t}\n\treturn helper()\n}\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			if err := os.WriteFile(filepath.Join(root, tc.file), []byte(tc.src), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if callers := callersOfMethod(t, root, tc.method); !callers[tc.wantCaller] {
+				t.Errorf("%s: the receiver is bound in the enclosing scope; got %v", tc.name, keysOf(callers))
+			}
+		})
+	}
+}
+
+// Walking outward must not skip shadowing: a binding in the inner scope wins.
+func TestInnerBindingShadowsOuter(t *testing.T) {
+	outer := &funcSpan{start: 1, end: 20, types: map[string]string{"c": "Outer"}}
+	inner := &funcSpan{start: 5, end: 10, types: map[string]string{"c": "Inner"}}
+	spans := []*funcSpan{outer, inner}
+
+	if got, _ := lookupLocalType(spans, 7, "c"); got != "Inner" {
+		t.Errorf("inside the nested scope c = %q, want Inner (the inner binding shadows)", got)
+	}
+	if got, _ := lookupLocalType(spans, 15, "c"); got != "Outer" {
+		t.Errorf("outside the nested scope c = %q, want Outer", got)
+	}
+	// A name bound only in the inner scope is not visible outside it.
+	inner.types["only"] = "T"
+	if _, ok := lookupLocalType(spans, 15, "only"); ok {
+		t.Error("a binding from the inner scope leaked to the outer one")
+	}
+	// An unbound name stays unbound rather than resolving to something.
+	if _, ok := lookupLocalType(spans, 7, "absent"); ok {
+		t.Error("an unbound identifier resolved")
+	}
+}
+
+func TestEnclosingChainIsInnermostFirst(t *testing.T) {
+	outer := &funcSpan{start: 1, end: 20, types: map[string]string{}}
+	mid := &funcSpan{start: 4, end: 15, types: map[string]string{}}
+	inner := &funcSpan{start: 6, end: 9, types: map[string]string{}}
+	// Deliberately unsorted input: spans arrive in source order, not nesting order.
+	chain := enclosingChain([]*funcSpan{outer, mid, inner}, 7)
+	if len(chain) != 3 {
+		t.Fatalf("chain length %d, want 3", len(chain))
+	}
+	if chain[0] != inner || chain[1] != mid || chain[2] != outer {
+		t.Error("chain is not ordered innermost first, so shadowing would resolve backwards")
+	}
+	if got := enclosingChain([]*funcSpan{outer, mid, inner}, 18); len(got) != 1 || got[0] != outer {
+		t.Error("a line inside only the outer span must yield just that span")
+	}
+}
