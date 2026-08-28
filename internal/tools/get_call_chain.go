@@ -121,8 +121,9 @@ func GetCallChainHandler(database *sql.DB) mcp.ToolHandler {
 			if n := countInterfaceDispatchEdges(database, a.FunctionName, direction); n > 0 {
 				result["interface_dispatch_excluded"] = n
 				result["interface_dispatch_hint"] = fmt.Sprintf(
-					"%d edge(s) reach %s through an interface and are excluded at the default confidence. "+
-						"Re-run with min_confidence \"interface-dispatch\" to include them.", n, a.FunctionName)
+					"%d edge(s) reach %s through an interface whose fan-out is too wide (>%d "+
+						"implementations) to include by default. Re-run with min_confidence "+
+						"\"interface-dispatch\" to include them.", n, a.FunctionName, maxDefaultDispatchWidth)
 			}
 		}
 
@@ -143,26 +144,28 @@ func GetCallChainHandler(database *sql.DB) mcp.ToolHandler {
 	}
 }
 
-// countInterfaceDispatchEdges counts the direct interface-dispatch edges the
-// default confidence filter hides for one symbol. Direct edges only: this
-// answers "is there something behind the filter", not "how large is the fan-out
-// at depth", and paying for a recursive walk to phrase a hint would cost more
-// than the hint saves.
+// countInterfaceDispatchEdges counts the interface-dispatch edges the default
+// confidence filter still hides for one symbol — the wide fan-outs, and rows
+// from an index predating dispatch_width. Narrow sites are admitted by default
+// now and must not be reported as hidden. Direct edges only: this answers "is
+// there something behind the filter", not "how large is the fan-out at depth",
+// and a recursive walk to phrase a hint would cost more than the hint saves.
 func countInterfaceDispatchEdges(database *sql.DB, functionName, direction string) int {
 	const dispatch = "interface-dispatch"
+	hidden := fmt.Sprintf(" AND (e.dispatch_width = 0 OR e.dispatch_width > %d)", maxDefaultDispatchWidth)
 	var q string
 	switch direction {
 	case "callers":
 		q = `SELECT COUNT(*) FROM calls e JOIN functions f ON f.id = e.callee_id
-		     WHERE f.name = ? AND e.resolution = ?`
+		     WHERE f.name = ? AND e.resolution = ?` + hidden
 	case "callees":
 		q = `SELECT COUNT(*) FROM calls e JOIN functions f ON f.id = e.caller_id
-		     WHERE f.name = ? AND e.resolution = ?`
+		     WHERE f.name = ? AND e.resolution = ?` + hidden
 	default: // both
 		q = `SELECT COUNT(*) FROM calls e
 		     WHERE e.resolution = ? AND (
 		       e.callee_id IN (SELECT id FROM functions WHERE name = ?)
-		       OR e.caller_id IN (SELECT id FROM functions WHERE name = ?))`
+		       OR e.caller_id IN (SELECT id FROM functions WHERE name = ?))` + hidden
 		var n int
 		if err := database.QueryRow(q, dispatch, functionName, functionName).Scan(&n); err != nil {
 			return 0
@@ -178,10 +181,11 @@ func countInterfaceDispatchEdges(database *sql.DB, functionName, direction strin
 
 func queryCallChain(database *sql.DB, functionName string, depth int, direction, minConfidence string) ([]callChainNode, error) {
 	// edgeFilter gates which edges the walk may traverse by resolution confidence.
-	// Default EXCLUDES the low-confidence interface-dispatch fan-out (so default
-	// behavior is unchanged); a low min_confidence opts it in, a high one excludes
-	// it along with other weak edges. Mirrors get_impact.
-	edgeFilter := " AND e.resolution != 'interface-dispatch'"
+	// The default admits interface-dispatch edges only where the call site's
+	// fan-out is narrow, and excludes the wide ones; a low min_confidence opts
+	// into all of them, a high one excludes them along with other weak edges.
+	// Mirrors get_impact.
+	edgeFilter := defaultEdgeFilter()
 	var filterArgs []interface{}
 	if markers := edgeMarkersAtOrAbove(minConfidence); markers != nil {
 		ph := make([]string, len(markers))
@@ -266,4 +270,26 @@ func capNodes(nodes []callChainNode, limit int) ([]callChainNode, int) {
 		return nodes, total
 	}
 	return nodes[:limit], total
+}
+
+// maxDefaultDispatchWidth is how many concrete implementations an interface
+// call site may fan out to before its edges are excluded at the default
+// confidence.
+//
+// Chosen from the fan-out distribution measured on cobra, gin, and
+// client_golang: widths cluster at 1–5 (77% of call sites) and then jump to 13
+// and 19, with nothing in between. Admitting the narrow cluster recovers the
+// callers of an interface method — previously absent entirely, so a method
+// reached only through an interface looked like it had none — while the wide
+// sites, which grew responses by 872% and 1138%, stay behind min_confidence.
+const maxDefaultDispatchWidth = 5
+
+// defaultEdgeFilter is the SQL predicate applied when no min_confidence is
+// given. dispatch_width is 0 on rows indexed before the column existed, so an
+// un-reindexed database keeps the old exclude-everything behaviour rather than
+// silently widening.
+func defaultEdgeFilter() string {
+	return fmt.Sprintf(
+		" AND (e.resolution != 'interface-dispatch' OR (e.dispatch_width > 0 AND e.dispatch_width <= %d))",
+		maxDefaultDispatchWidth)
 }

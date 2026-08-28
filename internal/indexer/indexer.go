@@ -515,10 +515,15 @@ func insertInterfaceDispatchEdges(tx *sql.Tx, resolver *Resolver, c CallRecord, 
 	if ifaceType == "" {
 		return nil
 	}
-	for _, id := range resolver.interfaceMethodImpls(ifaceType, c.CalleeName) {
+	impls := resolver.interfaceMethodImpls(ifaceType, c.CalleeName)
+	// The fan-out width is what separates an unambiguous dispatch from a noisy
+	// one, and it is known exactly here. Recording it costs one integer per edge
+	// and saves a correlated subquery inside every recursive graph walk.
+	width := len(impls)
+	for _, id := range impls {
 		if _, err := tx.Exec(
-			"INSERT INTO calls (caller_id, callee_id, callee_name, file_path, line, resolution, receiver_name) VALUES (?, ?, ?, ?, ?, ?, ?)",
-			callerID, id, c.CalleeName, c.FilePath, c.Line, resInterfaceDispatch, nullStr(c.ReceiverName),
+			"INSERT INTO calls (caller_id, callee_id, callee_name, file_path, line, resolution, receiver_name, dispatch_width) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			callerID, id, c.CalleeName, c.FilePath, c.Line, resInterfaceDispatch, nullStr(c.ReceiverName), width,
 		); err != nil {
 			return err
 		}

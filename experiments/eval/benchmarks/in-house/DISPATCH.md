@@ -41,17 +41,17 @@ a quarter of the bytes — and it is wrong.
 
 | Probe | Arm | Recall | Precision | Calls | Bytes |
 |---|---|---|---|---|---|
-| D02 | grep (one-shot) | 1.00 | 0.67 | 4 | 930 |
-| D02 | max-context (`min_confidence: interface-dispatch`) | **1.00** | **0.67** | **1** | **463** |
-| D01 | max-context (shipped default) | 0.00 | 0.00 | 1 | 469 |
+| D01 | grep (one-shot) | 1.00 | 0.67 | 4 | 930 |
+| D01 | max-context (**shipped default**) | **1.00** | **0.67** | **1** | **463** |
+| D02 | max-context (`min_confidence: interface-dispatch`) | 1.00 | 0.67 | 1 | 463 |
 
-Opted in, max-context now returns **exactly grep's answer set** — same recall,
-same precision, same three names — in 1 call instead of 4 and 463 bytes instead
-of 930. The loss is gone; what is left is the ties-on-quality, wins-on-cost
-shape this project's other results have.
+Out of the box, with no flags, max-context now returns **exactly grep's answer
+set** — same recall, same precision, same three names — in 1 call instead of 4
+and 463 bytes instead of 930. The loss is gone; what is left is the
+ties-on-quality, wins-on-cost shape this project's other results have.
 
-D01 still scores 0.00 because the default still excludes the fan-out. It no
-longer does so silently: see defect 1.
+D01 and D02 now agree, which is the point: the setting that produced the right
+answer is the one users get without knowing it exists.
 
 ## Why the hypothesis was wrong (still true after the fixes)
 
@@ -72,26 +72,55 @@ moat.
 
 ## What the probe did find: three defects
 
-Losing to grep here is a bug, not a market. Each of these is independently
-reproducible.
+Losing to grep here was a bug, not a market. Each was independently reproducible,
+and all three are now fixed.
 
-**1. The shipped default returns zero true callers.** *(mitigated, not flipped)*
-`get_call_chain` and `get_impact` both exclude `interface-dispatch` edges by
-default. On D01 the only thing returned is `FlushMetrics` — the decoy — for a
-recall of 0.00. Whatever the right default is, "finds only the wrong answer" is
-not it.
+**1. The shipped default returned zero true callers.** *(fixed — the default is
+now width-gated)* `get_call_chain` and `get_impact` both excluded every
+`interface-dispatch` edge. On D01 the only thing returned was `FlushMetrics` —
+the decoy — for a recall of 0.00. "Finds only the wrong answer" is not a
+defensible default.
 
-The default is unchanged: on a repo with twenty implementations behind one
-interface the fan-out is genuinely noisy, and this fixture is too small to
-justify flipping it globally. What changed is that it no longer happens in
-silence. When the filter hides dispatch edges for the queried symbol, the
-response says so and names the argument that reveals them:
+Flipping it wholesale is not defensible either, so the question was settled with
+measurement rather than taste. Indexing three real Go repositories (cobra, gin,
+client_golang) shows dispatch edges are **0–4% of the call graph**, and their
+fan-out width is **bimodal**:
+
+| Fan-out width | Share of call sites | Cumulative |
+|---|---|---|
+| 1 | 13.4% | 13.4% |
+| 2 | 41.1% | 54.5% |
+| 3 | 3.6% | 58.0% |
+| 5 | 18.8% | **76.8%** |
+| 8 | 0.9% | 77.7% |
+| 13 | 20.5% | 98.2% |
+| 19 | 1.8% | 100% |
+
+Widths cluster at 1–5 and then jump to 13 and 19 with **nothing in between**.
+Admitting every edge grew individual responses by a median of 5–87% but by
+**872% and 1138%** at the tail — and the blowups were exactly the wide sites.
+
+So the default now admits dispatch edges whose call site fans out to **5
+implementations or fewer**, and excludes the rest. The width is recorded per
+edge at index time (`dispatch_width`, migration 10), where it is already known,
+rather than recomputed by a correlated subquery inside every recursive walk.
+Rows from an index predating the column carry 0 and are treated as wide, so an
+un-reindexed database keeps its old answers instead of silently widening.
+
+**Measured cost of the new default**, on max-context's own repo via
+`max-context bench`: average response 1,311 → 1,374 tokens (**+4.8%**), savings
+37.1× → 36.5× vs naive and 11.6× → 11.3× vs skilled. That is the price of D01
+going from recall 0.00 to 1.00.
+
+Wide fan-outs are still excluded, but no longer in silence. When the filter
+hides edges for the queried symbol, the response says so and names the argument
+that reveals them:
 
 ```json
-"interface_dispatch_excluded": 6,
-"interface_dispatch_hint": "6 edge(s) reach Send through an interface and are
-  excluded at the default confidence. Re-run with min_confidence
-  \"interface-dispatch\" to include them."
+"interface_dispatch_excluded": 182,
+"interface_dispatch_hint": "182 edge(s) reach Bind through an interface whose
+  fan-out is too wide (>5 implementations) to include by default. Re-run with
+  min_confidence \"interface-dispatch\" to include them."
 ```
 
 An empty caller list and "no callers exist" were indistinguishable before. This
@@ -154,7 +183,7 @@ keeps it that way so the probe measures dispatch resolution rather than this
 bug. It was a silent whole-class failure in real repositories: every interface
 written on one line resolved nothing, with nothing in the output to say why.
 
-Defect 1 is mitigated (the exclusion is now reported); defect 2 is fixed.
+All three defects are fixed.
 
 ## An API gap this exposed
 
