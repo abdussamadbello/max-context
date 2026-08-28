@@ -281,17 +281,11 @@ func parseGo(slashPath string, groups []treesitter.CaptureGroup) *ParseResult {
 		name, callee string
 		line         int
 	}
-	// rawRange is a binding whose type comes from another identifier's element
-	// type: `for _, n := range ns` and `n := ns[0]`.
-	type rawRange struct {
-		name, src string
-		line      int
-	}
 	var calls []rawCall
 	var fieldCalls []rawFieldCall
 	var typed []rawTyped              // params, receivers, and statically-typed locals
-	var elems []rawTyped              // identifier -> ELEMENT type of its collection
-	var ranges []rawRange             // range/index bindings, typed from elems below
+	var elems []typedIdent            // identifier -> ELEMENT type of its collection
+	var ranges []derivedBinding       // range/index bindings, typed from elems below
 	var calleeLocals []rawCalleeLocal // x := f() locals (9a), typed by the resolver
 
 	for _, g := range groups {
@@ -355,10 +349,10 @@ func parseGo(slashPath string, groups []treesitter.CaptureGroup) *ParseResult {
 			// The identifier's own type is the collection; the ELEMENT type is
 			// recorded separately so a range or index binding over it can be
 			// typed without claiming the collection is that type itself.
-			elems = append(elems, rawTyped{name: t["elem.name"], typ: t["elem.type"], line: rowOf(g, "elem.name")})
+			elems = append(elems, typedIdent{name: t["elem.name"], typ: t["elem.type"], line: rowOf(g, "elem.name")})
 
 		case t["range.name"] != "" && t["range.src"] != "":
-			ranges = append(ranges, rawRange{name: t["range.name"], src: t["range.src"], line: rowOf(g, "range.name")})
+			ranges = append(ranges, derivedBinding{name: t["range.name"], src: t["range.src"], line: rowOf(g, "range.name")})
 
 		case t["localcall.name"] != "" && t["localcall.callee"] != "":
 			calleeLocals = append(calleeLocals, rawCalleeLocal{
@@ -424,32 +418,7 @@ func parseGo(slashPath string, groups []treesitter.CaptureGroup) *ParseResult {
 			s.types[ty.name] = ty.typ
 		}
 	}
-	// Element types are scoped like any other binding, but kept out of s.types:
-	// `ns []Notifier` means ns is a slice, not a Notifier, and typing ns as one
-	// would invent a method call the code never makes.
-	elemTypes := map[*funcSpan]map[string]string{}
-	for _, e := range elems {
-		s := enclosing(spans, e.line)
-		if s == nil {
-			continue
-		}
-		if elemTypes[s] == nil {
-			elemTypes[s] = map[string]string{}
-		}
-		elemTypes[s][e.name] = e.typ
-	}
-	// A range or index binding takes its collection's element type. Bindings
-	// whose source is untyped stay untyped rather than guessing, so an
-	// unresolvable range produces no edge instead of a wrong one.
-	for _, rg := range ranges {
-		s := enclosing(spans, rg.line)
-		if s == nil {
-			continue
-		}
-		if typ, ok := elemTypes[s][rg.src]; ok {
-			s.types[rg.name] = typ
-		}
-	}
+	bindElementTypes(spans, elems, ranges)
 	// Package-level statically-typed vars (var x T at file scope) -> package_vars.
 	for _, ty := range typed {
 		if enclosing(spans, ty.line) == nil {
@@ -582,17 +551,11 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 		callee string
 		line   int
 	}
-	// rawRange is a binding typed from another identifier's element type:
-	// `for (const n of ns)` where ns is Notifier[].
-	type rawRange struct {
-		name, src string
-		line      int
-	}
 	var calls []rawCall
 	var thisCalls []rawThisCall
 	var typed []rawTyped
-	var elems []rawTyped
-	var ranges []rawRange
+	var elems []typedIdent
+	var ranges []derivedBinding
 	var calleeLocals []rawCalleeLocal
 	var selfMethods []rawSelfMethod
 
@@ -661,10 +624,10 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 			typed = append(typed, rawTyped{name: t["local.name"], typ: t["local.type"], line: rowOf(g, "local.name")})
 
 		case t["elem.name"] != "" && t["elem.type"] != "":
-			elems = append(elems, rawTyped{name: t["elem.name"], typ: t["elem.type"], line: rowOf(g, "elem.name")})
+			elems = append(elems, typedIdent{name: t["elem.name"], typ: t["elem.type"], line: rowOf(g, "elem.name")})
 
 		case t["range.name"] != "" && t["range.src"] != "":
-			ranges = append(ranges, rawRange{name: t["range.name"], src: t["range.src"], line: rowOf(g, "range.name")})
+			ranges = append(ranges, derivedBinding{name: t["range.name"], src: t["range.src"], line: rowOf(g, "range.name")})
 
 		case t["localnew.name"] != "" && t["localnew.type"] != "":
 			typed = append(typed, rawTyped{name: t["localnew.name"], typ: t["localnew.type"], line: rowOf(g, "localnew.name")})
@@ -740,30 +703,7 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 			s.types[ty.name] = ty.typ
 		}
 	}
-	// Element types are scoped like any other binding but kept out of s.types:
-	// `ns: Notifier[]` means ns is an array, not a Notifier.
-	tsElemTypes := map[*funcSpan]map[string]string{}
-	for _, e := range elems {
-		s := enclosing(fnSpans, e.line)
-		if s == nil {
-			continue
-		}
-		if tsElemTypes[s] == nil {
-			tsElemTypes[s] = map[string]string{}
-		}
-		tsElemTypes[s][e.name] = e.typ
-	}
-	// A for..of binding takes its collection's element type; an untyped source
-	// leaves the binding untyped rather than guessing.
-	for _, rg := range ranges {
-		s := enclosing(fnSpans, rg.line)
-		if s == nil {
-			continue
-		}
-		if typ, ok := tsElemTypes[s][rg.src]; ok {
-			s.types[rg.name] = typ
-		}
-	}
+	bindElementTypes(fnSpans, elems, ranges)
 	for _, cl := range calleeLocals {
 		if s := enclosing(fnSpans, cl.line); s != nil {
 			if s.fromCallee == nil {
@@ -900,6 +840,8 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 	var calls []rawCall
 	var selfCalls []rawSelfCall
 	var typed []rawTyped
+	var elems []typedIdent
+	var ranges []derivedBinding
 	var fields []rawField
 	var selfAssigns []rawSelfAssign
 	var calleeLocals []rawCalleeLocal
@@ -965,6 +907,12 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 		case t["param.name"] != "" && t["param.type"] != "":
 			typed = append(typed, rawTyped{name: t["param.name"], typ: t["param.type"], line: rowOf(g, "param.name")})
 
+		case t["elem.name"] != "" && t["elem.type"] != "":
+			elems = append(elems, typedIdent{name: t["elem.name"], typ: t["elem.type"], line: rowOf(g, "elem.name")})
+
+		case t["range.name"] != "" && t["range.src"] != "":
+			ranges = append(ranges, derivedBinding{name: t["range.name"], src: t["range.src"], line: rowOf(g, "range.name")})
+
 		case t["field.name"] != "" && t["field.type"] != "":
 			fields = append(fields, rawField{name: t["field.name"], typ: t["field.type"], line: rowOf(g, "field.name")})
 
@@ -1026,6 +974,7 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 			s.types[ty.name] = ty.typ
 		}
 	}
+	bindElementTypes(fnSpans, elems, ranges)
 	for _, cl := range calleeLocals {
 		if s := enclosing(fnSpans, cl.line); s != nil {
 			if s.fromCallee == nil {

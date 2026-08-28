@@ -24,6 +24,21 @@
   (identifier) @param.name
   type: (type (identifier) @param.type))
 
+; Element-typed collections: `ns: List[Notifier]`, `ns: Sequence[Notifier]`. The
+; identifier's own type is the collection; a `for` binding over it needs the
+; ELEMENT type. Without this a protocol held in a list is never reached — the
+; same gap the Go and TypeScript fixtures each exposed in turn.
+(typed_parameter
+  (identifier) @elem.name
+  type: (type (generic_type
+    (identifier) @_container
+    (type_parameter (type (identifier) @elem.type)))))
+
+; for n in ns: — bind n to ns's element type.
+(for_statement
+  left: (identifier) @range.name
+  right: (identifier) @range.src)
+
 ; Module-level constants/vars: NAME = value at file scope. Anchored at module
 ; scope (and module-level try/except/if/else guards — the common optional-import
 ; and version-gate fallback patterns) so config constants like DEFAULT_TIMEOUT_CONFIG
