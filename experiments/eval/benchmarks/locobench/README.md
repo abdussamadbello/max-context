@@ -21,11 +21,17 @@ smoke test in progress; no headline numbers yet.
 
 ## Data
 
-`data/` holds the extracted LoCoBench dataset (gitignored, 249MB zip → ~600MB):
+`data/` holds the extracted LoCoBench dataset (gitignored, 249MB zip → ~790MB):
 `data/generated/<project>/<InnerName>/` (real source) + `data/output/scenarios/*.json`
-(8,000 tasks). Fetch: `gdown 1pK1M1sRrVZUDMKYcwh49CdXug0UzStvl` (or curl via the
-Drive confirm-token), `unzip`, then flatten so `data/generated` + `data/output` sit
-directly under `data/`.
+(8,000 tasks across 1,000 projects).
+
+```bash
+./fetch-data.sh          # download + extract; no-op if data/ is already populated
+```
+
+The archive already carries `data/generated` and `data/output` at its top level,
+so it extracts straight into place — there is no flattening step. `__MACOSX/` is
+excluded: it roughly doubles the file count and holds nothing the harness reads.
 
 ## Run
 
