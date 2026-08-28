@@ -498,6 +498,9 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 	// root is "" for relative specifiers (always in-repo) or the first path segment
 	// of a bare specifier (resolver gates it against repo package roots).
 	importedSymbols := map[string]importedSym{}
+	// importedModules maps a namespace alias to the repo file the module names,
+	// so `ns.member()` can resolve the way Go's pkg.Func() already does.
+	importedModules := map[string]string{}
 	var fnSpans []*funcSpan
 	var clsSpans []*classSpan
 
@@ -536,22 +539,23 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 			path := strings.Trim(t["import.path"], "\"'`")
 			if alias := t["import.alias"]; alias != "" {
 				imports[alias] = path
+				// `ns.member()` needs the module the namespace names, in the form
+				// definitions are stamped with. Go recorded a candidate package
+				// here and resolved on a unique match; TypeScript stopped at the
+				// alias, so the same pattern resolved in one language only.
+				if mod := relativeModuleFile(slashPath, path, filepath.Ext(slashPath)); mod != "" {
+					importedModules[alias] = mod
+				}
 			}
 
 		case t["import.symbol"] != "":
 			// `import { f }` (local f) or `import { f as g }` (local g -> origin f).
-			origin := t["import.symbol"]
-			local := origin
-			if a := t["import.alias.local"]; a != "" {
-				local = a
-			}
 			// Gate on the source module: relative specifiers ("./..", "..") are
 			// always in-repo (root=""); bare specifiers carry their first segment
 			// for the resolver to check against repo roots (so a name from node:fs
 			// or a 3rd-party pkg won't link to a same-named local function).
-			spec := strings.Trim(t["import.symbol.src"], "\"'`")
-			if local != "" && spec != "" {
-				importedSymbols[local] = importedSym{origin: origin, root: tsModuleRoot(spec)}
+			if spec := strings.Trim(t["import.symbol.src"], "\"'`"); spec != "" {
+				recordImportedSymbol(importedSymbols, t["import.symbol"], t["import.alias.local"], tsModuleRoot(spec))
 			}
 
 		case t["class.name"] != "" && hasKey(t, "class.body"):
@@ -691,7 +695,11 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 	for _, c := range calls {
 		cr := CallRecord{CalleeName: c.callee, ReceiverName: c.recv, Language: lang, FilePath: slashPath, Line: c.line}
 		cr.linkBareImportedCall(c.callee, importedSymbols)
-		cr.classifyReceiver(c.recv, imports, fnSpans, c.line)
+		if cr.classifyReceiver(c.recv, imports, fnSpans, c.line) != "" {
+			// The receiver is a module namespace: name the file it refers to so
+			// the resolver can link on a unique match, as it does for Go.
+			cr.ReceiverPackage = importedModules[c.recv]
+		}
 		res.Calls = append(res.Calls, cr)
 	}
 
@@ -747,6 +755,9 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 	// dotted segment of an absolute module (gated against repo roots by the resolver
 	// so a stdlib import like `from urllib.parse import unquote` won't link locally).
 	importedSymbols := map[string]importedSym{}
+	// importedModules maps a namespace alias to the repo file the module names,
+	// so `ns.member()` can resolve the way Go's pkg.Func() already does.
+	importedModules := map[string]string{}
 	var fnSpans []*funcSpan
 	var clsSpans []*classSpan
 
@@ -795,10 +806,6 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 			// `from m import f` (alias=="" -> local name f) or
 			// `from m import f as g` (alias g -> origin f). Map local -> origin.
 			origin := t["import.symbol"]
-			local := origin
-			if a := t["import.alias"]; a != "" {
-				local = a
-			}
 			// Gate on the source module: relative imports (relmod, e.g. `.utils`)
 			// are always in-repo (root=""); absolute modules carry their first
 			// dotted segment for the resolver to check against repo roots (so a
@@ -807,13 +814,17 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 			if mod := t["import.symbol.mod"]; mod != "" {
 				root = firstDotSegment(mod) // absolute module: gate by repo root
 			}
-			if local != "" {
-				importedSymbols[local] = importedSym{origin: origin, root: root}
-			}
+			recordImportedSymbol(importedSymbols, origin, t["import.alias"], root)
 
 		case t["path"] != "":
 			p := strings.Trim(t["path"], "\"'`")
 			imports[p] = p
+			// `mod.member()` needs the file the module names, in the form
+			// definitions are stamped with. Go recorded a candidate package here
+			// and resolved on a unique match; Python stopped at the alias.
+			if mod := pythonModuleFile(slashPath, p); mod != "" {
+				importedModules[p] = mod
+			}
 
 		case t["class.name"] != "" && hasKey(t, "class.body"):
 			start, end := defRange(g, "class.name", "class.body")
@@ -928,7 +939,11 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 	for _, c := range calls {
 		cr := CallRecord{CalleeName: c.callee, ReceiverName: c.recv, Language: lang, FilePath: slashPath, Line: c.line}
 		cr.linkBareImportedCall(c.callee, importedSymbols)
-		cr.classifyReceiver(c.recv, imports, fnSpans, c.line)
+		if cr.classifyReceiver(c.recv, imports, fnSpans, c.line) != "" {
+			// The receiver is a module namespace: name the file it refers to so
+			// the resolver can link on a unique match, as it does for Go.
+			cr.ReceiverPackage = importedModules[c.recv]
+		}
 		res.Calls = append(res.Calls, cr)
 	}
 
