@@ -41,14 +41,21 @@ MC=../../../bin/max-context   # build with `make build` at repo root first
 go run ./cmd/eval --data data --lang go --category feature_implementation --limit 1 \
   --mc-bin "$MC" --rg "$(command -v rg)" --dry-run
 
-# Live (Bedrock): one paired run
+# Live (Anthropic API): keep the key in this shell only; do not put it in a file.
+# This runs the same models as the published results, so new runs stay
+# comparable to them. No --model-prefix: that exists for Bedrock's ids.
+read -rsp 'Anthropic key: ' ANTHROPIC_API_KEY && export ANTHROPIC_API_KEY && echo
+go run ./cmd/eval --backend anthropic --model claude-sonnet-4-6 --provider-preflight
 go run ./cmd/eval --data data --lang go --category feature_implementation --limit 1 \
-  --mc-bin "$MC" --rg "$HOME/.local/bin/rg" \
-  --backend bedrock --aws-region us-east-1 --aws-profile <profile> \
-  --task-model us.anthropic.claude-sonnet-4-6 \
-  --judge-model us.anthropic.claude-haiku-4-5-20251001-v1:0
+  --mc-bin "$MC" --rg "$(command -v rg)" \
+  --backend anthropic \
+  --model claude-sonnet-4-6 --judge claude-haiku-4-5-20251001 \
+  --arms grep,max-context,context --context-budget 4000
+unset ANTHROPIC_API_KEY
 
-# Live (OpenCode Zen): keep the key in this shell only; do not put it in a file.
+# Live (OpenCode Zen, or any OpenAI-compatible endpoint via --openai-base-url).
+# Note this changes the model, so results are NOT comparable to the published
+# runs — use it to test a second model family, not to extend an existing series.
 read -rsp 'OpenCode key: ' OPENCODE_KEY && export OPENCODE_KEY && echo
 go run ./cmd/eval --backend opencode --model nemotron-3-ultra-free --provider-preflight
 go run ./cmd/eval --data data --lang go --category feature_implementation --limit 1 \
@@ -57,6 +64,14 @@ go run ./cmd/eval --data data --lang go --category feature_implementation --limi
   --judge mimo-v2.5-free \
   --arms grep,max-context,context --context-budget 4000
 unset OPENCODE_KEY
+
+# Live (Bedrock): the backend the published in-house results were produced on.
+# Kept for provenance; needs AWS credentials.
+go run ./cmd/eval --data data --lang go --category feature_implementation --limit 1 \
+  --mc-bin "$MC" --rg "$(command -v rg)" \
+  --backend bedrock --aws-region us-east-1 --aws-profile <profile> \
+  --task-model us.anthropic.claude-sonnet-4-6 \
+  --judge-model us.anthropic.claude-haiku-4-5-20251001-v1:0
 ```
 
 After restoring the large LoCoBench dataset, run harness tests with
