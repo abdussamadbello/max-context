@@ -15,6 +15,23 @@ var defRe = regexp.MustCompile(`^(\s*)(?:async\s+)?def\s+(\w+)`)
 // `func (e *EmailNotifier) Send(...)` captures Send rather than the receiver.
 var goFuncRe = regexp.MustCompile(`^(\s*)func\s+(?:\([^)]*\)\s*)?(\w+)`)
 
+// tsFuncRe matches a TypeScript/JavaScript function or class method: an
+// optional `export`, optional modifiers, then either `function name(` or a bare
+// `name(` method. Interface members declare rather than define, so a body brace
+// is required to keep `send(msg: string): void;` from counting as a definition.
+var tsFuncRe = regexp.MustCompile(`^(\s*)(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:public\s+|private\s+|protected\s+|static\s+)*(?:function\s+)?(\w+)\s*\([^)]*\)[^;{]*\{`)
+
+// controlFlowKeywords look exactly like a call-shaped definition to a regex:
+// `for (const n of ns) {` matches "identifier, parens, brace" as surely as
+// `send(msg: string) {` does. Attributing a call to `for` silently costs the
+// baseline every hit inside a loop — grep found the line, and the harness threw
+// the answer away. RE2 has no lookahead, so the match is rejected here instead.
+var controlFlowKeywords = map[string]bool{
+	"for": true, "if": true, "while": true, "switch": true, "catch": true,
+	"return": true, "else": true, "do": true, "with": true, "await": true,
+	"typeof": true, "throw": true, "case": true,
+}
+
 // defPatternFor picks the definition pattern for a file's language. Attribution
 // that silently matches nothing scores the baseline at zero on every hit it
 // found, which reads as a retrieval failure and is really a harness failure —
@@ -26,6 +43,9 @@ func defPatternFor(path string) (*regexp.Regexp, bool) {
 		return defRe, true
 	case strings.HasSuffix(path, ".go"):
 		return goFuncRe, true
+	case strings.HasSuffix(path, ".ts"), strings.HasSuffix(path, ".tsx"),
+		strings.HasSuffix(path, ".js"), strings.HasSuffix(path, ".jsx"):
+		return tsFuncRe, true
 	default:
 		return nil, false
 	}
@@ -61,7 +81,7 @@ func enclosingFunc(path string, lines []string, line int) string {
 			continue
 		}
 		m := re.FindStringSubmatch(l)
-		if m == nil {
+		if m == nil || controlFlowKeywords[m[2]] {
 			continue
 		}
 		if leadingWidth(m[1]) < indent {

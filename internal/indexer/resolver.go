@@ -93,6 +93,11 @@ type Resolver struct {
 	// out to concrete implementations.
 	interfaceMethods map[string]map[string]bool
 
+	// interfaceLang records the language each interface was declared in, so
+	// satisfaction uses that language's rule rather than one language's rule
+	// applied to all of them.
+	interfaceLang map[string]string
+
 	// implCache memoizes (interfaceType, method) -> concrete method func ids;
 	// implDirty marks it stale after any method/interface change so it is rebuilt
 	// on the next lookup.
@@ -145,6 +150,7 @@ func newEmptyResolver() *Resolver {
 		bases:            map[string][]string{},
 		repoRoots:        map[string]int{},
 		interfaceMethods: map[string]map[string]bool{},
+		interfaceLang:    map[string]string{},
 		implCache:        map[[2]string][]int64{},
 		implDirty:        true,
 		fileFuncs:        map[string][]funcDef{},
@@ -345,6 +351,9 @@ func (r *Resolver) removeFile(file string) {
 		// Single-declaration assumption: an interface name lives in one file. If
 		// two files declared the same name, this drops the merged set (rare).
 		delete(r.interfaceMethods, name)
+		// Drop the language alongside the method set: a stale entry would pick
+		// the wrong satisfaction rule for a later interface of the same name.
+		delete(r.interfaceLang, name)
 	}
 	delete(r.fileInterfaces, file)
 
@@ -391,25 +400,33 @@ func (r *Resolver) addInterface(file, name, def string) {
 	for _, m := range methods {
 		set[m] = true
 	}
+	r.interfaceLang[name] = languageOfPath(file)
 	r.fileInterfaces[file] = append(r.fileInterfaces[file], name)
 	r.implDirty = true
 }
 
-// loadInterfaces populates interface method sets from every interface type in
-// the DB (Go: definition begins with "interface").
+// loadInterfaces populates interface method sets from every type the language
+// conventions recognise as an implementable interface.
+//
+// The predicate was `definition LIKE 'interface%'`, which is Go syntax — so a
+// TypeScript interface, whose body starts with '{', was never loaded and no
+// TypeScript type ever satisfied anything. The SQL narrows to a superset and
+// isInterfaceType applies the per-language rule.
 func (r *Resolver) loadInterfaces(q rowQuerier) error {
-	rows, err := q.Query("SELECT name, definition, file_path FROM types WHERE definition LIKE 'interface%'")
+	rows, err := q.Query("SELECT name, definition, file_path, kind FROM types")
 	if err != nil {
 		return nil
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var name, file string
+		var name, file, kind string
 		var def sql.NullString
-		if err := rows.Scan(&name, &def, &file); err != nil {
+		if err := rows.Scan(&name, &def, &file, &kind); err != nil {
 			return err
 		}
-		r.addInterface(file, name, def.String)
+		if isInterfaceType(languageOfPath(file), kind, def.String) {
+			r.addInterface(file, name, def.String)
+		}
 	}
 	return rows.Err()
 }
@@ -462,14 +479,30 @@ func (r *Resolver) rebuildImplements() {
 		}
 		s[m] = true
 	}
+	// Which concrete types satisfy an interface is decided by that interface's
+	// OWN language. Running Go's structural rule against a TypeScript interface
+	// would re-introduce the false positives the language already rules out by
+	// stating `implements` outright.
 	for iface, mset := range r.interfaceMethods {
 		if len(mset) == 0 {
 			continue
 		}
-		for t, tm := range typeMethods {
-			if t == iface || !subsetKeys(mset, tm) {
-				continue
+		rule, known := satisfactionRuleFor(r.interfaceLang[iface])
+		if !known {
+			rule = SatisfactionStructural
+		}
+		var impls []string
+		switch rule {
+		case SatisfactionDeclared:
+			impls = r.declaredImplementors(iface)
+		default:
+			for t, tm := range typeMethods {
+				if t != iface && subsetKeys(mset, tm) {
+					impls = append(impls, t)
+				}
 			}
+		}
+		for _, t := range impls {
 			for m := range mset {
 				for _, d := range r.byRecvName[[2]string{t, m}] {
 					k := [2]string{iface, m}
@@ -479,6 +512,46 @@ func (r *Resolver) rebuildImplements() {
 		}
 	}
 	r.implDirty = false
+}
+
+// declaredImplementors returns the types that state they implement iface,
+// following inheritance: a subclass of an implementor is one too. Exact by
+// construction — it reports what the source says rather than what its method
+// names happen to resemble.
+func (r *Resolver) declaredImplementors(iface string) []string {
+	direct := map[string]bool{}
+	for class, bases := range r.bases {
+		for _, base := range bases {
+			if base == iface {
+				direct[class] = true
+			}
+		}
+	}
+	// Transitive: anything deriving from a declared implementor implements it
+	// too. Bounded by the number of classes, and cycle-safe via the seen set.
+	seen := map[string]bool{}
+	queue := make([]string, 0, len(direct))
+	for c := range direct {
+		queue = append(queue, c)
+	}
+	var out []string
+	for len(queue) > 0 {
+		c := queue[0]
+		queue = queue[1:]
+		if seen[c] {
+			continue
+		}
+		seen[c] = true
+		out = append(out, c)
+		for sub, bases := range r.bases {
+			for _, base := range bases {
+				if base == c && !seen[sub] {
+					queue = append(queue, sub)
+				}
+			}
+		}
+	}
+	return out
 }
 
 func subsetKeys(small, big map[string]bool) bool {

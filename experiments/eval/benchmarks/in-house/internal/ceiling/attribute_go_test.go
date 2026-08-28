@@ -57,7 +57,9 @@ func TestDefPatternForKnownLanguages(t *testing.T) {
 	}{
 		{"a.py", true},
 		{"a.go", true},
-		{"a.ts", false},
+		{"a.ts", true},
+		{"a.tsx", true},
+		{"a.js", true},
 		{"a.rs", false},
 		{"Makefile", false},
 	} {
@@ -82,6 +84,61 @@ func TestGoFuncReCapturesMethodNameNotReceiver(t *testing.T) {
 		}
 		if m[2] != tc.want {
 			t.Errorf("%q captured %q, want %q", tc.line, m[2], tc.want)
+		}
+	}
+}
+
+// `for (const n of ns) {` matches "identifier, parens, brace" as surely as a
+// method signature does, so a call inside a loop attributed to `for` — grep
+// found the line and the harness discarded the answer. That scored the TS probe
+// 1/2 for grep when the real figure is 2/2, which is a false claim about the
+// baseline, not a finding.
+func TestEnclosingFuncIgnoresControlFlow(t *testing.T) {
+	src := []string{
+		"export function broadcastAll(ns: Notifier[], msg: string): void {", // 1
+		"  for (const n of ns) {", // 2
+		"    n.send(msg);",        // 3
+		"  }",                     // 4
+		"}",                       // 5
+		"",                        // 6
+		"export function retry(n: Notifier): void {", // 7
+		"  while (true) {",                           // 8
+		"    if (ready()) {",                         // 9
+		"      n.send('x');",                         // 10
+		"    }",                                      // 11
+		"  }",                                        // 12
+		"}",                                          // 13
+	}
+	for _, tc := range []struct {
+		line int
+		want string
+		why  string
+	}{
+		{3, "broadcastAll", "a call inside a for loop belongs to the enclosing function"},
+		{10, "retry", "nested while/if must not capture the call either"},
+	} {
+		if got := enclosingFunc("pipeline.ts", src, tc.line); got != tc.want {
+			t.Errorf("line %d: got %q, want %q (%s)", tc.line, got, tc.want, tc.why)
+		}
+	}
+}
+
+// A TypeScript interface member declares without defining; counting it as a
+// definition would attribute the interface's own line to a phantom function.
+func TestTsFuncReRequiresABody(t *testing.T) {
+	for _, tc := range []struct {
+		line  string
+		match bool
+	}{
+		{"export function deliverAlert(n: Notifier): void {", true},
+		{"  send(msg: string): void {", true},
+		{"  async send(msg: string): Promise<void> {", true},
+		{"  send(msg: string): void;", false}, // interface member: declaration only
+		{"  private helper(): void {", true},
+	} {
+		got := tsFuncRe.MatchString(tc.line)
+		if got != tc.match {
+			t.Errorf("tsFuncRe.MatchString(%q) = %v, want %v", tc.line, got, tc.match)
 		}
 	}
 }

@@ -582,9 +582,17 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 		callee string
 		line   int
 	}
+	// rawRange is a binding typed from another identifier's element type:
+	// `for (const n of ns)` where ns is Notifier[].
+	type rawRange struct {
+		name, src string
+		line      int
+	}
 	var calls []rawCall
 	var thisCalls []rawThisCall
 	var typed []rawTyped
+	var elems []rawTyped
+	var ranges []rawRange
 	var calleeLocals []rawCalleeLocal
 	var selfMethods []rawSelfMethod
 
@@ -652,6 +660,12 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 		case t["local.name"] != "" && t["local.type"] != "":
 			typed = append(typed, rawTyped{name: t["local.name"], typ: t["local.type"], line: rowOf(g, "local.name")})
 
+		case t["elem.name"] != "" && t["elem.type"] != "":
+			elems = append(elems, rawTyped{name: t["elem.name"], typ: t["elem.type"], line: rowOf(g, "elem.name")})
+
+		case t["range.name"] != "" && t["range.src"] != "":
+			ranges = append(ranges, rawRange{name: t["range.name"], src: t["range.src"], line: rowOf(g, "range.name")})
+
 		case t["localnew.name"] != "" && t["localnew.type"] != "":
 			typed = append(typed, rawTyped{name: t["localnew.name"], typ: t["localnew.type"], line: rowOf(g, "localnew.name")})
 
@@ -677,6 +691,19 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 			res.Types = append(res.Types, TypeRecord{
 				Name: t["type.name"], FilePath: slashPath, Line: rowOf(g, "type.name"), Kind: "type",
 				Definition: truncate(t["type.def"], 300), Exported: isExported(t["type.name"]),
+			})
+
+		case t["iface.name"] != "" && t["iface.def"] != "":
+			// kind "interface", not "type": a type alias cannot be implemented,
+			// and satisfaction is recorded only for constructs that can be.
+			res.Types = append(res.Types, TypeRecord{
+				Name: t["iface.name"], FilePath: slashPath, Line: rowOf(g, "iface.name"), Kind: "interface",
+				Definition: truncate(t["iface.def"], 300), Exported: isExported(t["iface.name"]),
+			})
+
+		case t["classbase.name"] != "" && t["classbase.base"] != "":
+			res.ClassBases = append(res.ClassBases, ClassBaseRecord{
+				ClassName: t["classbase.name"], BaseName: t["classbase.base"], FilePath: slashPath,
 			})
 		}
 	}
@@ -711,6 +738,30 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 		}
 		if s := enclosing(fnSpans, ty.line); s != nil {
 			s.types[ty.name] = ty.typ
+		}
+	}
+	// Element types are scoped like any other binding but kept out of s.types:
+	// `ns: Notifier[]` means ns is an array, not a Notifier.
+	tsElemTypes := map[*funcSpan]map[string]string{}
+	for _, e := range elems {
+		s := enclosing(fnSpans, e.line)
+		if s == nil {
+			continue
+		}
+		if tsElemTypes[s] == nil {
+			tsElemTypes[s] = map[string]string{}
+		}
+		tsElemTypes[s][e.name] = e.typ
+	}
+	// A for..of binding takes its collection's element type; an untyped source
+	// leaves the binding untyped rather than guessing.
+	for _, rg := range ranges {
+		s := enclosing(fnSpans, rg.line)
+		if s == nil {
+			continue
+		}
+		if typ, ok := tsElemTypes[s][rg.src]; ok {
+			s.types[rg.name] = typ
 		}
 	}
 	for _, cl := range calleeLocals {

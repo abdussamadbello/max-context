@@ -12,6 +12,12 @@
       "clone_url": "fixtures/dispatch",
       "sha": "",
       "lang": "go"
+    },
+    {
+      "name": "dispatch-ts",
+      "clone_url": "fixtures/dispatch-ts",
+      "sha": "",
+      "lang": "typescript"
     }
   ],
   "tasks": [
@@ -43,6 +49,16 @@
       "paraphrases": [
         "Which functions dispatch through the Notifier interface to reach a Send implementation?",
         "Enumerate the callers that reach EmailNotifier.Send or SMSNotifier.Send, by enclosing function."
+      ]
+    },
+    {
+      "id": "T01",
+      "repo": "dispatch-ts",
+      "type": "impact",
+      "intent": "List every function that delivers a notification by calling send through the Notifier interface. Name each calling function.",
+      "paraphrases": [
+        "Which functions dispatch through the Notifier interface to reach a send implementation?",
+        "Enumerate the callers that reach EmailNotifier.send or SmsNotifier.send, by enclosing function."
       ]
     }
   ],
@@ -79,6 +95,17 @@
       "oracle_version": "manual (controlled)",
       "human_verified": true,
       "notes": "INTERFACE DISPATCH test, symbol-addressed arm. Paired with D01 (default, by name)."
+    },
+    {
+      "task_id": "T01",
+      "expected_symbols": [
+        "deliverAlert",
+        "broadcastAll"
+      ],
+      "oracle": "hand-authored controlled TypeScript repo. Notifier declared notifier.ts:4 with one method, send. EmailNotifier (email.ts) and SmsNotifier (sms.ts) both state `implements Notifier`. Interface-dispatched call sites: pipeline.ts (deliverAlert, receiver is the Notifier parameter n; broadcastAll, receiver is the for..of binding over Notifier[]). MetricsBuffer (metrics.ts) has a send method with a matching signature but declares no implements and is never used as a Notifier, so flushMetrics is a false positive and is excluded from the gold set. No call site names a concrete implementation.",
+      "oracle_version": "manual (controlled)",
+      "human_verified": true,
+      "notes": "INTERFACE DISPATCH test, TypeScript. Mirrors D01 to check that satisfaction is not Go-only. TypeScript states satisfaction with `implements`, so the relation here is exact where Go's is structural: MetricsBuffer is excluded from implementations, which it is not on the Go fixture."
     }
   ]
 }

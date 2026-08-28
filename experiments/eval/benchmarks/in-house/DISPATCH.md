@@ -126,6 +126,61 @@ by the same proportion (+4.3% and +3.8%) over the same interval: that is the
 repository growing by 529 lines between runs, not a regression. Ratios are the
 comparable figure; the absolute token counts are not, across runs.
 
+## T01 — the same experiment in TypeScript
+
+Everything above was measured in Go, and a defect found in one language's
+resolution path says nothing about the others until a probe asks. Interface
+detection was `definition LIKE 'interface%'` — Go syntax — so **TypeScript
+recorded zero implementations and zero dispatch edges**, despite being one of
+the three languages with a dedicated parser and 130 lines of queries. The
+divergence was invisible: every language reports the same confidence vocabulary
+whether or not the analysis behind it ran.
+
+| Arm | Recall | Precision | Calls | Bytes |
+|---|---|---|---|---|
+| grep (one-shot) | 1.00 | 0.67 | 4 | 532 |
+| max-context | **1.00** | 0.67 | **1** | **462** |
+
+Interface handling is now per-language data (`internal/indexer/conventions.go`),
+and the rule differs because the languages differ:
+
+| | Interface recognised by | Satisfaction | Decoy |
+|---|---|---|---|
+| Go | `kind=type` + definition starts `interface` | **structural** — method sets are compared | included (correctly: it does satisfy) |
+| TypeScript | `kind=interface` | **declared** — `class C implements I` | **excluded** |
+
+TypeScript states satisfaction outright, so the relation is exact and carries no
+false positives. `MetricsBuffer` has a `send` with a matching signature and is
+still not an implementation, because it never says it is. Go has nothing to
+read, so structural inference stays — and stays imprecise.
+
+Adding a language is now a table entry. A language with no entry gets no
+satisfaction relation at all, which is the honest state for conventions nobody
+has written down, as against silently running Go's rule against it.
+
+### The probe immediately found the predicted second bug
+
+On its first run, T01 scored max-context **1/2**: `broadcastAll` was missed
+because `for (const n of ns)` over `Notifier[]` was untyped — the *same*
+range-binding defect fixed for Go earlier on this branch, present in TypeScript
+and unfound because nothing had asked. TypeScript now captures element types and
+`for..of` bindings the same way, and the probe scores 2/2.
+
+That is the whole argument for per-language probes in one result: the Go fix did
+not generalise, and nothing in the output would have said so.
+
+### And a harness bug it found in me
+
+T01's first fair-looking run scored **grep 1/2**. That was wrong. The TypeScript
+attributor matched `for (const n of ns) {` as a function definition — identifier,
+parens, brace — so a call inside a loop attributed to `for`, and grep's hit was
+discarded. RE2 has no lookahead, so `enclosingFunc` now rejects control-flow
+keywords explicitly. Corrected, grep scores 2/2 and the honest T01 result is a
+recall tie at a quarter of the calls.
+
+Publishing the 1/2 would have been a false claim about the baseline, which is
+the second time this file has had to record that class of error.
+
 ## Why the hypothesis was wrong (still true after the fixes)
 
 Aliasing and interface dispatch hide *different* things, and only one of them is
