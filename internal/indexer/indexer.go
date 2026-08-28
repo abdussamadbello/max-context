@@ -168,8 +168,13 @@ func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries, op
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	// Clear existing data for full reindex
+	// Clear existing data for full reindex. implementations references
+	// functions(id), so it must go first: deleting a referenced parent row
+	// fails the foreign key.
 	if _, err := tx.Exec("DELETE FROM calls"); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM implementations"); err != nil {
 		return err
 	}
 	if _, err := tx.Exec("DELETE FROM functions"); err != nil {
@@ -292,6 +297,13 @@ func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries, op
 		if err := insertInterfaceDispatchEdges(tx, resolver, c, callerID); err != nil {
 			return err
 		}
+	}
+
+	// Record interface satisfaction as its own relation, so "what implements
+	// this?" is a query rather than something inferred from the shape of a
+	// caller list.
+	if err := insertImplementations(tx, resolver); err != nil {
+		return err
 	}
 
 	for _, imp := range allImports {
@@ -590,8 +602,13 @@ func IndexFile(ctx context.Context, root string, relPath string, database *sql.D
 
 	// Delete calls before functions: calls.caller_id/callee_id reference
 	// functions(id), so with foreign_keys=ON the edges must go first.
+	// implementations.impl_func_id has the same reference, and the same failure
+	// mode the comment above describes: a violation here rolls back the whole
+	// reindex, so an edit to a file declaring an interface implementation would
+	// silently never land.
 	for _, sql := range []string{
 		"DELETE FROM calls WHERE file_path = ?",
+		"DELETE FROM implementations WHERE impl_func_id IN (SELECT id FROM functions WHERE file_path = ?)",
 		"DELETE FROM functions WHERE file_path = ?",
 		"DELETE FROM types WHERE file_path = ?",
 		"DELETE FROM imports WHERE file_path = ?",
@@ -863,4 +880,29 @@ func reresolveStaleEdgesInFile(ctx context.Context, tx *sql.Tx, root string, res
 // matching re-parsed calls back to their stored edge rows.
 func staleKey(line int, name string) string {
 	return fmt.Sprintf("%d\x00%s", line, name)
+}
+
+// insertImplementations writes the interface-satisfaction relation.
+//
+// This is the same computation the dispatch fan-out already relies on, stored
+// once instead of being reachable only through the synthetic edges it produces.
+// It is written on a full index; incremental single-file reindexes leave it
+// alone, since satisfaction is a whole-repo property that one file's methods
+// can change in either direction.
+func insertImplementations(tx *sql.Tx, resolver *Resolver) error {
+	if _, err := tx.Exec("DELETE FROM implementations"); err != nil {
+		return err
+	}
+	for _, rec := range resolver.Implementations() {
+		if rec.ImplType == "" {
+			continue // not a method this resolver indexed; storing it would name no type
+		}
+		if _, err := tx.Exec(
+			"INSERT OR IGNORE INTO implementations (interface_type, method_name, impl_func_id, impl_type) VALUES (?, ?, ?, ?)",
+			rec.InterfaceType, rec.MethodName, rec.ImplFuncID, rec.ImplType,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
 }

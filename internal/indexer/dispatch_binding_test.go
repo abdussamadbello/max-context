@@ -2,6 +2,7 @@ package indexer
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
@@ -175,4 +176,76 @@ func dispatchCallersOf(t *testing.T, root, symbol string) map[string]bool {
 		out[n] = true
 	}
 	return out
+}
+
+// implementations.impl_func_id references functions(id), and both reindex paths
+// delete functions. A violation rolls back the whole transaction, and RunWorker
+// discards that error — which is exactly how an earlier version of this bug made
+// edits to widely-called files silently never reach the index. Both paths are
+// exercised here because they clear rows differently.
+func TestReindexDoesNotViolateImplementationsForeignKey(t *testing.T) {
+	root := t.TempDir()
+	write := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(root, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("notifier.go", "package notify\n\ntype Notifier interface {\n\tSend(msg string) error\n}\n")
+	write("email.go", "package notify\n\ntype Email struct{}\n\nfunc (e *Email) Send(msg string) error { return nil }\n")
+	write("caller.go", "package notify\n\nfunc Notify(n Notifier) error { return n.Send(\"hi\") }\n")
+
+	database, err := db.Open(filepath.Join(root, ".max-context", "index.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	if err := db.Migrate(database); err != nil {
+		t.Fatal(err)
+	}
+	q, err := db.PrepareQueries(database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer q.Close()
+
+	ctx := context.Background()
+	if err := Index(ctx, root, database, q); err != nil {
+		t.Fatalf("first full index: %v", err)
+	}
+	if n := countImplementations(t, database); n == 0 {
+		t.Fatal("no implementations recorded; the rest of this test would prove nothing")
+	}
+
+	// Incremental: rewrite the file whose functions the relation references.
+	write("email.go", "package notify\n\ntype Email struct{}\n\nfunc (e *Email) Send(msg string) error { return nil }\n\nfunc unrelated() {}\n")
+	if err := IndexFile(ctx, root, "email.go", database, q); err != nil {
+		t.Fatalf("incremental reindex of an implementing file: %v", err)
+	}
+
+	// Full again: the clear order must let functions be deleted.
+	if err := Index(ctx, root, database, q); err != nil {
+		t.Fatalf("second full index: %v", err)
+	}
+	if n := countImplementations(t, database); n == 0 {
+		t.Error("implementations were not repopulated by the second full index")
+	}
+
+	// Nothing may reference a function that no longer exists.
+	var dangling int
+	if err := database.QueryRow(`SELECT COUNT(*) FROM implementations i
+		LEFT JOIN functions f ON f.id = i.impl_func_id WHERE f.id IS NULL`).Scan(&dangling); err != nil {
+		t.Fatal(err)
+	}
+	if dangling != 0 {
+		t.Errorf("%d implementations rows point at deleted functions", dangling)
+	}
+}
+
+func countImplementations(t *testing.T, database *sql.DB) int {
+	t.Helper()
+	var n int
+	if err := database.QueryRow("SELECT COUNT(*) FROM implementations").Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
 }

@@ -107,6 +107,26 @@ func GetCallChainHandler(database *sql.DB) mcp.ToolHandler {
 		}
 		truncated := false
 
+		// "What implements this?" is a different question from "who calls this?",
+		// and answering it from the caller list meant reading the dispatch
+		// fan-out back out of an answer to the other question.
+		if direction == "implementations" {
+			impls, err := queryImplementations(database, a.FunctionName)
+			if err != nil {
+				return nil, &mcp.RPCError{Code: mcp.CodeInternalError, Message: fmt.Sprintf("implementations query failed: %v", err)}
+			}
+			result["implementations"] = impls
+			if len(impls) == 0 {
+				result["note"] = fmt.Sprintf(
+					"No indexed type satisfies an interface declaring %s. Interface satisfaction is "+
+						"matched on method names, so a type is listed when its method set covers the "+
+						"interface, whether or not any call site passes one.", a.FunctionName)
+			}
+			attachStaleness(result, database)
+			b, _ := json.Marshal(result)
+			return []mcp.ContentItem{{Type: "text", Text: string(b)}}, nil
+		}
+
 		if direction == "callers" || direction == "both" {
 			callers, err := queryCallChain(database, seed, depth, "callers", a.MinConfidence, seedBySymbol)
 			if err != nil {
@@ -335,4 +355,40 @@ func nameForSymbol(database *sql.DB, symbol string) (string, bool) {
 		return "", false
 	}
 	return name, true
+}
+
+// implementationHit is one concrete method satisfying an interface method.
+type implementationHit struct {
+	Interface string `json:"interface"`
+	Type      string `json:"type"`
+	Name      string `json:"name"`
+	FilePath  string `json:"file_path"`
+	Line      int    `json:"line"`
+	Symbol    string `json:"symbol,omitempty"`
+}
+
+// queryImplementations answers "what implements this method?" from the stored
+// relation rather than from the synthetic call edges it also feeds. An index
+// built before the relation existed returns nothing, which reads as "not
+// recorded" rather than as "nothing implements it" thanks to the caller's note.
+func queryImplementations(database *sql.DB, methodName string) ([]implementationHit, error) {
+	rows, err := database.Query(`
+		SELECT i.interface_type, i.impl_type, f.name, f.file_path, f.start_line, COALESCE(f.symbol, '')
+		FROM implementations i
+		JOIN functions f ON f.id = i.impl_func_id
+		WHERE i.method_name = ?
+		ORDER BY i.interface_type, i.impl_type`, methodName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []implementationHit{}
+	for rows.Next() {
+		var h implementationHit
+		if err := rows.Scan(&h.Interface, &h.Type, &h.Name, &h.FilePath, &h.Line, &h.Symbol); err != nil {
+			continue
+		}
+		out = append(out, h)
+	}
+	return out, rows.Err()
 }

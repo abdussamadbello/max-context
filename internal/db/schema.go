@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const schemaVersion = 11
+const schemaVersion = 12
 
 // Migrate ensures the database schema is at the current version, running
 // migrations if needed. Call after Open.
@@ -82,6 +82,7 @@ var migrations = map[int]func(*sql.Tx) error{
 	9:  migrationV9,
 	10: migrationV10,
 	11: migrationV11,
+	12: migrationV12,
 }
 
 func migrationV1(tx *sql.Tx) error {
@@ -607,4 +608,32 @@ func migrationV11(tx *sql.Tx) error {
 		}
 	}
 	return nil
+}
+
+// migrationV12 persists interface satisfaction as its own relation.
+//
+// "Who calls this?" and "what implements this?" are different questions, and
+// this index answered them with one query. Satisfaction existed only as an
+// in-memory memo (Resolver.implCache) whose sole output was a fan-out of
+// synthetic call edges, so the only way to ask what implements an interface was
+// to ask who calls it and read the fan-out back out of the answer — which is
+// also why the fan-out had to be width-gated to keep caller lists usable.
+//
+// SCIP models this as a distinct relationship (is_implementation) precisely so
+// "find implementations" and "find references" stay separable. Storing it makes
+// the same separation available here.
+func migrationV12(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		CREATE TABLE IF NOT EXISTS implementations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			interface_type TEXT NOT NULL,
+			method_name TEXT NOT NULL,
+			impl_func_id INTEGER NOT NULL REFERENCES functions(id),
+			impl_type TEXT NOT NULL,
+			UNIQUE(interface_type, method_name, impl_func_id)
+		);
+		CREATE INDEX IF NOT EXISTS idx_impl_interface ON implementations(interface_type, method_name);
+		CREATE INDEX IF NOT EXISTS idx_impl_func ON implementations(impl_func_id);
+	`)
+	return err
 }

@@ -89,7 +89,7 @@ func RegisterAll(h *mcp.Handler, database *sql.DB, q *db.Queries, projectRoot st
 				"properties": map[string]interface{}{
 					"function_name":  str("Function to trace"),
 					"symbol":         str("Exact symbol from get_definition; disambiguates same-named methods"),
-					"direction":      map[string]interface{}{"type": "string", "enum": []string{"callers", "callees", "both"}, "default": "both"},
+					"direction":      map[string]interface{}{"type": "string", "description": "'implementations' lists types satisfying an interface method", "enum": []string{"callers", "callees", "both", "implementations"}, "default": "both"},
 					"depth":          depth,
 					"max_results":    map[string]interface{}{"type": "integer", "description": "Cap per direction, nearest first (1-200)", "default": 50},
 					"min_confidence": confidence,

@@ -989,3 +989,50 @@ func callerForLineQuery(q queryRower, filePath string, line int) (int64, error) 
 	}
 	return id, err
 }
+
+// ImplementationRecord is one (interface, method) -> concrete implementation
+// fact, the relation SCIP calls is_implementation.
+type ImplementationRecord struct {
+	InterfaceType string
+	MethodName    string
+	ImplFuncID    int64
+	ImplType      string
+}
+
+// Implementations returns every interface-satisfaction fact the resolver knows.
+//
+// The same computation previously existed only as a memo consumed while
+// emitting synthetic call edges, which meant "what implements this interface?"
+// could only be answered by asking who calls it and reading the fan-out back
+// out. Exposing the relation lets that question be asked directly.
+func (r *Resolver) Implementations() []ImplementationRecord {
+	if r.implDirty {
+		r.rebuildImplements()
+	}
+	out := make([]ImplementationRecord, 0, len(r.implCache))
+	for key, ids := range r.implCache {
+		iface, method := key[0], key[1]
+		for _, id := range ids {
+			out = append(out, ImplementationRecord{
+				InterfaceType: iface,
+				MethodName:    method,
+				ImplFuncID:    id,
+				ImplType:      r.receiverTypeOf(id),
+			})
+		}
+	}
+	return out
+}
+
+// receiverTypeOf reports the concrete type a method is defined on, or "" when
+// the id is not a method this resolver indexed.
+func (r *Resolver) receiverTypeOf(id int64) string {
+	for key, defs := range r.byRecvName {
+		for _, d := range defs {
+			if d.id == id {
+				return key[0]
+			}
+		}
+	}
+	return ""
+}

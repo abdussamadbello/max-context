@@ -93,6 +93,39 @@ it. Nothing in the source rules that out — only the fact that no caller ever
 passes one, which needs call-site type flow the indexer does not do. Symbols
 sharpen the *definition* side of the question; they do not narrow the fan-out.
 
+## Satisfaction is now its own relation
+
+That limit was only *visible* as a puzzle — why does the decoy appear? —
+because satisfaction had no representation of its own. It existed as an
+in-memory memo whose sole output was a fan-out of synthetic call edges, so "what
+implements this interface?" could only be answered by asking who calls it and
+reading the fan-out back out of the answer. That is also why the fan-out needed
+a width gate: it was riding inside a caller list that had to stay usable.
+
+SCIP keeps these apart deliberately —
+[`Relationship.is_implementation`](https://github.com/scip-code/scip/blob/main/scip.proto)
+is a distinct fact from a reference, so "find implementations" and "find
+references" never answer each other. The same separation now exists here:
+migration 12 stores an `implementations` relation, and `get_call_chain` takes
+`direction: "implementations"`.
+
+```
+$ max-context tool get_call_chain --json '{"function_name":"Send","direction":"implementations"}'
+  Notifier <- EmailNotifier   email.go:8
+  Notifier <- MetricsBuffer   metrics.go:15
+  Notifier <- SMSNotifier     sms.go:10
+```
+
+The decoy's presence in the caller list is now *explained* by a stored fact
+rather than inferred from the shape of an answer to a different question.
+
+**Cost:** none measurable. `max-context bench` reports 36.5× vs naive and 11.3×
+vs skilled, unchanged from before symbols and the implementations relation
+existed. Average response tokens moved 1,374 → 1,435, but naive and skilled rose
+by the same proportion (+4.3% and +3.8%) over the same interval: that is the
+repository growing by 529 lines between runs, not a regression. Ratios are the
+comparable figure; the absolute token counts are not, across runs.
+
 ## Why the hypothesis was wrong (still true after the fixes)
 
 Aliasing and interface dispatch hide *different* things, and only one of them is
