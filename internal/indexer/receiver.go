@@ -113,3 +113,41 @@ func selfKeyword(word string) func(string) bool {
 	}
 	return func(s string) bool { return s == word }
 }
+
+// classifySelfMethod fills the receiver fields for a bare method call on the
+// enclosing instance: `self.m()`, `this.m()`, and their super forms.
+//
+// TypeScript and Python each wrote this out; Go has no classes, so it is a
+// two-way duplication rather than three. Both handled self/this and neither
+// handled super, which is not a divergence but a shared gap: `super.m()` and
+// `super().m()` produced no edge, because the receiver is neither a typed local
+// nor a field and no existing kind described it.
+//
+// isSuper distinguishes the two. A super call keeps the enclosing class as its
+// receiver type — the resolver starts the method lookup at that class's bases,
+// so an override on the class itself is skipped, which is what the call site
+// asked for.
+func (cr *CallRecord) classifySelfMethod(receiverName string, isSuper bool, clsSpans []*classSpan, line int) {
+	cr.ReceiverName = receiverName
+	cs := enclosingClass(clsSpans, line)
+	if cs == nil {
+		// A self/super call outside any class is malformed source or a parse
+		// artifact; naming no type is better than naming a wrong one.
+		cr.ReceiverKind = "unresolved-field"
+		return
+	}
+	cr.ReceiverType = cs.name
+	if isSuper {
+		cr.ReceiverKind = "super"
+		return
+	}
+	cr.ReceiverKind = "var"
+}
+
+// selfReceiverName is the receiver text recorded for a self/super method call.
+func selfReceiverName(self string, isSuper bool) string {
+	if isSuper {
+		return "super"
+	}
+	return self
+}

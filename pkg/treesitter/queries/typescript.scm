@@ -121,6 +121,13 @@
     object: (this)
     property: (property_identifier) @callselfmethod.callee))
 
+; super.m() -> the method the BASE class provides. Distinct from this.m():
+; the call site wrote super precisely to skip an override on this class.
+(call_expression
+  function: (member_expression
+    object: (super) @callsuper.recv
+    property: (property_identifier) @callsuper.callee))
+
 ; Interfaces (types table). Captured separately from type aliases: only an
 ; interface can be implemented, and satisfaction is recorded per language from
 ; whichever construct that language uses.

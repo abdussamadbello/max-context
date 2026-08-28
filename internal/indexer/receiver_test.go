@@ -217,3 +217,70 @@ func openIndexed(t *testing.T, root string) (*sql.DB, *db.Queries, func()) {
 	}
 	return database, q, func() { q.Close(); database.Close() }
 }
+
+// `super.m()` / `super().m()` resolved in neither TypeScript nor Python. Unlike
+// the other seams this was not a divergence — both languages had the same gap —
+// but the receiver is neither a typed local nor a field, so no existing kind
+// described it and every super call produced no edge at all.
+func TestSuperCallResolvesToTheBaseMethod(t *testing.T) {
+	for _, tc := range []struct{ name, file, src, method, wantCaller string }{
+		{
+			name: "typescript", file: "a.ts", method: "greet", wantCaller: "run",
+			src: "export class Base {\n  greet(): void {}\n}\n\nexport class Svc extends Base {\n  run(): void {\n    super.greet();\n  }\n}\n",
+		},
+		{
+			name: "python", file: "a.py", method: "greet", wantCaller: "run",
+			src: "class Base:\n    def greet(self):\n        pass\n\n\nclass Svc(Base):\n    def run(self):\n        super().greet()\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			if err := os.WriteFile(filepath.Join(root, tc.file), []byte(tc.src), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if callers := callersOfMethod(t, root, tc.method); !callers[tc.wantCaller] {
+				t.Errorf("%s: super call from %s does not reach the base method; got %v",
+					tc.name, tc.wantCaller, keysOf(callers))
+			}
+		})
+	}
+}
+
+// The point of writing super is to skip the override on this class. Resolving a
+// super call the way self resolves would land on the override — the method the
+// call site went out of its way not to invoke.
+func TestSuperSkipsTheOverrideOnTheCallingClass(t *testing.T) {
+	root := t.TempDir()
+	src := "class Base:\n    def greet(self):\n        pass\n\n\nclass Svc(Base):\n    def greet(self):\n        super().greet()\n"
+	if err := os.WriteFile(filepath.Join(root, "a.py"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	owner, receiver := resolvedOwnerOf(t, root, "greet")
+	if receiver != "super" {
+		t.Errorf("receiver recorded as %q, want %q", receiver, "super")
+	}
+	if owner != "Base" {
+		t.Errorf("super().greet() resolved to %s.greet; Svc overrides greet, so the target is Base.greet", owner)
+	}
+}
+
+// A self/super call outside any class names no type, rather than a wrong one.
+func TestSelfMethodOutsideAClassIsUnresolved(t *testing.T) {
+	var cr CallRecord
+	cr.classifySelfMethod("self", false, nil, 5)
+	if cr.ReceiverKind != "unresolved-field" || cr.ReceiverType != "" {
+		t.Errorf("got (%q,%q), want (unresolved-field,\"\")", cr.ReceiverKind, cr.ReceiverType)
+	}
+
+	spans := []*classSpan{{start: 1, end: 10, name: "Svc"}}
+	var self, super CallRecord
+	self.classifySelfMethod("self", false, spans, 5)
+	super.classifySelfMethod("super", true, spans, 5)
+	if self.ReceiverKind != "var" || self.ReceiverType != "Svc" {
+		t.Errorf("self: got (%q,%q), want (var,Svc)", self.ReceiverKind, self.ReceiverType)
+	}
+	if super.ReceiverKind != "super" || super.ReceiverType != "Svc" {
+		t.Errorf("super: got (%q,%q), want (super,Svc) — the class whose BASES are searched",
+			super.ReceiverKind, super.ReceiverType)
+	}
+}

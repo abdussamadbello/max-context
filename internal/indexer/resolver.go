@@ -821,6 +821,19 @@ func fileRepoRoots(p string) []string {
 	return []string{base}
 }
 
+// methodOnBases resolves a method starting from a class's bases rather than the
+// class itself, which is what `super` means. Without it a super call resolved to
+// nothing at all: the receiver is neither a typed local nor a field, so no
+// existing kind described it.
+func (r *Resolver) methodOnBases(class, name string) (int64, bool) {
+	for _, base := range r.bases[class] {
+		if id, ok := r.methodOnType(base, name); ok {
+			return id, true
+		}
+	}
+	return 0, false
+}
+
 // indexByteASCII is strings.IndexByte without importing strings here.
 func indexByteASCII(s string, b byte) int {
 	for i := 0; i < len(s); i++ {
@@ -907,6 +920,15 @@ func (t typedReceiverStrategy) resolveTyped(r *Resolver, c CallRecord, scope, fi
 	case "var":
 		// Method call on a receiver whose type is statically known.
 		if id, ok := r.methodOnType(c.ReceiverType, c.CalleeName); ok {
+			return id, resReceiverTyped
+		}
+		return 0, resUnresolved
+
+	case "super":
+		// super.m() / super().m(): the lookup starts at the enclosing class's
+		// BASES, not at the class, so an override on the class itself is skipped
+		// — which is the whole reason the call site wrote super.
+		if id, ok := r.methodOnBases(c.ReceiverType, c.CalleeName); ok {
 			return id, resReceiverTyped
 		}
 		return 0, resUnresolved

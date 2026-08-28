@@ -118,6 +118,13 @@
     object: (identifier) @callselfmethod.recv
     attribute: (identifier) @callselfmethod.callee))
 
+; super().method() -> the method the BASE class provides. Distinct from
+; self.method(): the call site wrote super precisely to skip an override here.
+(call
+  function: (attribute
+    object: (call function: (identifier) @callsuper.recv)
+    attribute: (identifier) @callsuper.callee))
+
 ; Imports
 (import_statement
   name: (dotted_name) @path)

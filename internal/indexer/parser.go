@@ -521,8 +521,9 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 		line         int
 	}
 	type rawSelfMethod struct {
-		callee string
-		line   int
+		callee  string
+		isSuper bool
+		line    int
 	}
 	var calls []rawCall
 	var thisCalls []rawThisCall
@@ -619,6 +620,9 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 		case t["callselfmethod.callee"] != "":
 			selfMethods = append(selfMethods, rawSelfMethod{callee: t["callselfmethod.callee"], line: rowOf(g, "callselfmethod.callee")})
 
+		case t["callsuper.callee"] != "":
+			selfMethods = append(selfMethods, rawSelfMethod{callee: t["callsuper.callee"], isSuper: true, line: rowOf(g, "callsuper.callee")})
+
 		case t["const.name"] != "":
 			// Module-level const/let (program/export-anchored) -> searchable symbol.
 			res.Consts = append(res.Consts, ConstRecord{
@@ -712,13 +716,8 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 
 	// this.m() — direct method on the enclosing class.
 	for _, sm := range selfMethods {
-		cr := CallRecord{CalleeName: sm.callee, ReceiverName: "this", Language: lang, FilePath: slashPath, Line: sm.line}
-		if cs := enclosingClass(clsSpans, sm.line); cs != nil {
-			cr.ReceiverKind = "var"
-			cr.ReceiverType = cs.name
-		} else {
-			cr.ReceiverKind = "unresolved-field"
-		}
+		cr := CallRecord{CalleeName: sm.callee, Language: lang, FilePath: slashPath, Line: sm.line}
+		cr.classifySelfMethod(selfReceiverName("this", sm.isSuper), sm.isSuper, clsSpans, sm.line)
 		res.Calls = append(res.Calls, cr)
 	}
 
@@ -786,8 +785,9 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 		line         int
 	}
 	type rawSelfMethod struct {
-		callee string
-		line   int
+		callee  string
+		isSuper bool
+		line    int
 	}
 	var calls []rawCall
 	var selfCalls []rawSelfCall
@@ -880,6 +880,9 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 		case t["callselfmethod.callee"] != "" && t["callselfmethod.recv"] == "self":
 			selfMethods = append(selfMethods, rawSelfMethod{callee: t["callselfmethod.callee"], line: rowOf(g, "callselfmethod.callee")})
 
+		case t["callsuper.callee"] != "" && t["callsuper.recv"] == "super":
+			selfMethods = append(selfMethods, rawSelfMethod{callee: t["callsuper.callee"], isSuper: true, line: rowOf(g, "callsuper.callee")})
+
 		case t["call.callee"] != "":
 			// Skip self.X() here — handled by the self-method/self-field cases so
 			// it isn't double-counted as an unknown member call.
@@ -956,13 +959,8 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 
 	// self.method() — direct method on the enclosing class.
 	for _, sm := range selfMethods {
-		cr := CallRecord{CalleeName: sm.callee, ReceiverName: "self", Language: lang, FilePath: slashPath, Line: sm.line}
-		if cs := enclosingClass(clsSpans, sm.line); cs != nil {
-			cr.ReceiverKind = "var"
-			cr.ReceiverType = cs.name
-		} else {
-			cr.ReceiverKind = "unresolved-field"
-		}
+		cr := CallRecord{CalleeName: sm.callee, Language: lang, FilePath: slashPath, Line: sm.line}
+		cr.classifySelfMethod(selfReceiverName("self", sm.isSuper), sm.isSuper, clsSpans, sm.line)
 		res.Calls = append(res.Calls, cr)
 	}
 
