@@ -34,6 +34,16 @@
         "Which functions dispatch through the Notifier interface to reach a Send implementation?",
         "Enumerate the callers that reach EmailNotifier.Send or SMSNotifier.Send, by enclosing function."
       ]
+    },
+    {
+      "id": "D03",
+      "repo": "dispatch",
+      "type": "impact",
+      "intent": "List every function that delivers a notification by calling Send through the Notifier interface. Name each calling function.",
+      "paraphrases": [
+        "Which functions dispatch through the Notifier interface to reach a Send implementation?",
+        "Enumerate the callers that reach EmailNotifier.Send or SMSNotifier.Send, by enclosing function."
+      ]
     }
   ],
   "keys": [
@@ -58,6 +68,17 @@
       "oracle_version": "manual (controlled)",
       "human_verified": true,
       "notes": "INTERFACE DISPATCH test, opt-in arm. Paired with D01."
+    },
+    {
+      "task_id": "D03",
+      "expected_symbols": [
+        "DeliverAlert",
+        "BroadcastAll"
+      ],
+      "oracle": "Identical repo and gold set as D01; see that key's oracle for the site list. This task differs only in that the max-context arm addresses the definition by its SCIP-shaped symbol 'go . dispatch . EmailNotifier#Send().' rather than by the bare name 'Send'. Three types in this repo declare Send, so a name-based query cannot distinguish them and every arm pays the decoy; the symbol names one of them.",
+      "oracle_version": "manual (controlled)",
+      "human_verified": true,
+      "notes": "INTERFACE DISPATCH test, symbol-addressed arm. Paired with D01 (default, by name)."
     }
   ]
 }

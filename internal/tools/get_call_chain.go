@@ -11,8 +11,13 @@ import (
 
 type getCallChainArgs struct {
 	FunctionName string `json:"function_name"`
-	Direction    string `json:"direction"`
-	Depth        *int   `json:"depth"`
+	// Symbol addresses ONE definition precisely, where function_name matches
+	// every definition sharing that name. A repository with EmailNotifier.Send,
+	// SMSNotifier.Send and MetricsBuffer.Send cannot be asked about one of them
+	// by name; get_definition returns each match's symbol for this argument.
+	Symbol    string `json:"symbol"`
+	Direction string `json:"direction"`
+	Depth     *int   `json:"depth"`
 	// MinConfidence, when set, restricts traversal to edges at or above the given
 	// resolution confidence. Like get_impact, the low-confidence interface-dispatch
 	// fan-out is excluded by default and included only at a low min_confidence.
@@ -51,8 +56,22 @@ func GetCallChainHandler(database *sql.DB) mcp.ToolHandler {
 				return nil, &mcp.RPCError{Code: mcp.CodeInvalidParams, Message: err.Error()}
 			}
 		}
-		if a.FunctionName == "" {
-			return nil, &mcp.RPCError{Code: mcp.CodeInvalidParams, Message: "function_name required"}
+		if a.FunctionName == "" && a.Symbol == "" {
+			return nil, &mcp.RPCError{Code: mcp.CodeInvalidParams, Message: "function_name or symbol required"}
+		}
+		// A symbol names exactly one definition, so it supersedes the name. When
+		// it matches nothing, say so rather than silently widening to every
+		// same-named definition — that would answer a different question than
+		// the one asked, which is the failure this argument exists to fix.
+		seed, seedBySymbol := a.FunctionName, false
+		if a.Symbol != "" {
+			name, ok := nameForSymbol(database, a.Symbol)
+			if !ok {
+				return nil, &mcp.RPCError{Code: mcp.CodeInvalidParams, Message: fmt.Sprintf(
+					"no definition has symbol %q; call get_definition to get the symbol of the definition you mean", a.Symbol)}
+			}
+			seed, seedBySymbol = a.Symbol, true
+			a.FunctionName = name
 		}
 		depth := 2
 		if a.Depth != nil {
@@ -83,10 +102,13 @@ func GetCallChainHandler(database *sql.DB) mcp.ToolHandler {
 			"function": a.FunctionName,
 			"depth":    depth,
 		}
+		if seedBySymbol {
+			result["symbol"] = a.Symbol
+		}
 		truncated := false
 
 		if direction == "callers" || direction == "both" {
-			callers, err := queryCallChain(database, a.FunctionName, depth, "callers", a.MinConfidence)
+			callers, err := queryCallChain(database, seed, depth, "callers", a.MinConfidence, seedBySymbol)
 			if err != nil {
 				return nil, &mcp.RPCError{Code: mcp.CodeInternalError, Message: fmt.Sprintf("callers query failed: %v", err)}
 			}
@@ -99,7 +121,7 @@ func GetCallChainHandler(database *sql.DB) mcp.ToolHandler {
 		}
 
 		if direction == "callees" || direction == "both" {
-			callees, err := queryCallChain(database, a.FunctionName, depth, "callees", a.MinConfidence)
+			callees, err := queryCallChain(database, seed, depth, "callees", a.MinConfidence, seedBySymbol)
 			if err != nil {
 				return nil, &mcp.RPCError{Code: mcp.CodeInternalError, Message: fmt.Sprintf("callees query failed: %v", err)}
 			}
@@ -179,7 +201,15 @@ func countInterfaceDispatchEdges(database *sql.DB, functionName, direction strin
 	return n
 }
 
-func queryCallChain(database *sql.DB, functionName string, depth int, direction, minConfidence string) ([]callChainNode, error) {
+// queryCallChain walks the graph from a seed definition. seedBySymbol selects
+// which column the base case matches: resolving a symbol to its name and
+// seeding on the name would re-widen to every same-named definition, undoing
+// the precision the symbol was passed for.
+func queryCallChain(database *sql.DB, seed string, depth int, direction, minConfidence string, seedBySymbol bool) ([]callChainNode, error) {
+	seedClause := "f.name = ?"
+	if seedBySymbol {
+		seedClause = "f.symbol = ?"
+	}
 	// edgeFilter gates which edges the walk may traverse by resolution confidence.
 	// The default admits interface-dispatch edges only where the call site's
 	// fan-out is narrow, and excludes the wide ones; a low min_confidence opts
@@ -203,7 +233,7 @@ func queryCallChain(database *sql.DB, functionName string, depth int, direction,
 		query = `
 			WITH RECURSIVE chain(id, name, file_path, line, depth, resolution) AS (
 				SELECT f.id, f.name, f.file_path, f.start_line, 0, ''
-				FROM functions f WHERE f.name = ?
+				FROM functions f WHERE ` + seedClause + `
 				UNION ALL
 				SELECT f.id, f.name, f.file_path, f.start_line, c.depth + 1, e.resolution
 				FROM chain c
@@ -220,7 +250,7 @@ func queryCallChain(database *sql.DB, functionName string, depth int, direction,
 		query = `
 			WITH RECURSIVE chain(id, name, file_path, line, depth, resolution) AS (
 				SELECT f.id, f.name, f.file_path, f.start_line, 0, ''
-				FROM functions f WHERE f.name = ?
+				FROM functions f WHERE ` + seedClause + `
 				UNION ALL
 				SELECT COALESCE(f.id, 0), COALESCE(f.name, e.callee_name), COALESCE(f.file_path, '(external)'), f.start_line, c.depth + 1, e.resolution
 				FROM chain c
@@ -234,8 +264,8 @@ func queryCallChain(database *sql.DB, functionName string, depth int, direction,
 		`
 	}
 
-	// Arg order: base-case name, recursive depth, then the edge-filter markers.
-	args := append([]interface{}{functionName, depth}, filterArgs...)
+	// Arg order: base-case seed, recursive depth, then the edge-filter markers.
+	args := append([]interface{}{seed, depth}, filterArgs...)
 	rows, err := database.Query(query, args...)
 	if err != nil {
 		return nil, err
@@ -292,4 +322,17 @@ func defaultEdgeFilter() string {
 	return fmt.Sprintf(
 		" AND (e.resolution != 'interface-dispatch' OR (e.dispatch_width > 0 AND e.dispatch_width <= %d))",
 		maxDefaultDispatchWidth)
+}
+
+// nameForSymbol returns the definition name a symbol addresses. Used only to
+// label the response and to verify the symbol exists — the walk itself seeds on
+// the symbol, so an unknown one must fail loudly rather than fall back to a
+// name match that would answer about every same-named definition.
+func nameForSymbol(database *sql.DB, symbol string) (string, bool) {
+	var name string
+	err := database.QueryRow(`SELECT name FROM functions WHERE symbol = ? LIMIT 1`, symbol).Scan(&name)
+	if err != nil {
+		return "", false
+	}
+	return name, true
 }

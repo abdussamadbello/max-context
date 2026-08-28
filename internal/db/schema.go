@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const schemaVersion = 10
+const schemaVersion = 11
 
 // Migrate ensures the database schema is at the current version, running
 // migrations if needed. Call after Open.
@@ -81,6 +81,7 @@ var migrations = map[int]func(*sql.Tx) error{
 	8:  migrationV8,
 	9:  migrationV9,
 	10: migrationV10,
+	11: migrationV11,
 }
 
 func migrationV1(tx *sql.Tx) error {
@@ -578,6 +579,28 @@ func migrationV10(tx *sql.Tx) error {
 	for _, stmt := range []string{
 		`ALTER TABLE calls ADD COLUMN dispatch_width INTEGER NOT NULL DEFAULT 0`,
 		`CREATE INDEX IF NOT EXISTS idx_calls_dispatch_width ON calls(dispatch_width)`,
+	} {
+		if _, err := tx.Exec(stmt); err != nil {
+			return fmt.Errorf("%s: %w", stmt, err)
+		}
+	}
+	return nil
+}
+
+// migrationV11 adds the SCIP-shaped symbol string for each definition.
+//
+// Every tool addresses code by bare name, which cannot express the question a
+// caller usually means: EmailNotifier.Send, SMSNotifier.Send and an unrelated
+// MetricsBuffer.Send all collapse into "Send". The symbol carries the package
+// and receiver type alongside the name, so the three become distinguishable
+// without changing how the fuzzy lookups work.
+//
+// Empty until reindexed. A definition with no symbol is simply not addressable
+// that way, which degrades to today's behaviour rather than matching wrongly.
+func migrationV11(tx *sql.Tx) error {
+	for _, stmt := range []string{
+		`ALTER TABLE functions ADD COLUMN symbol TEXT`,
+		`CREATE INDEX IF NOT EXISTS idx_functions_symbol ON functions(symbol)`,
 	} {
 		if _, err := tx.Exec(stmt); err != nil {
 			return fmt.Errorf("%s: %w", stmt, err)

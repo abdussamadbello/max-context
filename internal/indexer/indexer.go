@@ -410,9 +410,10 @@ func insertFunction(tx *sql.Tx, f FuncRecord) error {
 		kind = "func"
 	}
 	_, err := tx.Exec(
-		"INSERT INTO functions (name, name_parts, file_path, start_line, end_line, language, exported, code, docstring, signature, kind, receiver_type, package, return_type) VALUES (?1, split_identifier(?1), ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+		"INSERT INTO functions (name, name_parts, file_path, start_line, end_line, language, exported, code, docstring, signature, kind, receiver_type, package, return_type, symbol) VALUES (?1, split_identifier(?1), ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
 		f.Name, f.FilePath, f.StartLine, f.EndLine, f.Language, exported, f.Code, f.Docstring, f.Signature,
 		kind, nullStr(f.ReceiverType), nullStr(f.Package), nullStr(f.ReturnType),
+		nullStr(SymbolID(f.Language, f.Package, f.ReceiverType, kind, f.Name)),
 	)
 	return err
 }

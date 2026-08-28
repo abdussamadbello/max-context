@@ -53,6 +53,46 @@ ties-on-quality, wins-on-cost shape this project's other results have.
 D01 and D02 now agree, which is the point: the setting that produced the right
 answer is the one users get without knowing it exists.
 
+### D03 — addressing one definition by symbol (run 2026-08-28)
+
+Every arm above caps at **precision 0.67**, and the reason is not retrieval: the
+question cannot be asked. Three types here declare `Send`, `get_call_chain` took
+only a bare `function_name`, and grep matches text — so `MetricsBuffer.Send`
+comes back no matter which `Send` the caller meant.
+
+D03 asks the same question with the max-context arm naming one definition by a
+SCIP-shaped symbol instead:
+
+```json
+{"symbol": "go . dispatch . EmailNotifier#Send().", "direction": "callers"}
+```
+
+| Arm | Recall | Precision | Calls | Bytes |
+|---|---|---|---|---|
+| grep (one-shot) | 1.00 | 0.67 | 4 | 930 |
+| grep (alias-chained) | 1.00 | 0.67 | 4 | 930 |
+| **max-context (by symbol)** | **1.00** | **1.00** | **1** | **413** |
+
+This is the first probe in the series where max-context **beats** grep rather
+than matching it. The gain is not a better search — it is a question grep has no
+way to express. A text search cannot say "this `Send`, not that one", so it pays
+the decoy at every confidence and with every pattern.
+
+Symbols are recorded per definition at index time from the package, receiver
+type, and kind already stored (`internal/indexer/symbolid.go`), following
+[SCIP's symbol grammar](https://github.com/scip-code/scip/blob/main/docs/scip.md).
+This is **not** a SCIP index: there is no dependency resolution, so manager and
+version are placeholders and a symbol is unique within one indexed repository
+rather than across repositories.
+
+One honest limit the probe exposes. Asking for
+`go . dispatch . MetricsBuffer#Send().` returns all three callers, not one.
+That is correct: `MetricsBuffer` has a `Send` method with the right signature, so
+it structurally satisfies `Notifier`, and a `Notifier` value could dispatch to
+it. Nothing in the source rules that out — only the fact that no caller ever
+passes one, which needs call-site type flow the indexer does not do. Symbols
+sharpen the *definition* side of the question; they do not narrow the fan-out.
+
 ## Why the hypothesis was wrong (still true after the fixes)
 
 Aliasing and interface dispatch hide *different* things, and only one of them is
