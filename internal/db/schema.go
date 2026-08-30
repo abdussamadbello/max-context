@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const schemaVersion = 9
+const schemaVersion = 12
 
 // Migrate ensures the database schema is at the current version, running
 // migrations if needed. Call after Open.
@@ -71,15 +71,18 @@ func runMigration(db *sql.DB, version int) error {
 }
 
 var migrations = map[int]func(*sql.Tx) error{
-	1: migrationV1,
-	2: migrationV2,
-	3: migrationV3,
-	4: migrationV4,
-	5: migrationV5,
-	6: migrationV6,
-	7: migrationV7,
-	8: migrationV8,
-	9: migrationV9,
+	1:  migrationV1,
+	2:  migrationV2,
+	3:  migrationV3,
+	4:  migrationV4,
+	5:  migrationV5,
+	6:  migrationV6,
+	7:  migrationV7,
+	8:  migrationV8,
+	9:  migrationV9,
+	10: migrationV10,
+	11: migrationV11,
+	12: migrationV12,
 }
 
 func migrationV1(tx *sql.Tx) error {
@@ -555,5 +558,82 @@ func migrationV9(tx *sql.Tx) error {
 		return err
 	}
 	_, err = tx.Exec("INSERT INTO types_fts(types_fts) VALUES('rebuild')")
+	return err
+}
+
+// migrationV10 records how many concrete implementations each interface-dispatch
+// call site fans out to, so the default confidence filter can distinguish an
+// unambiguous dispatch from a noisy one.
+//
+// Measured on three real Go repositories (cobra, gin, client_golang), dispatch
+// edges are 0–4% of the call graph, and their fan-out width is bimodal: 55% of
+// call sites resolve to two implementations or fewer, while a fifth resolve to
+// 13 or 19. Including every dispatch edge grew responses by a median of 5–87%
+// but by 872% and 1138% at the tail, and the blowups were exactly the wide
+// sites. Width is what separates the two, so it is recorded per edge rather
+// than recomputed per query inside a recursive walk.
+//
+// 0 means "not an interface-dispatch edge". Rows indexed before this migration
+// keep 0 and are treated as wide (excluded by default) until reindexed, which
+// preserves the previous behaviour rather than silently widening an old index.
+func migrationV10(tx *sql.Tx) error {
+	for _, stmt := range []string{
+		`ALTER TABLE calls ADD COLUMN dispatch_width INTEGER NOT NULL DEFAULT 0`,
+		`CREATE INDEX IF NOT EXISTS idx_calls_dispatch_width ON calls(dispatch_width)`,
+	} {
+		if _, err := tx.Exec(stmt); err != nil {
+			return fmt.Errorf("%s: %w", stmt, err)
+		}
+	}
+	return nil
+}
+
+// migrationV11 adds the SCIP-shaped symbol string for each definition.
+//
+// Every tool addresses code by bare name, which cannot express the question a
+// caller usually means: EmailNotifier.Send, SMSNotifier.Send and an unrelated
+// MetricsBuffer.Send all collapse into "Send". The symbol carries the package
+// and receiver type alongside the name, so the three become distinguishable
+// without changing how the fuzzy lookups work.
+//
+// Empty until reindexed. A definition with no symbol is simply not addressable
+// that way, which degrades to today's behaviour rather than matching wrongly.
+func migrationV11(tx *sql.Tx) error {
+	for _, stmt := range []string{
+		`ALTER TABLE functions ADD COLUMN symbol TEXT`,
+		`CREATE INDEX IF NOT EXISTS idx_functions_symbol ON functions(symbol)`,
+	} {
+		if _, err := tx.Exec(stmt); err != nil {
+			return fmt.Errorf("%s: %w", stmt, err)
+		}
+	}
+	return nil
+}
+
+// migrationV12 persists interface satisfaction as its own relation.
+//
+// "Who calls this?" and "what implements this?" are different questions, and
+// this index answered them with one query. Satisfaction existed only as an
+// in-memory memo (Resolver.implCache) whose sole output was a fan-out of
+// synthetic call edges, so the only way to ask what implements an interface was
+// to ask who calls it and read the fan-out back out of the answer — which is
+// also why the fan-out had to be width-gated to keep caller lists usable.
+//
+// SCIP models this as a distinct relationship (is_implementation) precisely so
+// "find implementations" and "find references" stay separable. Storing it makes
+// the same separation available here.
+func migrationV12(tx *sql.Tx) error {
+	_, err := tx.Exec(`
+		CREATE TABLE IF NOT EXISTS implementations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			interface_type TEXT NOT NULL,
+			method_name TEXT NOT NULL,
+			impl_func_id INTEGER NOT NULL REFERENCES functions(id),
+			impl_type TEXT NOT NULL,
+			UNIQUE(interface_type, method_name, impl_func_id)
+		);
+		CREATE INDEX IF NOT EXISTS idx_impl_interface ON implementations(interface_type, method_name);
+		CREATE INDEX IF NOT EXISTS idx_impl_func ON implementations(impl_func_id);
+	`)
 	return err
 }

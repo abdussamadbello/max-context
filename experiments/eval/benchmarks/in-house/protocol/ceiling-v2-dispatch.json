@@ -1,0 +1,119 @@
+{
+  "version": "ceiling-v2-dispatch",
+  "note": "Interface-dispatch retrieval-ceiling probes: no LLM, no API key, no cost. Aliasing (ceiling-v1) defeats text search but is rare \u2014 one qualifying case in 16 repos surveyed. Interface dispatch has the same mechanism, a call site whose text names nothing about the code that runs, and is common in every language with interfaces. D01 and D02 are the same question over the same fixture and differ only in the max-context arm's min_confidence: D01 is the shipped default, D02 opts into the interface-dispatch fan-out. The delta between them is what the flag buys. Gold sets are checked against dispatch-v5.json by VerifyAgainstKeys and cannot drift silently. D03 repeats the question with the max-context arm addressing one definition by its symbol instead of by bare name, which is the axis a name-based query cannot express. T01 is the same experiment in TypeScript. It exists because interface satisfaction was recognised by Go syntax, so no other language got the relation at all \u2014 and because a defect found in one language's resolution path says nothing about the others until a probe asks.",
+  "probes": [
+    {
+      "task_id": "D01",
+      "repo": "dispatch",
+      "lang": "go",
+      "repo_path": "fixtures/dispatch",
+      "question": "List every function that delivers a notification by calling Send through the Notifier interface.",
+      "symbol": "Send",
+      "expected_symbols": [
+        "DeliverAlert",
+        "BroadcastAll"
+      ],
+      "grep_patterns": [
+        "EmailNotifier\\.Send",
+        "SMSNotifier\\.Send",
+        "\\.Send\\(",
+        "\\bSend\\b"
+      ],
+      "mc_calls": [
+        {
+          "tool": "get_call_chain",
+          "args": {
+            "function_name": "Send",
+            "direction": "callers",
+            "depth": 3
+          }
+        }
+      ]
+    },
+    {
+      "task_id": "D02",
+      "repo": "dispatch",
+      "lang": "go",
+      "repo_path": "fixtures/dispatch",
+      "question": "List every function that delivers a notification by calling Send through the Notifier interface.",
+      "symbol": "Send",
+      "expected_symbols": [
+        "DeliverAlert",
+        "BroadcastAll"
+      ],
+      "grep_patterns": [
+        "EmailNotifier\\.Send",
+        "SMSNotifier\\.Send",
+        "\\.Send\\(",
+        "\\bSend\\b"
+      ],
+      "mc_calls": [
+        {
+          "tool": "get_call_chain",
+          "args": {
+            "function_name": "Send",
+            "direction": "callers",
+            "depth": 3,
+            "min_confidence": "interface-dispatch"
+          }
+        }
+      ]
+    },
+    {
+      "task_id": "D03",
+      "repo": "dispatch",
+      "lang": "go",
+      "repo_path": "fixtures/dispatch",
+      "question": "List every function that reaches EmailNotifier's Send implementation.",
+      "symbol": "Send",
+      "expected_symbols": [
+        "DeliverAlert",
+        "BroadcastAll"
+      ],
+      "grep_patterns": [
+        "EmailNotifier\\.Send",
+        "SMSNotifier\\.Send",
+        "\\.Send\\(",
+        "\\bSend\\b"
+      ],
+      "mc_calls": [
+        {
+          "tool": "get_call_chain",
+          "args": {
+            "symbol": "go . dispatch . EmailNotifier#Send().",
+            "direction": "callers",
+            "depth": 3
+          }
+        }
+      ]
+    },
+    {
+      "task_id": "T01",
+      "repo": "dispatch-ts",
+      "lang": "typescript",
+      "repo_path": "fixtures/dispatch-ts",
+      "question": "List every function that delivers a notification by calling send through the Notifier interface.",
+      "symbol": "send",
+      "expected_symbols": [
+        "deliverAlert",
+        "broadcastAll"
+      ],
+      "grep_patterns": [
+        "EmailNotifier\\.send",
+        "SmsNotifier\\.send",
+        "\\.send\\(",
+        "\\bsend\\b"
+      ],
+      "mc_calls": [
+        {
+          "tool": "get_call_chain",
+          "args": {
+            "function_name": "send",
+            "direction": "callers",
+            "depth": 3
+          }
+        }
+      ]
+    }
+  ]
+}

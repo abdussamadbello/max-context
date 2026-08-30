@@ -97,6 +97,64 @@
       (pointer_type (qualified_type name: (type_identifier) @local.type))
     ]))
 
+; Element-typed collections: parameters and locals whose type is a slice, array,
+; or map of a named type — `ns []Notifier`, `m map[string]Notifier`. Captured
+; separately from param.type/local.type because the identifier's own type is the
+; COLLECTION; what a range or index binding needs is the ELEMENT type. Without
+; this, `for _, n := range ns` cannot type n at all, so an interface-typed
+; element never reaches the dispatch fan-out.
+(function_declaration
+  parameters: (parameter_list
+    (parameter_declaration
+      name: (identifier) @elem.name
+      type: [
+        (slice_type element: (type_identifier) @elem.type)
+        (slice_type element: (pointer_type (type_identifier) @elem.type))
+        (array_type element: (type_identifier) @elem.type)
+        (map_type value: (type_identifier) @elem.type)
+        (map_type value: (pointer_type (type_identifier) @elem.type))
+      ])))
+
+(method_declaration
+  parameters: (parameter_list
+    (parameter_declaration
+      name: (identifier) @elem.name
+      type: [
+        (slice_type element: (type_identifier) @elem.type)
+        (slice_type element: (pointer_type (type_identifier) @elem.type))
+        (array_type element: (type_identifier) @elem.type)
+        (map_type value: (type_identifier) @elem.type)
+        (map_type value: (pointer_type (type_identifier) @elem.type))
+      ])))
+
+(var_declaration
+  (var_spec
+    name: (identifier) @elem.name
+    type: [
+      (slice_type element: (type_identifier) @elem.type)
+      (slice_type element: (pointer_type (type_identifier) @elem.type))
+      (array_type element: (type_identifier) @elem.type)
+      (map_type value: (type_identifier) @elem.type)
+      (map_type value: (pointer_type (type_identifier) @elem.type))
+    ]))
+
+; Range bindings: `for _, n := range ns` and `for n := range ns`. Captures the
+; bound identifier and the ranged collection; the parser types the binding from
+; the collection's recorded element type.
+(range_clause
+  left: (expression_list (identifier) (identifier) @range.name)
+  right: (identifier) @range.src)
+
+(range_clause
+  left: (expression_list (identifier) @range.name)
+  right: (identifier) @range.src)
+
+; Index bindings: `n := ns[0]`. Same element-type lookup as a range binding.
+(short_var_declaration
+  left: (expression_list (identifier) @range.name)
+  right: (expression_list
+    (index_expression operand: (identifier) @range.src)))
+
 ; Return-typed locals (9a): x := someCall(...)  — record the callee so the
 ; resolver can type x from that function's return_type. Bare call only; selector
 ; calls (pkg.New(), a.B()) are handled separately / left for a later cut.

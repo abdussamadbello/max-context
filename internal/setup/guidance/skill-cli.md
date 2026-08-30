@@ -17,6 +17,7 @@ one or two calls is usually enough, then commit to an answer.**
 | What does this call? | `max-context calls Name -direction callees` |
 | What breaks if I change this? | `max-context impact -from-git HEAD` |
 | Project overview | `max-context arch` |
+| Everything one task needs, budgeted | `max-context context --task "..." --budget 4000` |
 
 Flags may go on either side of the positional argument.
 
@@ -42,6 +43,23 @@ finds `ResolverCache`; `"remove file"` finds `removeFile`.
 
 If you find yourself issuing a third `query` for the same concept, switch to
 `impact`/`calls` or commit to your current answer.
+
+## Compiling context for a whole task (experimental)
+
+When a task is broad enough that you would otherwise run several of the commands
+above, `max-context context --task "..." --budget 4000` runs them for you and
+returns the highest-priority evidence that fits the budget, in one call:
+
+```bash
+max-context context --task "change JWT refresh token expiration" --budget 4000
+```
+
+The response reports `tokens_used`, whether the package is `complete`, and what
+was omitted — so a truncated package is visible rather than silent. Budgets use
+the `cl100k_base` profile, named in every response because it approximates for
+models that tokenise differently.
+
+This is a CLI-only command; there is no MCP tool for it.
 
 ## If the index is not ready
 

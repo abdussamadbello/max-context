@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -42,6 +43,7 @@ func RunGrep(ctx context.Context, root string, p Probe, extra []string, rgPath s
 	}
 
 	fileCache := map[string][]string{}
+	unattributable := map[string]bool{}
 	var combined strings.Builder
 
 	run := func(pattern, note string) {
@@ -61,7 +63,14 @@ func RunGrep(ctx context.Context, root string, p Probe, extra []string, rgPath s
 				lines = readLines(full)
 				fileCache[full] = lines
 			}
-			if fn := enclosingFunc(lines, h.Line); fn != "" {
+			// A hit in a language this harness cannot attribute would silently
+			// score as "no caller found", making a harness gap look like a grep
+			// failure. Record it on the step instead.
+			if _, known := defPatternFor(h.Path); !known {
+				unattributable[filepath.Ext(h.Path)] = true
+				continue
+			}
+			if fn := enclosingFunc(h.Path, lines, h.Line); fn != "" {
 				res.Predicted = append(res.Predicted, fn)
 			}
 		}
@@ -75,6 +84,18 @@ func RunGrep(ctx context.Context, root string, p Probe, extra []string, rgPath s
 		for _, alias := range discoverAliases(combined.String(), p.Symbol) {
 			run(regexpQuote(alias)+`\s*\(`, "follow-up: `"+p.Symbol+"` is imported as `"+alias+"`")
 		}
+	}
+
+	// Say so loudly when hits were dropped for lack of an attributor: a silent
+	// drop scores as a grep miss and would understate the baseline.
+	if len(unattributable) > 0 {
+		exts := make([]string, 0, len(unattributable))
+		for ext := range unattributable {
+			exts = append(exts, ext)
+		}
+		sort.Strings(exts)
+		res.Err = "harness cannot attribute hits in " + strings.Join(exts, ", ") +
+			"; this arm's recall is a floor, not a measurement (add a pattern to defPatternFor)"
 	}
 
 	res.finalize(p.ExpectedSymbols)

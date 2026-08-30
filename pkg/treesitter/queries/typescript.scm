@@ -52,6 +52,25 @@
   pattern: (identifier) @param.name
   type: (type_annotation (type_identifier) @param.type))
 
+; Element-typed collections: `ns: Notifier[]`, `ns: Array<Notifier>`. The
+; identifier's own type is the collection; a `for..of` binding over it needs the
+; ELEMENT type, which is why it is captured separately. Without this, an
+; interface held in an array is never reached — the same gap the Go fixture
+; exposed for `ns []Notifier`.
+(required_parameter
+  pattern: (identifier) @elem.name
+  type: (type_annotation [
+    (array_type (type_identifier) @elem.type)
+    (generic_type
+      name: (type_identifier) @_gen
+      type_arguments: (type_arguments (type_identifier) @elem.type))
+  ]))
+
+; for (const n of ns) — bind n to ns's element type.
+(for_in_statement
+  left: (identifier) @range.name
+  right: (identifier) @range.src)
+
 ; Typed locals: const a: Foo = ...
 (variable_declarator
   name: (identifier) @local.name
@@ -81,7 +100,18 @@
 (call_expression
   function: (member_expression
     object: (member_expression
-      object: (this)
+      object: (this) @callthis.base
+      property: (property_identifier) @callthis.field)
+    property: (property_identifier) @callthis.callee))
+
+; base.field.m() where base is an ordinary identifier — the field's type comes
+; from the base's type, not from the enclosing class. Go handled this shape and
+; TypeScript did not, so a field held on a parameter resolved in one language
+; and not the other.
+(call_expression
+  function: (member_expression
+    object: (member_expression
+      object: (identifier) @callthis.base
       property: (property_identifier) @callthis.field)
     property: (property_identifier) @callthis.callee))
 
@@ -91,14 +121,43 @@
     object: (this)
     property: (property_identifier) @callselfmethod.callee))
 
-; Interfaces / type aliases (types table).
+; super.m() -> the method the BASE class provides. Distinct from this.m():
+; the call site wrote super precisely to skip an override on this class.
+(call_expression
+  function: (member_expression
+    object: (super) @callsuper.recv
+    property: (property_identifier) @callsuper.callee))
+
+; Interfaces (types table). Captured separately from type aliases: only an
+; interface can be implemented, and satisfaction is recorded per language from
+; whichever construct that language uses.
 (interface_declaration
-  name: (type_identifier) @type.name
-  body: (interface_body) @type.def)
+  name: (type_identifier) @iface.name
+  body: (interface_body) @iface.def)
 
 (type_alias_declaration
   name: (type_identifier) @type.name
   value: (_) @type.def)
+
+; Declared satisfaction: `class C implements I`. TypeScript states this outright,
+; where Go leaves it structural — so satisfaction here is exact and carries no
+; false positives, rather than being inferred from matching method names.
+(class_declaration
+  name: (type_identifier) @classbase.name
+  (class_heritage
+    (implements_clause (type_identifier) @classbase.base)))
+
+; Inheritance: `class C extends B`. Same relation; a subclass satisfies whatever
+; its base does.
+(class_declaration
+  name: (type_identifier) @classbase.name
+  (class_heritage
+    (extends_clause value: (identifier) @classbase.base)))
+
+; Interface inheritance: `interface I extends J`.
+(interface_declaration
+  name: (type_identifier) @classbase.name
+  (extends_type_clause (type_identifier) @classbase.base))
 
 ; Imports: namespace alias + module path.
 (import_statement

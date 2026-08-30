@@ -21,11 +21,17 @@ smoke test in progress; no headline numbers yet.
 
 ## Data
 
-`data/` holds the extracted LoCoBench dataset (gitignored, 249MB zip → ~600MB):
+`data/` holds the extracted LoCoBench dataset (gitignored, 249MB zip → ~790MB):
 `data/generated/<project>/<InnerName>/` (real source) + `data/output/scenarios/*.json`
-(8,000 tasks). Fetch: `gdown 1pK1M1sRrVZUDMKYcwh49CdXug0UzStvl` (or curl via the
-Drive confirm-token), `unzip`, then flatten so `data/generated` + `data/output` sit
-directly under `data/`.
+(8,000 tasks across 1,000 projects).
+
+```bash
+./fetch-data.sh          # download + extract; no-op if data/ is already populated
+```
+
+The archive already carries `data/generated` and `data/output` at its top level,
+so it extracts straight into place — there is no flattening step. `__MACOSX/` is
+excluded: it roughly doubles the file count and holds nothing the harness reads.
 
 ## Run
 
@@ -35,14 +41,21 @@ MC=../../../bin/max-context   # build with `make build` at repo root first
 go run ./cmd/eval --data data --lang go --category feature_implementation --limit 1 \
   --mc-bin "$MC" --rg "$(command -v rg)" --dry-run
 
-# Live (Bedrock): one paired run
+# Live (Anthropic API): keep the key in this shell only; do not put it in a file.
+# This runs the same models as the published results, so new runs stay
+# comparable to them. No --model-prefix: that exists for Bedrock's ids.
+read -rsp 'Anthropic key: ' ANTHROPIC_API_KEY && export ANTHROPIC_API_KEY && echo
+go run ./cmd/eval --backend anthropic --model claude-sonnet-4-6 --provider-preflight
 go run ./cmd/eval --data data --lang go --category feature_implementation --limit 1 \
-  --mc-bin "$MC" --rg "$HOME/.local/bin/rg" \
-  --backend bedrock --aws-region us-east-1 --aws-profile <profile> \
-  --task-model us.anthropic.claude-sonnet-4-6 \
-  --judge-model us.anthropic.claude-haiku-4-5-20251001-v1:0
+  --mc-bin "$MC" --rg "$(command -v rg)" \
+  --backend anthropic \
+  --model claude-sonnet-4-6 --judge claude-haiku-4-5-20251001 \
+  --arms grep,max-context,context --context-budget 4000
+unset ANTHROPIC_API_KEY
 
-# Live (OpenCode Zen): keep the key in this shell only; do not put it in a file.
+# Live (OpenCode Zen, or any OpenAI-compatible endpoint via --openai-base-url).
+# Note this changes the model, so results are NOT comparable to the published
+# runs — use it to test a second model family, not to extend an existing series.
 read -rsp 'OpenCode key: ' OPENCODE_KEY && export OPENCODE_KEY && echo
 go run ./cmd/eval --backend opencode --model nemotron-3-ultra-free --provider-preflight
 go run ./cmd/eval --data data --lang go --category feature_implementation --limit 1 \
@@ -51,6 +64,14 @@ go run ./cmd/eval --data data --lang go --category feature_implementation --limi
   --judge mimo-v2.5-free \
   --arms grep,max-context,context --context-budget 4000
 unset OPENCODE_KEY
+
+# Live (Bedrock): the backend the published in-house results were produced on.
+# Kept for provenance; needs AWS credentials.
+go run ./cmd/eval --data data --lang go --category feature_implementation --limit 1 \
+  --mc-bin "$MC" --rg "$(command -v rg)" \
+  --backend bedrock --aws-region us-east-1 --aws-profile <profile> \
+  --task-model us.anthropic.claude-sonnet-4-6 \
+  --judge-model us.anthropic.claude-haiku-4-5-20251001-v1:0
 ```
 
 After restoring the large LoCoBench dataset, run harness tests with

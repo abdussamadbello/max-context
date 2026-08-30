@@ -1,6 +1,18 @@
 {
-  "description": "Max-context: index-aware grep suggestion, auto-reindex on file edits, inject architecture at session start, persist summary before compact.",
+  "description": "Max-context: index-aware grep suggestion, auto-reindex on file edits, inject architecture at session start, compile task context per prompt, persist summary before compact.",
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/context-compiler.sh",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Grep",

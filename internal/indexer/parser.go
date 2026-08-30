@@ -284,6 +284,8 @@ func parseGo(slashPath string, groups []treesitter.CaptureGroup) *ParseResult {
 	var calls []rawCall
 	var fieldCalls []rawFieldCall
 	var typed []rawTyped              // params, receivers, and statically-typed locals
+	var elems []typedIdent            // identifier -> ELEMENT type of its collection
+	var ranges []derivedBinding       // range/index bindings, typed from elems below
 	var calleeLocals []rawCalleeLocal // x := f() locals (9a), typed by the resolver
 
 	for _, g := range groups {
@@ -342,6 +344,15 @@ func parseGo(slashPath string, groups []treesitter.CaptureGroup) *ParseResult {
 
 		case t["local.name"] != "" && t["local.type"] != "":
 			typed = append(typed, rawTyped{name: t["local.name"], typ: t["local.type"], line: rowOf(g, "local.name")})
+
+		case t["elem.name"] != "" && t["elem.type"] != "":
+			// The identifier's own type is the collection; the ELEMENT type is
+			// recorded separately so a range or index binding over it can be
+			// typed without claiming the collection is that type itself.
+			elems = append(elems, typedIdent{name: t["elem.name"], typ: t["elem.type"], line: rowOf(g, "elem.name")})
+
+		case t["range.name"] != "" && t["range.src"] != "":
+			ranges = append(ranges, derivedBinding{name: t["range.name"], src: t["range.src"], line: rowOf(g, "range.name")})
 
 		case t["localcall.name"] != "" && t["localcall.callee"] != "":
 			calleeLocals = append(calleeLocals, rawCalleeLocal{
@@ -407,6 +418,7 @@ func parseGo(slashPath string, groups []treesitter.CaptureGroup) *ParseResult {
 			s.types[ty.name] = ty.typ
 		}
 	}
+	bindElementTypes(spans, elems, ranges)
 	// Package-level statically-typed vars (var x T at file scope) -> package_vars.
 	for _, ty := range typed {
 		if enclosing(spans, ty.line) == nil {
@@ -439,32 +451,12 @@ func parseGo(slashPath string, groups []treesitter.CaptureGroup) *ParseResult {
 			FilePath:     slashPath,
 			Line:         c.line,
 		}
-		if c.recv != "" {
-			switch {
-			case imports[c.recv] != "":
-				cr.ReceiverKind = "import"
-				// Candidate package = last segment of the import path (the
-				// conventional Go package name). The resolver links pkg.Func()
-				// to that package's Func only on a unique match; otherwise the
-				// call stays import-qualified (no false edge if the name differs).
-				cr.ReceiverPackage = lastPathSegment(strings.Trim(imports[c.recv], "\"'`"))
-			default:
-				s := enclosing(spans, c.line)
-				if s != nil {
-					if typ, ok := s.types[c.recv]; ok {
-						cr.ReceiverKind = "var"
-						cr.ReceiverType = typ
-					} else if callee, ok := s.fromCallee[c.recv]; ok {
-						// 9a: x := callee(); x.M() — resolver types x from callee's return.
-						cr.ReceiverKind = "from-callee"
-						cr.ReceiverFromCallee = callee
-					}
-				}
-				// 9b: package-global receiver (no local binding found).
-				if cr.ReceiverKind == "" {
-					cr.ReceiverKind = "maybe-global"
-				}
-			}
+		// Candidate package = last segment of the import path (the conventional
+		// Go package name). The resolver links pkg.Func() to that package's Func
+		// only on a unique match; otherwise the call stays import-qualified, so a
+		// differing name yields no false edge.
+		if path := cr.classifyReceiver(c.recv, imports, spans, c.line); path != "" {
+			cr.ReceiverPackage = lastPathSegment(strings.Trim(path, "\"'`"))
 		}
 		res.Calls = append(res.Calls, cr)
 	}
@@ -472,23 +464,13 @@ func parseGo(slashPath string, groups []treesitter.CaptureGroup) *ParseResult {
 	// Build field-receiver call edges (9b): base.field.M().
 	for _, fc := range fieldCalls {
 		cr := CallRecord{
-			CalleeName:    fc.callee,
-			ReceiverName:  fc.base + "." + fc.field,
-			ReceiverField: fc.field,
-			Language:      string(treesitter.LangGo),
-			FilePath:      slashPath,
-			Line:          fc.line,
+			CalleeName: fc.callee,
+			Language:   string(treesitter.LangGo),
+			FilePath:   slashPath,
+			Line:       fc.line,
 		}
-		// Type the base; the resolver then looks up base-type's field type.
-		if s := enclosing(spans, fc.line); s != nil {
-			if typ, ok := s.types[fc.base]; ok {
-				cr.ReceiverKind = "field"
-				cr.ReceiverType = typ // base's type; ReceiverField names the field
-			}
-		}
-		if cr.ReceiverKind == "" {
-			cr.ReceiverKind = "unresolved-field"
-		}
+		// Go has no self/this: every base is an ordinary identifier.
+		cr.classifyFieldReceiver(fc.base, fc.field, nil, spans, nil, fc.line)
 		res.Calls = append(res.Calls, cr)
 	}
 
@@ -516,6 +498,9 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 	// root is "" for relative specifiers (always in-repo) or the first path segment
 	// of a bare specifier (resolver gates it against repo package roots).
 	importedSymbols := map[string]importedSym{}
+	// importedModules maps a namespace alias to the repo file the module names,
+	// so `ns.member()` can resolve the way Go's pkg.Func() already does.
+	importedModules := map[string]string{}
 	var fnSpans []*funcSpan
 	var clsSpans []*classSpan
 
@@ -524,8 +509,8 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 		line         int
 	}
 	type rawThisCall struct {
-		field, callee string
-		line          int
+		base, field, callee string
+		line                int
 	}
 	type rawTyped struct {
 		name, typ string
@@ -536,12 +521,15 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 		line         int
 	}
 	type rawSelfMethod struct {
-		callee string
-		line   int
+		callee  string
+		isSuper bool
+		line    int
 	}
 	var calls []rawCall
 	var thisCalls []rawThisCall
 	var typed []rawTyped
+	var elems []typedIdent
+	var ranges []derivedBinding
 	var calleeLocals []rawCalleeLocal
 	var selfMethods []rawSelfMethod
 
@@ -552,22 +540,23 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 			path := strings.Trim(t["import.path"], "\"'`")
 			if alias := t["import.alias"]; alias != "" {
 				imports[alias] = path
+				// `ns.member()` needs the module the namespace names, in the form
+				// definitions are stamped with. Go recorded a candidate package
+				// here and resolved on a unique match; TypeScript stopped at the
+				// alias, so the same pattern resolved in one language only.
+				if mod := relativeModuleFile(slashPath, path, filepath.Ext(slashPath)); mod != "" {
+					importedModules[alias] = mod
+				}
 			}
 
 		case t["import.symbol"] != "":
 			// `import { f }` (local f) or `import { f as g }` (local g -> origin f).
-			origin := t["import.symbol"]
-			local := origin
-			if a := t["import.alias.local"]; a != "" {
-				local = a
-			}
 			// Gate on the source module: relative specifiers ("./..", "..") are
 			// always in-repo (root=""); bare specifiers carry their first segment
 			// for the resolver to check against repo roots (so a name from node:fs
 			// or a 3rd-party pkg won't link to a same-named local function).
-			spec := strings.Trim(t["import.symbol.src"], "\"'`")
-			if local != "" && spec != "" {
-				importedSymbols[local] = importedSym{origin: origin, root: tsModuleRoot(spec)}
+			if spec := strings.Trim(t["import.symbol.src"], "\"'`"); spec != "" {
+				recordImportedSymbol(importedSymbols, t["import.symbol"], t["import.alias.local"], tsModuleRoot(spec))
 			}
 
 		case t["class.name"] != "" && hasKey(t, "class.body"):
@@ -609,6 +598,12 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 		case t["local.name"] != "" && t["local.type"] != "":
 			typed = append(typed, rawTyped{name: t["local.name"], typ: t["local.type"], line: rowOf(g, "local.name")})
 
+		case t["elem.name"] != "" && t["elem.type"] != "":
+			elems = append(elems, typedIdent{name: t["elem.name"], typ: t["elem.type"], line: rowOf(g, "elem.name")})
+
+		case t["range.name"] != "" && t["range.src"] != "":
+			ranges = append(ranges, derivedBinding{name: t["range.name"], src: t["range.src"], line: rowOf(g, "range.name")})
+
 		case t["localnew.name"] != "" && t["localnew.type"] != "":
 			typed = append(typed, rawTyped{name: t["localnew.name"], typ: t["localnew.type"], line: rowOf(g, "localnew.name")})
 
@@ -616,10 +611,17 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 			calleeLocals = append(calleeLocals, rawCalleeLocal{name: t["localcall.name"], callee: t["localcall.callee"], line: rowOf(g, "localcall.name")})
 
 		case t["callthis.callee"] != "":
-			thisCalls = append(thisCalls, rawThisCall{field: t["callthis.field"], callee: t["callthis.callee"], line: rowOf(g, "callthis.callee")})
+			base := t["callthis.base"]
+			if base == "" {
+				base = "this" // the (this) node captures no text
+			}
+			thisCalls = append(thisCalls, rawThisCall{base: base, field: t["callthis.field"], callee: t["callthis.callee"], line: rowOf(g, "callthis.callee")})
 
 		case t["callselfmethod.callee"] != "":
 			selfMethods = append(selfMethods, rawSelfMethod{callee: t["callselfmethod.callee"], line: rowOf(g, "callselfmethod.callee")})
+
+		case t["callsuper.callee"] != "":
+			selfMethods = append(selfMethods, rawSelfMethod{callee: t["callsuper.callee"], isSuper: true, line: rowOf(g, "callsuper.callee")})
 
 		case t["const.name"] != "":
 			// Module-level const/let (program/export-anchored) -> searchable symbol.
@@ -634,6 +636,19 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 			res.Types = append(res.Types, TypeRecord{
 				Name: t["type.name"], FilePath: slashPath, Line: rowOf(g, "type.name"), Kind: "type",
 				Definition: truncate(t["type.def"], 300), Exported: isExported(t["type.name"]),
+			})
+
+		case t["iface.name"] != "" && t["iface.def"] != "":
+			// kind "interface", not "type": a type alias cannot be implemented,
+			// and satisfaction is recorded only for constructs that can be.
+			res.Types = append(res.Types, TypeRecord{
+				Name: t["iface.name"], FilePath: slashPath, Line: rowOf(g, "iface.name"), Kind: "interface",
+				Definition: truncate(t["iface.def"], 300), Exported: isExported(t["iface.name"]),
+			})
+
+		case t["classbase.name"] != "" && t["classbase.base"] != "":
+			res.ClassBases = append(res.ClassBases, ClassBaseRecord{
+				ClassName: t["classbase.name"], BaseName: t["classbase.base"], FilePath: slashPath,
 			})
 		}
 	}
@@ -670,6 +685,7 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 			s.types[ty.name] = ty.typ
 		}
 	}
+	bindElementTypes(fnSpans, elems, ranges)
 	for _, cl := range calleeLocals {
 		if s := enclosing(fnSpans, cl.line); s != nil {
 			if s.fromCallee == nil {
@@ -682,60 +698,26 @@ func parseTS(slashPath, lang string, groups []treesitter.CaptureGroup) *ParseRes
 	// Bare / member-ident calls.
 	for _, c := range calls {
 		cr := CallRecord{CalleeName: c.callee, ReceiverName: c.recv, Language: lang, FilePath: slashPath, Line: c.line}
-		if c.recv == "" {
-			// Bare call to a named-imported symbol -> resolve cross-file to origin.
-			if sym, ok := importedSymbols[c.callee]; ok {
-				cr.ImportedOrigin = sym.origin
-				cr.ImportedModuleRoot = sym.root
-			}
-		}
-		if c.recv != "" {
-			switch {
-			case imports[c.recv] != "":
-				cr.ReceiverKind = "import"
-			default:
-				s := enclosing(fnSpans, c.line)
-				if s != nil {
-					if typ, ok := s.types[c.recv]; ok {
-						cr.ReceiverKind = "var"
-						cr.ReceiverType = typ
-					} else if callee, ok := s.fromCallee[c.recv]; ok {
-						cr.ReceiverKind = "from-callee"
-						cr.ReceiverFromCallee = callee
-					}
-				}
-				if cr.ReceiverKind == "" {
-					cr.ReceiverKind = "maybe-global"
-				}
-			}
+		cr.linkBareImportedCall(c.callee, importedSymbols)
+		if cr.classifyReceiver(c.recv, imports, fnSpans, c.line) != "" {
+			// The receiver is a module namespace: name the file it refers to so
+			// the resolver can link on a unique match, as it does for Go.
+			cr.ReceiverPackage = importedModules[c.recv]
 		}
 		res.Calls = append(res.Calls, cr)
 	}
 
 	// this.field.m() — base type is the enclosing class.
 	for _, tc := range thisCalls {
-		cr := CallRecord{
-			CalleeName: tc.callee, ReceiverName: "this." + tc.field, ReceiverField: tc.field,
-			Language: lang, FilePath: slashPath, Line: tc.line,
-		}
-		if cs := enclosingClass(clsSpans, tc.line); cs != nil {
-			cr.ReceiverKind = "field"
-			cr.ReceiverType = cs.name
-		} else {
-			cr.ReceiverKind = "unresolved-field"
-		}
+		cr := CallRecord{CalleeName: tc.callee, Language: lang, FilePath: slashPath, Line: tc.line}
+		cr.classifyFieldReceiver(tc.base, tc.field, selfKeyword("this"), fnSpans, clsSpans, tc.line)
 		res.Calls = append(res.Calls, cr)
 	}
 
 	// this.m() — direct method on the enclosing class.
 	for _, sm := range selfMethods {
-		cr := CallRecord{CalleeName: sm.callee, ReceiverName: "this", Language: lang, FilePath: slashPath, Line: sm.line}
-		if cs := enclosingClass(clsSpans, sm.line); cs != nil {
-			cr.ReceiverKind = "var"
-			cr.ReceiverType = cs.name
-		} else {
-			cr.ReceiverKind = "unresolved-field"
-		}
+		cr := CallRecord{CalleeName: sm.callee, Language: lang, FilePath: slashPath, Line: sm.line}
+		cr.classifySelfMethod(selfReceiverName("this", sm.isSuper), sm.isSuper, clsSpans, sm.line)
 		res.Calls = append(res.Calls, cr)
 	}
 
@@ -772,6 +754,9 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 	// dotted segment of an absolute module (gated against repo roots by the resolver
 	// so a stdlib import like `from urllib.parse import unquote` won't link locally).
 	importedSymbols := map[string]importedSym{}
+	// importedModules maps a namespace alias to the repo file the module names,
+	// so `ns.member()` can resolve the way Go's pkg.Func() already does.
+	importedModules := map[string]string{}
 	var fnSpans []*funcSpan
 	var clsSpans []*classSpan
 
@@ -780,8 +765,8 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 		line         int
 	}
 	type rawSelfCall struct {
-		field, callee string
-		line          int
+		recv, field, callee string
+		line                int
 	}
 	type rawTyped struct {
 		name, typ string
@@ -800,12 +785,15 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 		line         int
 	}
 	type rawSelfMethod struct {
-		callee string
-		line   int
+		callee  string
+		isSuper bool
+		line    int
 	}
 	var calls []rawCall
 	var selfCalls []rawSelfCall
 	var typed []rawTyped
+	var elems []typedIdent
+	var ranges []derivedBinding
 	var fields []rawField
 	var selfAssigns []rawSelfAssign
 	var calleeLocals []rawCalleeLocal
@@ -818,10 +806,6 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 			// `from m import f` (alias=="" -> local name f) or
 			// `from m import f as g` (alias g -> origin f). Map local -> origin.
 			origin := t["import.symbol"]
-			local := origin
-			if a := t["import.alias"]; a != "" {
-				local = a
-			}
 			// Gate on the source module: relative imports (relmod, e.g. `.utils`)
 			// are always in-repo (root=""); absolute modules carry their first
 			// dotted segment for the resolver to check against repo roots (so a
@@ -830,13 +814,17 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 			if mod := t["import.symbol.mod"]; mod != "" {
 				root = firstDotSegment(mod) // absolute module: gate by repo root
 			}
-			if local != "" {
-				importedSymbols[local] = importedSym{origin: origin, root: root}
-			}
+			recordImportedSymbol(importedSymbols, origin, t["import.alias"], root)
 
 		case t["path"] != "":
 			p := strings.Trim(t["path"], "\"'`")
 			imports[p] = p
+			// `mod.member()` needs the file the module names, in the form
+			// definitions are stamped with. Go recorded a candidate package here
+			// and resolved on a unique match; Python stopped at the alias.
+			if mod := pythonModuleFile(slashPath, p); mod != "" {
+				importedModules[p] = mod
+			}
 
 		case t["class.name"] != "" && hasKey(t, "class.body"):
 			start, end := defRange(g, "class.name", "class.body")
@@ -871,6 +859,12 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 		case t["param.name"] != "" && t["param.type"] != "":
 			typed = append(typed, rawTyped{name: t["param.name"], typ: t["param.type"], line: rowOf(g, "param.name")})
 
+		case t["elem.name"] != "" && t["elem.type"] != "":
+			elems = append(elems, typedIdent{name: t["elem.name"], typ: t["elem.type"], line: rowOf(g, "elem.name")})
+
+		case t["range.name"] != "" && t["range.src"] != "":
+			ranges = append(ranges, derivedBinding{name: t["range.name"], src: t["range.src"], line: rowOf(g, "range.name")})
+
 		case t["field.name"] != "" && t["field.type"] != "":
 			fields = append(fields, rawField{name: t["field.name"], typ: t["field.type"], line: rowOf(g, "field.name")})
 
@@ -881,10 +875,13 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 			calleeLocals = append(calleeLocals, rawCalleeLocal{name: t["localcall.name"], callee: t["localcall.callee"], line: rowOf(g, "localcall.name")})
 
 		case t["callself.callee"] != "":
-			selfCalls = append(selfCalls, rawSelfCall{field: t["callself.field"], callee: t["callself.callee"], line: rowOf(g, "callself.callee")})
+			selfCalls = append(selfCalls, rawSelfCall{recv: t["callself.recv"], field: t["callself.field"], callee: t["callself.callee"], line: rowOf(g, "callself.callee")})
 
 		case t["callselfmethod.callee"] != "" && t["callselfmethod.recv"] == "self":
 			selfMethods = append(selfMethods, rawSelfMethod{callee: t["callselfmethod.callee"], line: rowOf(g, "callselfmethod.callee")})
+
+		case t["callsuper.callee"] != "" && t["callsuper.recv"] == "super":
+			selfMethods = append(selfMethods, rawSelfMethod{callee: t["callsuper.callee"], isSuper: true, line: rowOf(g, "callsuper.callee")})
 
 		case t["call.callee"] != "":
 			// Skip self.X() here — handled by the self-method/self-field cases so
@@ -932,6 +929,7 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 			s.types[ty.name] = ty.typ
 		}
 	}
+	bindElementTypes(fnSpans, elems, ranges)
 	for _, cl := range calleeLocals {
 		if s := enclosing(fnSpans, cl.line); s != nil {
 			if s.fromCallee == nil {
@@ -943,61 +941,26 @@ func parsePython(slashPath string, groups []treesitter.CaptureGroup) *ParseResul
 
 	for _, c := range calls {
 		cr := CallRecord{CalleeName: c.callee, ReceiverName: c.recv, Language: lang, FilePath: slashPath, Line: c.line}
-		if c.recv == "" {
-			// Bare call: if the name was imported from another module, record the
-			// original symbol so the resolver can link cross-file (incl. aliases).
-			if sym, ok := importedSymbols[c.callee]; ok {
-				cr.ImportedOrigin = sym.origin
-				cr.ImportedModuleRoot = sym.root
-			}
-		}
-		if c.recv != "" {
-			switch {
-			case imports[c.recv] != "":
-				cr.ReceiverKind = "import"
-			default:
-				s := enclosing(fnSpans, c.line)
-				if s != nil {
-					if typ, ok := s.types[c.recv]; ok {
-						cr.ReceiverKind = "var"
-						cr.ReceiverType = typ
-					} else if callee, ok := s.fromCallee[c.recv]; ok {
-						cr.ReceiverKind = "from-callee"
-						cr.ReceiverFromCallee = callee
-					}
-				}
-				if cr.ReceiverKind == "" {
-					cr.ReceiverKind = "maybe-global"
-				}
-			}
+		cr.linkBareImportedCall(c.callee, importedSymbols)
+		if cr.classifyReceiver(c.recv, imports, fnSpans, c.line) != "" {
+			// The receiver is a module namespace: name the file it refers to so
+			// the resolver can link on a unique match, as it does for Go.
+			cr.ReceiverPackage = importedModules[c.recv]
 		}
 		res.Calls = append(res.Calls, cr)
 	}
 
 	// self.field.method() — base type is the enclosing class.
 	for _, sc := range selfCalls {
-		cr := CallRecord{
-			CalleeName: sc.callee, ReceiverName: "self." + sc.field, ReceiverField: sc.field,
-			Language: lang, FilePath: slashPath, Line: sc.line,
-		}
-		if cs := enclosingClass(clsSpans, sc.line); cs != nil {
-			cr.ReceiverKind = "field"
-			cr.ReceiverType = cs.name
-		} else {
-			cr.ReceiverKind = "unresolved-field"
-		}
+		cr := CallRecord{CalleeName: sc.callee, Language: lang, FilePath: slashPath, Line: sc.line}
+		cr.classifyFieldReceiver(sc.recv, sc.field, selfKeyword("self"), fnSpans, clsSpans, sc.line)
 		res.Calls = append(res.Calls, cr)
 	}
 
 	// self.method() — direct method on the enclosing class.
 	for _, sm := range selfMethods {
-		cr := CallRecord{CalleeName: sm.callee, ReceiverName: "self", Language: lang, FilePath: slashPath, Line: sm.line}
-		if cs := enclosingClass(clsSpans, sm.line); cs != nil {
-			cr.ReceiverKind = "var"
-			cr.ReceiverType = cs.name
-		} else {
-			cr.ReceiverKind = "unresolved-field"
-		}
+		cr := CallRecord{CalleeName: sm.callee, Language: lang, FilePath: slashPath, Line: sm.line}
+		cr.classifySelfMethod(selfReceiverName("self", sm.isSuper), sm.isSuper, clsSpans, sm.line)
 		res.Calls = append(res.Calls, cr)
 	}
 

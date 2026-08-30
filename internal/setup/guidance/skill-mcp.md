@@ -44,6 +44,21 @@ yourself issuing a third `query_codebase` for the same concept, switch to
 Call `get_architecture` to load the project summary, module structure, and entry
 points. Use the optional `focus` parameter for a subsystem.
 
+## max-context context (experimental, CLI only)
+
+There is no MCP tool for this one. When a task is broad enough that you would
+otherwise call several of the tools above, run the CLI instead and get the
+highest-priority evidence that fits a hard budget in one shot:
+
+```bash
+max-context context --task "change JWT refresh token expiration" --budget 4000
+```
+
+It reports `tokens_used`, whether the package is `complete`, and what was
+omitted, so a truncated package is visible rather than silent. It is kept out of
+the MCP tool list on purpose: tool schemas are re-sent every turn, and this one
+has not yet earned that permanent cost.
+
 ## Workflow
 
 1. `get_architecture` once to orient (optional for narrow tasks).

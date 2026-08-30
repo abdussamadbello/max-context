@@ -93,6 +93,11 @@ type Resolver struct {
 	// out to concrete implementations.
 	interfaceMethods map[string]map[string]bool
 
+	// interfaceLang records the language each interface was declared in, so
+	// satisfaction uses that language's rule rather than one language's rule
+	// applied to all of them.
+	interfaceLang map[string]string
+
 	// implCache memoizes (interfaceType, method) -> concrete method func ids;
 	// implDirty marks it stale after any method/interface change so it is rebuilt
 	// on the next lookup.
@@ -145,6 +150,7 @@ func newEmptyResolver() *Resolver {
 		bases:            map[string][]string{},
 		repoRoots:        map[string]int{},
 		interfaceMethods: map[string]map[string]bool{},
+		interfaceLang:    map[string]string{},
 		implCache:        map[[2]string][]int64{},
 		implDirty:        true,
 		fileFuncs:        map[string][]funcDef{},
@@ -345,6 +351,9 @@ func (r *Resolver) removeFile(file string) {
 		// Single-declaration assumption: an interface name lives in one file. If
 		// two files declared the same name, this drops the merged set (rare).
 		delete(r.interfaceMethods, name)
+		// Drop the language alongside the method set: a stale entry would pick
+		// the wrong satisfaction rule for a later interface of the same name.
+		delete(r.interfaceLang, name)
 	}
 	delete(r.fileInterfaces, file)
 
@@ -391,32 +400,47 @@ func (r *Resolver) addInterface(file, name, def string) {
 	for _, m := range methods {
 		set[m] = true
 	}
+	r.interfaceLang[name] = languageOfPath(file)
 	r.fileInterfaces[file] = append(r.fileInterfaces[file], name)
 	r.implDirty = true
 }
 
-// loadInterfaces populates interface method sets from every interface type in
-// the DB (Go: definition begins with "interface").
+// loadInterfaces populates interface method sets from every type the language
+// conventions recognise as an implementable interface.
+//
+// The predicate was `definition LIKE 'interface%'`, which is Go syntax — so a
+// TypeScript interface, whose body starts with '{', was never loaded and no
+// TypeScript type ever satisfied anything. The SQL narrows to a superset and
+// isInterfaceType applies the per-language rule.
 func (r *Resolver) loadInterfaces(q rowQuerier) error {
-	rows, err := q.Query("SELECT name, definition, file_path FROM types WHERE definition LIKE 'interface%'")
+	rows, err := q.Query("SELECT name, definition, file_path, kind FROM types")
 	if err != nil {
 		return nil
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var name, file string
+		var name, file, kind string
 		var def sql.NullString
-		if err := rows.Scan(&name, &def, &file); err != nil {
+		if err := rows.Scan(&name, &def, &file, &kind); err != nil {
 			return err
 		}
-		r.addInterface(file, name, def.String)
+		if isInterfaceType(languageOfPath(file), kind, def.String) {
+			r.addInterface(file, name, def.String)
+		}
 	}
 	return rows.Err()
 }
 
-// ifaceMethodRe matches a method declaration line inside a Go interface body:
-// an identifier at line start (after whitespace) immediately followed by '('.
-var ifaceMethodRe = regexp.MustCompile(`(?m)^\s*([A-Za-z_]\w*)\s*\(`)
+// ifaceMethodRe matches a method declaration inside a Go interface body: an
+// identifier immediately followed by '(', positioned at the start of a line, or
+// after the opening brace, or after a semicolon separating methods on one line.
+//
+// Anchoring on line start alone silently dropped every method of a single-line
+// interface — `interface{ Send(msg string) error }` yielded no methods at all,
+// so no concrete type ever satisfied it and the interface-dispatch fan-out was
+// empty for that declaration. The two forms are identical Go; only the
+// formatting differed. See experiments/eval/benchmarks/in-house/DISPATCH.md.
+var ifaceMethodRe = regexp.MustCompile(`(?m)(?:^|[{;])\s*([A-Za-z_]\w*)\s*\(`)
 
 func extractInterfaceMethods(def string) []string {
 	var out []string
@@ -455,14 +479,30 @@ func (r *Resolver) rebuildImplements() {
 		}
 		s[m] = true
 	}
+	// Which concrete types satisfy an interface is decided by that interface's
+	// OWN language. Running Go's structural rule against a TypeScript interface
+	// would re-introduce the false positives the language already rules out by
+	// stating `implements` outright.
 	for iface, mset := range r.interfaceMethods {
 		if len(mset) == 0 {
 			continue
 		}
-		for t, tm := range typeMethods {
-			if t == iface || !subsetKeys(mset, tm) {
-				continue
+		rule, known := satisfactionRuleFor(r.interfaceLang[iface])
+		if !known {
+			rule = SatisfactionStructural
+		}
+		var impls []string
+		switch rule {
+		case SatisfactionDeclared:
+			impls = r.declaredImplementors(iface)
+		default:
+			for t, tm := range typeMethods {
+				if t != iface && subsetKeys(mset, tm) {
+					impls = append(impls, t)
+				}
 			}
+		}
+		for _, t := range impls {
 			for m := range mset {
 				for _, d := range r.byRecvName[[2]string{t, m}] {
 					k := [2]string{iface, m}
@@ -472,6 +512,46 @@ func (r *Resolver) rebuildImplements() {
 		}
 	}
 	r.implDirty = false
+}
+
+// declaredImplementors returns the types that state they implement iface,
+// following inheritance: a subclass of an implementor is one too. Exact by
+// construction — it reports what the source says rather than what its method
+// names happen to resemble.
+func (r *Resolver) declaredImplementors(iface string) []string {
+	direct := map[string]bool{}
+	for class, bases := range r.bases {
+		for _, base := range bases {
+			if base == iface {
+				direct[class] = true
+			}
+		}
+	}
+	// Transitive: anything deriving from a declared implementor implements it
+	// too. Bounded by the number of classes, and cycle-safe via the seen set.
+	seen := map[string]bool{}
+	queue := make([]string, 0, len(direct))
+	for c := range direct {
+		queue = append(queue, c)
+	}
+	var out []string
+	for len(queue) > 0 {
+		c := queue[0]
+		queue = queue[1:]
+		if seen[c] {
+			continue
+		}
+		seen[c] = true
+		out = append(out, c)
+		for sub, bases := range r.bases {
+			for _, base := range bases {
+				if base == c && !seen[sub] {
+					queue = append(queue, sub)
+				}
+			}
+		}
+	}
+	return out
 }
 
 func subsetKeys(small, big map[string]bool) bool {
@@ -741,6 +821,19 @@ func fileRepoRoots(p string) []string {
 	return []string{base}
 }
 
+// methodOnBases resolves a method starting from a class's bases rather than the
+// class itself, which is what `super` means. Without it a super call resolved to
+// nothing at all: the receiver is neither a typed local nor a field, so no
+// existing kind described it.
+func (r *Resolver) methodOnBases(class, name string) (int64, bool) {
+	for _, base := range r.bases[class] {
+		if id, ok := r.methodOnType(base, name); ok {
+			return id, true
+		}
+	}
+	return 0, false
+}
+
 // indexByteASCII is strings.IndexByte without importing strings here.
 func indexByteASCII(s string, b byte) int {
 	for i := 0; i < len(s); i++ {
@@ -827,6 +920,15 @@ func (t typedReceiverStrategy) resolveTyped(r *Resolver, c CallRecord, scope, fi
 	case "var":
 		// Method call on a receiver whose type is statically known.
 		if id, ok := r.methodOnType(c.ReceiverType, c.CalleeName); ok {
+			return id, resReceiverTyped
+		}
+		return 0, resUnresolved
+
+	case "super":
+		// super.m() / super().m(): the lookup starts at the enclosing class's
+		// BASES, not at the class, so an override on the class itself is skipped
+		// — which is the whole reason the call site wrote super.
+		if id, ok := r.methodOnBases(c.ReceiverType, c.CalleeName); ok {
 			return id, resReceiverTyped
 		}
 		return 0, resUnresolved
@@ -981,4 +1083,51 @@ func callerForLineQuery(q queryRower, filePath string, line int) (int64, error) 
 		return 0, nil
 	}
 	return id, err
+}
+
+// ImplementationRecord is one (interface, method) -> concrete implementation
+// fact, the relation SCIP calls is_implementation.
+type ImplementationRecord struct {
+	InterfaceType string
+	MethodName    string
+	ImplFuncID    int64
+	ImplType      string
+}
+
+// Implementations returns every interface-satisfaction fact the resolver knows.
+//
+// The same computation previously existed only as a memo consumed while
+// emitting synthetic call edges, which meant "what implements this interface?"
+// could only be answered by asking who calls it and reading the fan-out back
+// out. Exposing the relation lets that question be asked directly.
+func (r *Resolver) Implementations() []ImplementationRecord {
+	if r.implDirty {
+		r.rebuildImplements()
+	}
+	out := make([]ImplementationRecord, 0, len(r.implCache))
+	for key, ids := range r.implCache {
+		iface, method := key[0], key[1]
+		for _, id := range ids {
+			out = append(out, ImplementationRecord{
+				InterfaceType: iface,
+				MethodName:    method,
+				ImplFuncID:    id,
+				ImplType:      r.receiverTypeOf(id),
+			})
+		}
+	}
+	return out
+}
+
+// receiverTypeOf reports the concrete type a method is defined on, or "" when
+// the id is not a method this resolver indexed.
+func (r *Resolver) receiverTypeOf(id int64) string {
+	for key, defs := range r.byRecvName {
+		for _, d := range defs {
+			if d.id == id {
+				return key[0]
+			}
+		}
+	}
+	return ""
 }

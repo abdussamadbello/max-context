@@ -285,11 +285,13 @@ func queryImpact(database *sql.DB, seedIDs map[int64]string, depth int, directio
 	}
 
 	// edgeFilter restricts which edges the walk may traverse, by resolution
-	// confidence. With no min_confidence, the default EXCLUDES the low-confidence
-	// interface-dispatch fan-out (so default blast radius is unchanged); requesting
-	// a low min_confidence (e.g. "interface-dispatch") opts them in, while a high
-	// one excludes them along with other weak edges.
-	edgeFilter := " AND e.resolution != 'interface-dispatch'"
+	// confidence. With no min_confidence, the default admits interface-dispatch
+	// edges only at narrow call sites and excludes the wide ones; requesting a
+	// low min_confidence (e.g. "interface-dispatch") opts into all of them, while
+	// a high one excludes them along with other weak edges. Shares the predicate
+	// with get_call_chain so a blast radius and a call chain never disagree about
+	// which edges exist.
+	edgeFilter := defaultEdgeFilter()
 	var filterArgs []interface{}
 	if markers := edgeMarkersAtOrAbove(minConfidence); markers != nil {
 		ph := make([]string, len(markers))

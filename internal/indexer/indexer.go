@@ -168,8 +168,13 @@ func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries, op
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	// Clear existing data for full reindex
+	// Clear existing data for full reindex. implementations references
+	// functions(id), so it must go first: deleting a referenced parent row
+	// fails the foreign key.
 	if _, err := tx.Exec("DELETE FROM calls"); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM implementations"); err != nil {
 		return err
 	}
 	if _, err := tx.Exec("DELETE FROM functions"); err != nil {
@@ -294,6 +299,13 @@ func Index(ctx context.Context, root string, database *sql.DB, q *db.Queries, op
 		}
 	}
 
+	// Record interface satisfaction as its own relation, so "what implements
+	// this?" is a query rather than something inferred from the shape of a
+	// caller list.
+	if err := insertImplementations(tx, resolver); err != nil {
+		return err
+	}
+
 	for _, imp := range allImports {
 		_, err := tx.Exec(
 			"INSERT INTO imports (file_path, imported_path, imported_symbols) VALUES (?, ?, ?)",
@@ -410,9 +422,10 @@ func insertFunction(tx *sql.Tx, f FuncRecord) error {
 		kind = "func"
 	}
 	_, err := tx.Exec(
-		"INSERT INTO functions (name, name_parts, file_path, start_line, end_line, language, exported, code, docstring, signature, kind, receiver_type, package, return_type) VALUES (?1, split_identifier(?1), ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+		"INSERT INTO functions (name, name_parts, file_path, start_line, end_line, language, exported, code, docstring, signature, kind, receiver_type, package, return_type, symbol) VALUES (?1, split_identifier(?1), ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
 		f.Name, f.FilePath, f.StartLine, f.EndLine, f.Language, exported, f.Code, f.Docstring, f.Signature,
 		kind, nullStr(f.ReceiverType), nullStr(f.Package), nullStr(f.ReturnType),
+		nullStr(SymbolID(f.Language, f.Package, f.ReceiverType, kind, f.Name)),
 	)
 	return err
 }
@@ -481,19 +494,49 @@ func nullStr(s string) interface{} {
 	return s
 }
 
+// interfaceReceiverType returns the interface type a call dispatches through,
+// or "" when the receiver is not an interface value.
+//
+// A plain `var` receiver carries its own type. A `field` receiver carries the
+// type of the BASE — `h.n.Send()` records Holder, not the type of n — so the
+// field's declared type has to be looked up before it can be recognised as an
+// interface. Gating on ReceiverKind=="var" alone silently excluded every
+// interface held in a struct field, which is how most long-lived dependencies
+// are actually stored.
+func interfaceReceiverType(resolver *Resolver, c CallRecord) string {
+	switch c.ReceiverKind {
+	case "var":
+		return c.ReceiverType
+	case "field":
+		if c.ReceiverType == "" || c.ReceiverField == "" {
+			return ""
+		}
+		if ft, ok := resolver.fieldTypeOf([2]string{c.ReceiverType, c.ReceiverField}); ok {
+			return ft
+		}
+	}
+	return ""
+}
+
 // insertInterfaceDispatchEdges emits a low-confidence 'interface-dispatch' edge
 // from the caller to each concrete implementation of an interface-method call —
 // e.g. n.Send() where n is statically an interface — so get_impact can fan out
 // to implementations on request. No-op for non-interface receivers, so the
 // default call graph is unchanged. Called alongside the primary insertCall.
 func insertInterfaceDispatchEdges(tx *sql.Tx, resolver *Resolver, c CallRecord, callerID int64) error {
-	if c.ReceiverKind != "var" || c.ReceiverType == "" {
+	ifaceType := interfaceReceiverType(resolver, c)
+	if ifaceType == "" {
 		return nil
 	}
-	for _, id := range resolver.interfaceMethodImpls(c.ReceiverType, c.CalleeName) {
+	impls := resolver.interfaceMethodImpls(ifaceType, c.CalleeName)
+	// The fan-out width is what separates an unambiguous dispatch from a noisy
+	// one, and it is known exactly here. Recording it costs one integer per edge
+	// and saves a correlated subquery inside every recursive graph walk.
+	width := len(impls)
+	for _, id := range impls {
 		if _, err := tx.Exec(
-			"INSERT INTO calls (caller_id, callee_id, callee_name, file_path, line, resolution, receiver_name) VALUES (?, ?, ?, ?, ?, ?, ?)",
-			callerID, id, c.CalleeName, c.FilePath, c.Line, resInterfaceDispatch, nullStr(c.ReceiverName),
+			"INSERT INTO calls (caller_id, callee_id, callee_name, file_path, line, resolution, receiver_name, dispatch_width) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			callerID, id, c.CalleeName, c.FilePath, c.Line, resInterfaceDispatch, nullStr(c.ReceiverName), width,
 		); err != nil {
 			return err
 		}
@@ -559,8 +602,13 @@ func IndexFile(ctx context.Context, root string, relPath string, database *sql.D
 
 	// Delete calls before functions: calls.caller_id/callee_id reference
 	// functions(id), so with foreign_keys=ON the edges must go first.
+	// implementations.impl_func_id has the same reference, and the same failure
+	// mode the comment above describes: a violation here rolls back the whole
+	// reindex, so an edit to a file declaring an interface implementation would
+	// silently never land.
 	for _, sql := range []string{
 		"DELETE FROM calls WHERE file_path = ?",
+		"DELETE FROM implementations WHERE impl_func_id IN (SELECT id FROM functions WHERE file_path = ?)",
 		"DELETE FROM functions WHERE file_path = ?",
 		"DELETE FROM types WHERE file_path = ?",
 		"DELETE FROM imports WHERE file_path = ?",
@@ -832,4 +880,29 @@ func reresolveStaleEdgesInFile(ctx context.Context, tx *sql.Tx, root string, res
 // matching re-parsed calls back to their stored edge rows.
 func staleKey(line int, name string) string {
 	return fmt.Sprintf("%d\x00%s", line, name)
+}
+
+// insertImplementations writes the interface-satisfaction relation.
+//
+// This is the same computation the dispatch fan-out already relies on, stored
+// once instead of being reachable only through the synthetic edges it produces.
+// It is written on a full index; incremental single-file reindexes leave it
+// alone, since satisfaction is a whole-repo property that one file's methods
+// can change in either direction.
+func insertImplementations(tx *sql.Tx, resolver *Resolver) error {
+	if _, err := tx.Exec("DELETE FROM implementations"); err != nil {
+		return err
+	}
+	for _, rec := range resolver.Implementations() {
+		if rec.ImplType == "" {
+			continue // not a method this resolver indexed; storing it would name no type
+		}
+		if _, err := tx.Exec(
+			"INSERT OR IGNORE INTO implementations (interface_type, method_name, impl_func_id, impl_type) VALUES (?, ?, ?, ?)",
+			rec.InterfaceType, rec.MethodName, rec.ImplFuncID, rec.ImplType,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
 }

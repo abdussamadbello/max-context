@@ -21,6 +21,11 @@ type definitionHit struct {
 	File      string `json:"file"`
 	Line      int    `json:"line,omitempty"`
 	Canonical bool   `json:"canonical,omitempty"`
+	// Symbol is the SCIP-shaped identifier for this definition. It is what
+	// distinguishes same-named methods on different types, so a caller that got
+	// three matches for "Send" can name the one it means instead of guessing.
+	// Empty on an index built before symbols were recorded.
+	Symbol string `json:"symbol,omitempty"`
 }
 
 // GetDefinitionHandler answers "where is X defined?" with a single decisive
@@ -98,13 +103,14 @@ func exactDefinitions(database *sql.DB, symbol string) []definitionHit {
 	out := []definitionHit{}
 	// Functions/methods.
 	rows, err := database.Query(
-		`SELECT name, file_path, start_line, kind FROM functions WHERE name = ? COLLATE NOCASE ORDER BY file_path, start_line`,
+		`SELECT name, file_path, start_line, kind, symbol FROM functions WHERE name = ? COLLATE NOCASE ORDER BY file_path, start_line`,
 		symbol)
 	if err == nil {
 		for rows.Next() {
 			var h definitionHit
-			var kind sql.NullString
-			if rows.Scan(&h.Name, &h.File, &h.Line, &kind) == nil {
+			var kind, sym sql.NullString
+			if rows.Scan(&h.Name, &h.File, &h.Line, &kind, &sym) == nil {
+				h.Symbol = sym.String
 				h.Kind = "function"
 				if kind.Valid && kind.String == "method" {
 					h.Kind = "method"

@@ -50,7 +50,7 @@ func TestFixtureMatchesTheOracle(t *testing.T) {
 		if !strings.Contains(got, s.contains) {
 			t.Errorf("%s:%d = %q, oracle expects it to contain %q", s.file, s.line, got, s.contains)
 		}
-		if fn := enclosingFunc(lines, s.line); fn != s.enclosing {
+		if fn := enclosingFunc(s.file, lines, s.line); fn != s.enclosing {
 			t.Errorf("%s:%d is inside %q, oracle expects %q", s.file, s.line, fn, s.enclosing)
 		}
 	}
@@ -200,7 +200,7 @@ func TestEnclosingFuncAttribution(t *testing.T) {
 		{3, "", "a def line belongs to its parent scope, not itself"},
 		{12, "fetch", "async def counts"},
 	} {
-		if got := enclosingFunc(src, tc.line); got != tc.want {
+		if got := enclosingFunc("probe.py", src, tc.line); got != tc.want {
 			t.Errorf("line %d: got %q, want %q (%s)", tc.line, got, tc.want, tc.why)
 		}
 	}
@@ -209,7 +209,7 @@ func TestEnclosingFuncAttribution(t *testing.T) {
 func TestEnclosingFuncOutOfRange(t *testing.T) {
 	src := []string{"def f():", "    pass"}
 	for _, line := range []int{0, -1, 3, 999} {
-		if got := enclosingFunc(src, line); got != "" {
+		if got := enclosingFunc("probe.py", src, line); got != "" {
 			t.Errorf("line %d returned %q, want empty", line, got)
 		}
 	}

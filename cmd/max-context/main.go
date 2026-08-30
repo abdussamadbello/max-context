@@ -323,6 +323,13 @@ func runBench(cfg *config.Config, args []string) error {
 	tools.RegisterAll(handler, database, q, cfg.ProjectRoot)
 
 	invoke := func(tool string, args json.RawMessage) (string, error) {
+		// The context compiler is not an MCP tool and never reaches the handler.
+		// Measuring it still matters: a question set that could only describe
+		// registered tools would leave the one command whose cost is in question
+		// unmeasured.
+		if tool == "context" {
+			return compileContextForBench(cfg, database, q, args)
+		}
 		if len(args) == 0 {
 			args = json.RawMessage("{}")
 		}
