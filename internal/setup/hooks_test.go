@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -112,7 +113,13 @@ func TestSetupVSCodeInstallsEveryReferencedScript(t *testing.T) {
 			t.Errorf("hooks.json references %s but setup did not write it: %v", script, err)
 			continue
 		}
-		if info.Mode().Perm()&0111 == 0 {
+		// Windows has no execute bit. Go synthesises a file's mode there from
+		// the read-only attribute alone, so Perm() reads back as 0666 or 0444
+		// whatever mode the file was written with — this assertion would fail a
+		// perfectly good installation. Nothing is lost by skipping it: on
+		// Windows the hook runner picks the interpreter for a .sh, so the file
+		// mode was never what made the hook runnable.
+		if runtime.GOOS != "windows" && info.Mode().Perm()&0111 == 0 {
 			t.Errorf("%s is not executable (mode %v); the hook cannot run", script, info.Mode().Perm())
 		}
 	}
